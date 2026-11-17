@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://queria-io.github.io/tabledoc/schemas/tabledoc/v1.json",
+  "title": "tabledoc.json",
+  "description": "What `tabledoc build` writes: the description of one dataset in one file. Documents are referred to by path; `files` lists each one's sha256. Types, nullability and row counts are not here.",
+  "type": "object",
+  "required": ["$schema", "generator", "dataset", "schemas", "tables", "files"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "const": "https://queria-io.github.io/tabledoc/schemas/tabledoc/v1.json" },
+    "generator": { "type": "string", "description": "tabledoc <version>." },
+    "source": {
+      "type": "object",
+      "description": "The Git working copy it was built from. Left out outside Git.",
+      "required": ["commit", "path", "dirty"],
+      "additionalProperties": false,
+      "properties": {
+        "repository": { "type": "string", "description": "The origin remote as an https URL." },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "path": { "type": "string", "description": "From the repository's root to the folder of tabledoc.yml. Empty at the root." },
+        "dirty": { "type": "boolean", "description": "There were changes not committed." }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "../dataset/v1.json#/$defs/name" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "keywords": { "$ref": "../dataset/v1.json#/$defs/strings" },
+        "homepage": { "type": "string" },
+        "language": { "$ref": "../dataset/v1.json#/$defs/language" },
+        "issued": { "$ref": "../dataset/v1.json#/$defs/date" },
+        "update_frequency": { "$ref": "../dataset/v1.json#/$defs/updateFrequency" },
+        "licenses": { "$ref": "../dataset/v1.json#/$defs/licenses" },
+        "sources": { "$ref": "../dataset/v1.json#/$defs/sources" },
+        "contributors": { "$ref": "../dataset/v1.json#/$defs/contributors" },
+        "temporal_coverage": { "$ref": "../dataset/v1.json#/$defs/temporalCoverage" },
+        "spatial_coverage": { "$ref": "../dataset/v1.json#/$defs/spatialCoverage" },
+        "guide": { "$ref": "#/$defs/file", "description": "The dataset's overview (README.md)." },
+        "docs": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+        "annotations": { "$ref": "#/$defs/annotations" }
+      }
+    },
+    "schemas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "guide": { "$ref": "#/$defs/file" }
+        }
+      }
+    },
+    "tables": {
+      "type": "array",
+      "description": "Sorted by schema, then name.",
+      "items": {
+        "type": "object",
+        "required": ["schema", "name"],
+        "additionalProperties": false,
+        "properties": {
+          "schema": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "keywords": { "$ref": "../dataset/v1.json#/$defs/strings" },
+          "primary_key": { "$ref": "../table/v1.json#/$defs/columnNames" },
+          "licenses": { "$ref": "../dataset/v1.json#/$defs/licenses" },
+          "sources": { "$ref": "../dataset/v1.json#/$defs/sources" },
+          "temporal_coverage": { "$ref": "../dataset/v1.json#/$defs/temporalCoverage" },
+          "spatial_coverage": { "$ref": "../dataset/v1.json#/$defs/spatialCoverage" },
+          "sql": { "type": "string" },
+          "depends_on": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Tables the SQL reads: <schema>.<table> in this dataset, <repository URL>#<schema>.<table> in another."
+          },
+          "guide": { "$ref": "#/$defs/file" },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name"],
+              "additionalProperties": false,
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "title": { "type": "string" },
+                "description": { "type": "string" },
+                "asset": { "type": "boolean" },
+                "entity": { "$ref": "#/$defs/entity" },
+                "dimension": { "$ref": "#/$defs/dimension" },
+                "granularity": { "$ref": "../table/v1.json#/$defs/granularity" },
+                "annotations": { "$ref": "#/$defs/annotations" }
+              }
+            }
+          },
+          "metrics": { "type": "array", "items": { "$ref": "../table/v1.json#/$defs/metric" } },
+          "annotations": { "$ref": "#/$defs/annotations" }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "description": "Every file whose content is sent, sorted by path.",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "bytes", "media_type"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "$ref": "#/$defs/file" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "bytes": { "type": "integer", "minimum": 0 },
+          "media_type": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "file": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!\\.\\./)(?!.*/\\.\\./).+$", "description": "A path in `files`, relative to the folder of tabledoc.yml." },
+    "entity": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": { "type": { "$ref": "../table/v1.json#/$defs/entityType" }, "name": { "type": "string", "minLength": 1 } }
+    },
+    "dimension": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": { "type": { "$ref": "../table/v1.json#/$defs/dimensionType" }, "name": { "type": "string", "minLength": 1 } }
+    },
+    "annotations": {
+      "type": "object",
+      "additionalProperties": { "type": "object" },
+      "description": "Keys for each reader, by the reader's name. `queria` holds what tabledoc.yml and the table files write under `queria:`."
+    }
+  }
+}
