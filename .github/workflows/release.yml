@@ -2,6 +2,11 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: Bump this part regardless of the commits (patch, minor, major); empty to follow the commits
+        required: false
+        default: ""
 
 jobs:
   release:
@@ -18,6 +23,7 @@ jobs:
         id: release
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          force: ${{ inputs.force }}
 
       # Publishing runs in a separate workflow so a failed upload can be
       # retried against the tag without re-running semantic-release.
