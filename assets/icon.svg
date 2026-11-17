@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!-- tabledoc: a table whose header hangs down at both ends as a dog's ears -->
   <rect width="512" height="512" fill="#ffffff"/>
-  <rect x="112" y="128" width="288" height="256" rx="24" fill="#ffffff" stroke="#7846BE" stroke-width="24"/>
-  <path d="M112 152 a24 24 0 0 1 24 -24 h40 v120 c0 24 -32 32 -52 12 a24 24 0 0 1 -12 -20 Z" fill="#7846BE"/>
-  <path d="M400 152 a24 24 0 0 0 -24 -24 h-40 v120 c0 24 32 32 52 12 a24 24 0 0 0 12 -20 Z" fill="#7846BE"/>
-  <rect x="176" y="128" width="160" height="40" fill="#7846BE"/>
+  <path d="M124 140 H388 V168 H124 Z" fill="#7846BE"/>
+  <path d="M124 140 H176 V236 A26 26 0 0 1 124 236 Z" fill="#7846BE"/>
+  <path d="M336 140 H388 V236 A26 26 0 0 1 336 236 Z" fill="#7846BE"/>
   <line x1="112" y1="340" x2="400" y2="340" stroke="#7846BE" stroke-width="12"/>
+  <rect x="112" y="128" width="288" height="256" rx="24" fill="none" stroke="#7846BE" stroke-width="24"/>
   <circle cx="212" cy="250" r="17" fill="#1b1b1b"/>
   <circle cx="300" cy="250" r="17" fill="#1b1b1b"/>
   <ellipse cx="256" cy="300" rx="24" ry="17" fill="#1b1b1b"/>
