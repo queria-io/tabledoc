@@ -1,4 +1,10 @@
-# tabledoc の仕様 (v1)
+---
+title: 仕様 (v1)
+sidebar:
+  label: 仕様
+  order: 2
+description: tabledoc が読むファイル、その検査、作る tabledoc.json を定めます。
+---
 
 tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) を読み、機械が読む 1 つの JSON (`tabledoc.json`) を作るツールです。特定のデータの置き場や配信先には依存しません。
 
