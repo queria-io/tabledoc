@@ -1,24 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#1d3557"/>
-  <g transform="translate(0 -32)">
-  <!-- tabledoc: a dog holding a table -->
-  <path d="M136 152 C 88 160, 64 248, 92 316 C 104 344, 140 340, 150 312 L 176 196 Z" fill="#9c6b3c"/>
-  <path d="M376 152 C 424 160, 448 248, 420 316 C 408 344, 372 340, 362 312 L 336 196 Z" fill="#9c6b3c"/>
-  <!-- head -->
-  <path d="M256 128 C 336 128, 368 184, 368 256 C 368 328, 328 368, 256 368 C 184 368, 144 328, 144 256 C 144 184, 176 128, 256 128 Z" fill="#f1dfc0"/>
-  <!-- muzzle -->
-  <ellipse cx="256" cy="306" rx="64" ry="48" fill="#fff6e6"/>
-  <!-- eyes -->
-  <circle cx="212" cy="244" r="15" fill="#1b1b1b"/>
-  <circle cx="300" cy="244" r="15" fill="#1b1b1b"/>
-  <!-- nose -->
-  <path d="M234 284 Q 256 276 278 284 Q 276 304 256 310 Q 236 304 234 284 Z" fill="#1b1b1b"/>
-  <!-- a table sheet held in the mouth -->
-  <g transform="rotate(-6 256 392)">
-    <rect x="176" y="340" width="160" height="104" rx="10" fill="#ffffff" stroke="#1b1b1b" stroke-width="8"/>
-    <rect x="176" y="340" width="160" height="28" rx="10" fill="#e9c46a" stroke="#1b1b1b" stroke-width="8"/>
-    <line x1="176" y1="398" x2="336" y2="398" stroke="#1b1b1b" stroke-width="6"/>
-    <line x1="232" y1="368" x2="232" y2="444" stroke="#1b1b1b" stroke-width="6"/>
-  </g>
-  </g>
+  <!-- tabledoc: a table whose header columns hang down as a dog's ears -->
+  <rect width="512" height="512" fill="#ffffff"/>
+  <rect x="112" y="128" width="288" height="256" rx="24" fill="#ffffff" stroke="#7846BE" stroke-width="24"/>
+  <path d="M112 152 a24 24 0 0 1 24 -24 h40 v120 c0 24 -32 32 -52 12 a24 24 0 0 1 -12 -20 Z" fill="#7846BE"/>
+  <path d="M400 152 a24 24 0 0 0 -24 -24 h-40 v120 c0 24 32 32 52 12 a24 24 0 0 0 12 -20 Z" fill="#7846BE"/>
+  <rect x="176" y="128" width="160" height="40" fill="#7846BE"/>
+  <line x1="176" y1="116" x2="176" y2="168" stroke="#ffffff" stroke-width="10"/>
+  <line x1="336" y1="116" x2="336" y2="168" stroke="#ffffff" stroke-width="10"/>
+  <line x1="112" y1="340" x2="400" y2="340" stroke="#7846BE" stroke-width="12"/>
+  <circle cx="212" cy="250" r="17" fill="#1b1b1b"/>
+  <circle cx="300" cy="250" r="17" fill="#1b1b1b"/>
+  <ellipse cx="256" cy="300" rx="24" ry="17" fill="#1b1b1b"/>
 </svg>
