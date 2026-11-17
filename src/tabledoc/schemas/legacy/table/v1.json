@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://queria.io/schemas/table/v1.json",
+  "title": "Queria table description (Markdown front matter)",
+  "description": "The front matter of a Markdown file that describes one table. `table` names it, so the file may sit anywhere under the repository with any name. The text below the front matter is the table's guide. Keys only Queria reads (published, themes, ai_context, and a column's semantic) are written as they are; `queria metadata pack` moves them under annotations.queria.",
+  "type": "object",
+  "required": ["$schema", "table"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "const": "https://queria.io/schemas/table/v1.json" },
+    "table": {
+      "type": "string",
+      "pattern": "^[^.\\s]+\\.[^.\\s]+$",
+      "description": "<schema>.<table>, as in the catalog."
+    },
+    "title": { "type": "string" },
+    "description": { "type": "string", "description": "What one row is, and what to know before reading the table. The guide below the front matter can say more." },
+    "keywords": { "$ref": "../dataset/v1.json#/$defs/strings" },
+    "primary_key": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
+    "licenses": { "$ref": "../dataset/v1.json#/$defs/licenses" },
+    "sources": { "$ref": "../dataset/v1.json#/$defs/sources" },
+    "temporal_coverage": { "$ref": "../dataset/v1.json#/$defs/temporalCoverage" },
+    "spatial_coverage": { "$ref": "../dataset/v1.json#/$defs/spatialCoverage" },
+    "sql": { "type": "string", "description": "The SQL behind the table, when dbt does not give it." },
+    "depends_on": { "$ref": "../dataset/v1.json#/$defs/strings" },
+    "published": { "type": "boolean", "description": "false keeps the table off Queria's listings." },
+    "themes": { "$ref": "../dataset/v1.json#/$defs/strings" },
+    "ai_context": { "$ref": "../dataset/v1.json#/$defs/aiContext" },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "asset": { "type": "boolean" },
+          "semantic": {
+            "type": "object",
+            "required": ["role"],
+            "additionalProperties": false,
+            "properties": {
+              "role": { "enum": ["entity", "dimension", "measure"] },
+              "name": { "type": "string" },
+              "agg": { "type": "string" }
+            }
+          },
+          "annotations": { "type": "object" }
+        }
+      }
+    },
+    "annotations": { "type": "object", "description": "Values other hosts read, by owner." }
+  }
+}

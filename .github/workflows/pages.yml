@@ -1,0 +1,40 @@
+name: Pages
+
+# Serves the JSON Schemas at https://queria-io.github.io/tabledoc/schemas/.
+# A schema keeps its URL for good: change one by adding v2, never by editing v1's meaning.
+
+on:
+  push:
+    branches: [main]
+    paths: ["src/tabledoc/schemas/**", "assets/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: |
+          mkdir -p site
+          cp -r src/tabledoc/schemas site/schemas
+          rm -rf site/schemas/legacy
+          cp assets/favicon.ico site/
+          printf '<!doctype html><meta charset="utf-8"><title>tabledoc</title><link rel="icon" href="favicon.ico"><meta http-equiv="refresh" content="0; url=https://github.com/queria-io/tabledoc">\n' > site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
