@@ -1,4 +1,4 @@
-"""Where a build came from: the Git working copy around the root."""
+"""Where a description came from: the Git working copy around the root."""
 
 from __future__ import annotations
 

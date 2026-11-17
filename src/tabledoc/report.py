@@ -1,6 +1,6 @@
 """Findings from reading and checking a description.
 
-An error stops `build` and `push`. Warnings and info are worth knowing and do not.
+An error fails `validate`. Warnings and info are worth knowing and do not.
 Each message names the file and the thing that is wrong.
 """
 

@@ -3,20 +3,16 @@ title: 仕様 (v1)
 sidebar:
   label: 仕様
   order: 2
-description: tabledoc が読むファイル、その検査、作る tabledoc.json を定めます。
+description: tabledoc が読むファイル、その検査、プログラムに返す値を定めます。
 ---
 
-tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) を読み、機械が読む 1 つの JSON (`tabledoc.json`) を作るツールです。特定のデータの置き場や配信先には依存しません。
-
-`tabledoc.json` は dbt の `manifest.json` と同じ扱いで、人は編集しません。書き手のファイルが正です。
+tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) の書き方を定め、検査し、ほかのプログラムのために読むツールです。特定のデータの置き場や配信先には依存しません。書き手のファイルが正です。
 
 ## コマンド
 
 - `tabledoc validate`: 書き手のファイルを検査します
-- `tabledoc build`: 検査して `target/tabledoc.json` を書きます
-- `tabledoc push <URL>`: `target/tabledoc.json` と、そこに並べたファイルを受け手に送ります ([push](#push))
 
-`validate` と `build` は、エラーがあると終了コード 1 (`--strict` では警告も)、ファイルを読めないときは 2 で終わります。
+エラーがあると終了コード 1 (`--strict` では警告も)、ファイルを読めないときは 2 で終わります。
 
 ## ファイル
 
@@ -178,46 +174,47 @@ dbt で `metrics` を書くにはセマンティックレイヤー (`semantic_mo
 
 ## 読み手ごとのキー
 
-特定の読み手だけが使うキーは、その読み手の名前の下に書きます。tabledoc は中身を検査せず、`tabledoc.json` の `annotations.<読み手>` にそのまま入れます。
+特定の読み手だけが使うキーは、その読み手の名前の下に書きます。tabledoc は中身を検査せず、`annotations.<読み手>` にそのまま入れて返します。
 
 - Queria のキーは `queria:` に書きます。tabledoc が名前を知っている唯一の読み手で、中身は Queria が検査します
 - ほかの読み手は `annotations: {<読み手>: {...}}` に書きます
 
-## tabledoc.json
+## Python から読む
 
-`tabledoc build` が書く 1 つの JSON です。書き手のファイルの内容を 1 つにまとめ、以前の形式は今の形に読み替えて書きます。形は [英語版](../spec.md#tabledocjson) の例と、`schemas/tabledoc/v1.json` を参照してください。
+説明をほかの場所に送るプログラムや、別の形式に変えるプログラムは `tabledoc.read` で読みます。`validate` と同じ検査をして、以前の形式を今の形に読み替えた説明を返します。
 
-- `source` は Git の作業コピーから取ります。`repository` は `origin` の URL を https に直したもの (認証情報と `.git` を外す)、`commit` は HEAD、`path` はリポジトリのルートから tabledoc.yml のフォルダまでのパス、`dirty` はコミットしていない変更があるかです。Git の外では省きます。受け手は 2 つを比べるときに `source` と `generator` を除きます
-- 文書は本文を入れず、パスで参照します。`files` に、本文を送るすべてのファイル (ガイド・README・`docs`・それらが指すファイル) をパス・sha256・大きさ・メディアタイプで並べます。`guide`・`docs`・`schemas[].guide` の値は `files` のパスです
+```python
+import tabledoc
+
+report = tabledoc.Report()
+d = tabledoc.read(tabledoc.Options(root), report)  # root: tabledoc.yml のフォルダ
+if report.failed:
+    print(report.render())
+d.dataset   # {"name": "boj", "title": …, "guide": "README.md", "docs": […], "annotations": {…}}
+d.schemas   # [{"name": "timeseries", "title": "Time series"}]
+d.tables    # [{"schema": "timeseries", "name": "series", "sql": …, "depends_on": […], "guide": …, "columns": […]}]
+d.files     # [File(path="README.md", sha256="…", bytes=1234, media_type="text/markdown"), …]
+d.source    # {"repository": "https://github.com/…", "commit": "…", "path": "", "dirty": False}
+d.content(d.files[0])  # そのファイルの中身
+```
+
+- `source` は Git の作業コピーから取ります。`repository` は `origin` の URL を https に直したもの (認証情報と `.git` を外す)、`commit` は HEAD、`path` はリポジトリのルートから tabledoc.yml のフォルダまでのパス、`dirty` はコミットしていない変更があるかです。Git の外と `Options(with_source=False)` では None です
+- 文書はパスで参照します。`files` に、説明と一緒に送るファイル (ガイド・README・`docs`・それらが指すファイル) をパス・sha256・大きさ・メディアタイプで並べます。`guide`・`docs`・`schemas[].guide` の値は `files` のパスです。`content` はファイルの中身を返します。以前の形式の Markdown のテーブルのファイルでは、フロントマターを外した本文です
 - semantic は書き方によらず `{type, name}` の形にします (`dimension: categorical` は `{"type": "categorical"}`)
-- テーブルは `schema`・`name` の順に並べます。同じ入力からは同じバイト列を書きます
+- テーブルは `schema`・`name` の順に並べ、キーの順も決まっています。同じファイルからは同じ値を返します
 - 構造 (型・NULL・行数・ビューかどうか) は入れません
-
-## push
-
-`tabledoc push <URL>` は `target/tabledoc.json` (`--file` で変更できます) を、`--token` か `TABLEDOC_TOKEN` のトークンを `Authorization: Bearer <token>` に載せて送ります。
-
-```
-PUT <URL>                                  tabledoc.json (Content-Encoding: gzip)
-  ← 409 {"missing": ["<sha256>", …]}       受け手に無いファイル
-PUT <クエリを外した URL>/files/<sha256>     ファイルの本文。Content-Type はメディアタイプ
-PUT <URL>                                  もう一度。201 は新しい改訂、200 は同じ内容
-```
-
-URL にはクエリ (`?version=` など) を付けられます。クエリは tabledoc.json を送るときにだけ付けます。送る前に、各ファイルの sha256 が `tabledoc.json` と同じかを確認します。
 
 ## 以前の形式
 
 すべてのデータセットを一度に書き換えずに済むように、tabledoc は置き換える前の形式も読みます。新しく書くのは tabledoc の形式だけです。
 
-- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。最上位の `title_kana`・`themes`・`cover`・`ai_context` は `queria:` の下にあるものとして扱います。`catalogs` は `depends_on` に使い、`tabledoc.json` には入れません
+- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。最上位の `title_kana`・`themes`・`cover`・`ai_context` は `queria:` の下にあるものとして扱います。`catalogs` は `depends_on` に使い、返す値には入れません
 - フロントマターに `$schema: https://queria.io/schemas/table/v1.json` を持つ Markdown は、フロントマターをテーブルのファイル、本文をガイドとして読みます。`table:` で対応を決め、`fields` は `columns`、`published`・`themes`・`ai_context` は `queria:` の下として扱います。ガイドはその Markdown のパスで、送る本文はフロントマターを外したものです
 - 列の `semantic: {role, name, agg}` は次のように読み替えます。`role: entity` → `entity: {type: foreign, name}`、その列だけで `primary_key` になっていれば `type: primary`。`role: dimension` → `dimension: categorical`。`role: measure` → テーブルの metrics に `{name: <列名>, agg, expr: <列名>}` (`agg` が無ければ警告)
 - 同じフォルダに `tabledoc.yml` と `queria.yml` があるとエラーになります
 
 ## $schema とバージョン
 
-- JSON Schema は tabledoc に同梱し、`https://queria-io.github.io/tabledoc/schemas/<種類>/v<n>.json` で配ります。種類は `dataset`・`table`・`tabledoc` (生成する JSON) です
+- JSON Schema は tabledoc に同梱し、`https://queria-io.github.io/tabledoc/schemas/<種類>/v<n>.json` で配ります。種類は `dataset` と `table` です
 - キーを追加するだけなら同じバージョンのままです。キーの意味を変える・消すときは `v2` にし、tabledoc はしばらく両方を読みます
 - 知らない `$schema` のファイルは断り、tabledoc を上げるよう伝えます
-- 受け手は `tabledoc.json` の `$schema` で読み方を決めます
