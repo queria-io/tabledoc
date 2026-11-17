@@ -4,3 +4,7 @@ __pycache__/
 target/
 dist/
 .pytest_cache/
+
+# Docs (Blume)
+node_modules/
+.blume/

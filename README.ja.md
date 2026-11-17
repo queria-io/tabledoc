@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/icon.svg" width="96" alt=""></p>
+<p align="center"><img src="public/icon.svg" width="96" alt=""></p>
 
 # tabledoc
 
@@ -63,7 +63,7 @@ dbt のプロジェクトでは先に `dbt compile` を実行し、`dbt_project.
 
 ## 仕様
 
-[docs/ja/spec.md](docs/ja/spec.md) ([English](docs/spec.md))。JSON Schema は [src/tabledoc/schemas](src/tabledoc/schemas) にあり、`https://queria-io.github.io/tabledoc/schemas/` で配っています。
+ドキュメントと仕様は [tabledoc.queria.io/ja](https://tabledoc.queria.io/ja) にあります (元のファイルは [docs/ja/spec.md](docs/ja/spec.md))。JSON Schema は [src/tabledoc/schemas](src/tabledoc/schemas) にあり、`https://queria-io.github.io/tabledoc/schemas/` で配っています。
 
 ## ライセンス
 

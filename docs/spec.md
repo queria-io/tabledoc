@@ -1,4 +1,10 @@
-# tabledoc specification (v1)
+---
+title: Specification (v1)
+sidebar:
+  label: Specification
+  order: 2
+description: The files tabledoc reads, how it checks them, and the tabledoc.json it builds.
+---
 
 tabledoc reads the description of a dataset that people write (YAML and Markdown, or a dbt project's yml) and builds one JSON file for machines to read: `tabledoc.json`. It depends on no particular data store or host.
 

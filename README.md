@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/icon.svg" width="96" alt=""></p>
+<p align="center"><img src="public/icon.svg" width="96" alt=""></p>
 
 # tabledoc
 
@@ -63,7 +63,7 @@ In a dbt project, run `dbt compile` first, and write `tabledoc.yml` next to `dbt
 
 ## Specification
 
-[docs/spec.md](docs/spec.md) ([日本語](docs/ja/spec.md)). The JSON Schemas are in [src/tabledoc/schemas](src/tabledoc/schemas) and served at `https://queria-io.github.io/tabledoc/schemas/`.
+The documentation and the specification are at [tabledoc.queria.io](https://tabledoc.queria.io) (source: [docs/spec.md](docs/spec.md)). The JSON Schemas are in [src/tabledoc/schemas](src/tabledoc/schemas) and served at `https://queria-io.github.io/tabledoc/schemas/`.
 
 ## License
 
