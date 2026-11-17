@@ -1,6 +1,6 @@
 [project]
 name = "tabledoc"
-version = "0.0.0"
+version = "0.1.0"
 description = "Describe the tables of a dataset in YAML and Markdown (or dbt), and build one JSON from it"
 readme = "README.md"
 license = "MIT"
