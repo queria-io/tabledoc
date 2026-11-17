@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://queria.io/schemas/dataset/v1.json",
+  "title": "Queria dataset description (queria.yml)",
+  "description": "The description of a whole dataset, written at the root of its repository as queria.yml. `queria metadata pack` turns it and the table files into the dataset.json fdl commit takes. Keys only Queria reads (title_kana, themes, cover, ai_context, docs) are written at the top level; pack moves them under annotations.queria.",
+  "type": "object",
+  "required": ["$schema", "name", "title", "language"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "const": "https://queria.io/schemas/dataset/v1.json" },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$",
+      "description": "The dataset's name in URLs and SQL."
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "title_kana": { "type": "string", "description": "Reading of the title in kana." },
+    "description": { "type": "string", "description": "A paragraph or two shown under the title. The README.md beside this file is the longer overview." },
+    "keywords": { "$ref": "#/$defs/strings" },
+    "homepage": { "type": "string", "format": "uri" },
+    "language": { "type": "string", "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)*$", "description": "BCP 47 tag of the language this description is written in." },
+    "issued": { "type": ["string", "object"], "description": "Date first published, YYYY-MM-DD." },
+    "update_frequency": { "enum": ["continuous", "daily", "weekly", "monthly", "quarterly", "yearly", "irregular"] },
+    "licenses": { "$ref": "#/$defs/licenses" },
+    "sources": { "$ref": "#/$defs/sources" },
+    "contributors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "title": { "type": "string" },
+          "path": { "type": "string" },
+          "roles": { "$ref": "#/$defs/strings" }
+        }
+      }
+    },
+    "temporal_coverage": { "$ref": "#/$defs/temporalCoverage" },
+    "spatial_coverage": { "$ref": "#/$defs/spatialCoverage" },
+    "schemas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "guide": { "type": "string", "minLength": 1, "description": "Path of the schema's document, relative to this file." }
+        }
+      }
+    },
+    "catalogs": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "The alias each other dataset is attached under in the SQL, to its repository URL. Read from profiles.yml when not written."
+    },
+    "themes": { "$ref": "#/$defs/strings", "description": "Names from Queria's theme vocabulary." },
+    "cover": { "type": "string", "description": "An emoji shown as the dataset's cover." },
+    "ai_context": { "$ref": "#/$defs/aiContext" },
+    "docs": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Paths of the documents that belong to no one table, relative to this file. Shown in this order."
+    },
+    "annotations": { "type": "object", "description": "Values other hosts read, by owner." }
+  },
+  "$defs": {
+    "strings": { "type": "array", "items": { "type": "string" } },
+    "licenses": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string", "minLength": 1, "description": "An id from Queria's license registry, such as CC-BY-4.0." },
+          {
+            "type": "object",
+            "required": ["id"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "spdx": { "type": "string" },
+              "url": { "type": "string" },
+              "title": { "type": "string" },
+              "commercial_use": { "type": "boolean" },
+              "share_alike": { "type": "boolean" },
+              "attribution_required": { "type": "boolean" }
+            }
+          }
+        ]
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": { "title": { "type": "string" }, "path": { "type": "string" } }
+      }
+    },
+    "temporalCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "start": { "type": ["string", "integer", "null"] }, "end": { "type": ["string", "integer", "null"], "description": "Empty while the data is still updated." } }
+    },
+    "spatialCoverage": { "type": "array", "items": { "type": "string", "pattern": "^(?:[A-Z]{2}|[0-9]{6})$" } },
+    "aiContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instructions": { "type": "string" },
+        "synonyms": { "$ref": "#/$defs/strings" },
+        "examples": { "$ref": "#/$defs/strings" }
+      }
+    }
+  }
+}
