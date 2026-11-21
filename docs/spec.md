@@ -217,7 +217,9 @@ tabledoc load --ducklake work.sqlite --data-path data/ --out .fdl/pack
 - `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where new data files go (default: `FDL_DATA_PATH`, else the folder `fdl clone` noted beside the catalog)
 - `--out`: also write the folder `fdl commit` takes: `dataset.json` (`--dataset`, the primary keys and asset columns) and `assets/` (`--assets`, the files in `_meta.files`). With `--assets <folder>`, the files below it are linked into `assets/` too. The folder has to be empty or written by an earlier `load`
 - `--unlisted`: the catalog's tables and views that have no description get a row in `_meta.tables` with `published` false
-- A described table or column, or a primary key column, that is not in the catalog is an error. On an error (with `--strict`, a warning) nothing is written
+- A described table or column, or a primary key column, that is not in the catalog is an error. Names match without regard to case, as in DuckDB
+- A value its `_meta` column cannot hold is an error: `issued` other than `YYYY-MM-DD`, or a key under `queria:` of another type (such as `themes` written as a string)
+- On an error (with `--strict`, a warning) nothing is written
 
 | Table | Key | One row per |
 | --- | --- | --- |

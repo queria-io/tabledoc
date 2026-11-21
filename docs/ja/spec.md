@@ -217,7 +217,9 @@ tabledoc load --ducklake work.sqlite --data-path data/ --out .fdl/pack
 - `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ `fdl clone` がカタログの横に記録したフォルダ)
 - `--out`: `fdl commit` に渡すフォルダも書きます。`dataset.json` (`--dataset` に渡す主キーと asset の列) と `assets/` (`--assets` に渡す `_meta.files` のファイル) です。`--assets <フォルダ>` を付けると、その下のファイルも `assets/` にリンクします。フォルダは空か、前の `load` が書いたものでなければなりません
 - `--unlisted`: 説明の無いテーブルとビューにも `_meta.tables` の行を作り、`published` を false にします
-- 説明や主キーにあってカタログに無いテーブルと列はエラーです。エラー (`--strict` では警告も) があると何も書きません
+- 説明や主キーにあってカタログに無いテーブルと列はエラーです。名前は DuckDB と同じく大文字と小文字を区別せずに照合します
+- `_meta` の列の型に合わない値はエラーです。`YYYY-MM-DD` 以外の `issued` や、`queria:` の下の型の違うキー (文字列で書いた `themes` など) が該当します
+- エラー (`--strict` では警告も) があると何も書きません
 
 | テーブル | キー | 1 行の単位 |
 | --- | --- | --- |

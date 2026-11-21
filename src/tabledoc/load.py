@@ -42,17 +42,32 @@ class Target:
 
 
 def data_path(catalog: str, given: str | None) -> str | None:
-    """``given``, else the local folder `fdl clone` noted in ``<catalog>.fdl.json``."""
+    """``given``, else where `fdl clone` noted in ``<catalog>.fdl.json`` that new data files go.
+
+    As fdl reads the note: the storage's data folder (``--storage``), else the
+    local folder (``--data``), else None (the catalog's own data path).
+    """
     if given:
         return given
-    note = Path(catalog + ".fdl.json")
+    note = Path(catalog.removeprefix("ducklake:") + ".fdl.json")
     if not note.is_file():
         return None
     try:
-        data = json.loads(note.read_text(encoding="utf-8")).get("data")
+        state = json.loads(note.read_text(encoding="utf-8"))
+        storage, data, data_dir = state.get("storage"), state.get("data"), state.get("data_dir")
     except (OSError, ValueError, AttributeError) as exc:
         raise SpecError(f"cannot read {note}: {exc}") from exc
+    if storage:
+        if not data_dir:
+            raise SpecError(f"{note} names a storage but no data_dir; give --data-path")
+        base = storage if "://" in storage else Path(storage).resolve().as_posix()
+        return base.rstrip("/") + "/" + data_dir
     return Path(data).resolve().as_posix() + "/" if data else None
+
+
+def _string(value: str) -> str:
+    """``value`` as an SQL string literal."""
+    return "'" + value.replace("'", "''") + "'"
 
 
 @contextmanager
@@ -69,14 +84,14 @@ def attached(catalog: str, data: str | None) -> Iterator[Any]:
     if catalog.endswith(".sqlite"):
         options.append("META_TYPE 'sqlite'")
     if data:
-        options += [f"DATA_PATH '{data}'", "OVERRIDE_DATA_PATH true"]
+        options += [f"DATA_PATH {_string(data)}", "OVERRIDE_DATA_PATH true"]
     con = duckdb.connect()
     try:
         con.execute("INSTALL ducklake; LOAD ducklake; INSTALL httpfs; LOAD httpfs;")
         if catalog.endswith(".sqlite"):
             con.execute("INSTALL sqlite; LOAD sqlite;")
         try:
-            con.execute(f"ATTACH '{target}' AS {ALIAS} ({', '.join(options)})")
+            con.execute(f"ATTACH {_string(target)} AS {ALIAS} ({', '.join(options)})")
         except duckdb.Error as exc:
             raise SpecError(f"cannot open {catalog}: {exc}") from exc
         yield con
@@ -93,6 +108,13 @@ def check_out(out: Path) -> None:
 
 
 def write_out(description: Description, out: Path, assets: Path | None) -> None:
+    try:
+        _write_out(description, out, assets)
+    except OSError as exc:
+        raise SpecError(f"cannot write {out}: {exc}") from exc
+
+
+def _write_out(description: Description, out: Path, assets: Path | None) -> None:
     check_out(out)
     if out.exists():
         shutil.rmtree(out)
@@ -106,22 +128,25 @@ def write_out(description: Description, out: Path, assets: Path | None) -> None:
 
 
 def _missing(con: Any, description: Description, report: Report) -> None:
-    """Each described table and column, and each primary key column, has to be in the catalog."""
-    present = meta.relations(con, ALIAS)
+    """Each described table and column, and each primary key column, has to be in the catalog.
+
+    Names match without regard to case, as DuckDB's identifiers do.
+    """
+    present = {meta.fold(s, t) for s, t in meta.relations(con, ALIAS)}
     found = con.execute(
         "SELECT schema_name, table_name, column_name FROM duckdb_columns() WHERE database_name = ?", [ALIAS]
     ).fetchall()
-    columns = {(s, t): set() for s, t in present}
+    columns: dict[tuple[str, ...], set[str]] = {key: set() for key in present}
     for schema, table, name in found:
-        columns.setdefault((schema, table), set()).add(name)
+        columns.setdefault(meta.fold(schema, table), set()).add(name.lower())
     for table in description.tables:
         key = (table["schema"], table["name"])
-        if key not in present:
+        if meta.fold(*key) not in present:
             report.error("table-missing", f"{'.'.join(key)} is described but is not in the catalog", description.root)
             continue
         named = [c.get("name") for c in table.get("columns") or []] + list(table.get("primary_key") or [])
         for name in dict.fromkeys(named):
-            if name not in columns[key]:
+            if not isinstance(name, str) or name.lower() not in columns[meta.fold(*key)]:
                 report.error(
                     "column-missing",
                     f"{'.'.join(key)}.{name} is described but is not in the catalog",
@@ -135,6 +160,9 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
     Nothing is written when the check fails: on an error, or with ``strict`` on a warning.
     """
     description = read(options, report)
+    if not report.failed:
+        for where, column, kind in meta.unfit(meta.rows(description)):
+            report.error("meta-type", f"{where}: {column} cannot be written as {kind}", description.root)
     if report.failed or (strict and report.of(Level.WARNING)):
         return None
     if target.out is not None:

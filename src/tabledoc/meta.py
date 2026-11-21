@@ -15,8 +15,10 @@ where they come from. Readers ignore columns they do not know.
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
+import re
 import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -174,7 +176,7 @@ def rows(description: Description, carried: Rows | None = None, unlisted: set[Ke
     """
     columns = {name: list(spec[0]) for name, spec in TABLES.items()}
     kept = {(t["schema"], t["name"]): t for t in (carried or {}).get("tables") or []}
-    described = {(t["schema"], t["name"]) for t in description.tables}
+    described = {fold(t["schema"], t["name"]) for t in description.tables}
     tables = [
         {
             "schema": t["schema"],
@@ -185,7 +187,8 @@ def rows(description: Description, carried: Rows | None = None, unlisted: set[Ke
         for t in description.tables
     ] + [
         {"schema": s, "name": n, "published": False}
-        for s, n in sorted((unlisted or set()) - described)
+        for s, n in sorted(unlisted or set())
+        if fold(s, n) not in described
     ]
     kinds = _kinds(description)
     return {
@@ -247,6 +250,56 @@ def structure(description: Description) -> dict[str, Any]:
     }
 
 
+_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _fits(value: Any, kind: str) -> bool:
+    """Whether DuckDB can read ``value`` as a column of type ``kind`` (its outer shape)."""
+    if value is None:
+        return True
+    if kind == "DATE":
+        if not (isinstance(value, str) and _DATE.match(value)):
+            return False
+        try:
+            datetime.date.fromisoformat(value)
+        except ValueError:
+            return False
+        return True
+    if kind.endswith("[]"):
+        return isinstance(value, list) and (kind != "VARCHAR[]" or all(isinstance(v, str) for v in value))
+    if kind.startswith("STRUCT"):
+        return isinstance(value, dict)
+    if kind == "BOOLEAN":
+        return isinstance(value, bool)
+    if kind in ("INTEGER", "BIGINT"):
+        return isinstance(value, int) and not isinstance(value, bool)
+    return isinstance(value, (str, int, float)) and not isinstance(value, bool)
+
+
+def unfit(found: Rows) -> list[tuple[str, str, str]]:
+    """(where, column, type) of each value in ``found`` its `_meta` column cannot hold.
+
+    tabledoc does not check the keys under `queria:`, and `issued` is any text
+    in the schema; DuckDB refuses them here unless they have the column's type.
+    """
+    wrong = []
+    for table, records in found.items():
+        columns = TABLES[table][0]
+        for record in records:
+            key = ".".join(str(record[k]) for k in TABLES[table][1] if k in record)
+            where = f"{SCHEMA}.{table}" + (f" {key}" if key else "")
+            for column, value in record.items():
+                kind = columns.get(column)
+                if kind is not None and not _fits(value, kind):
+                    wrong.append((where, column, kind))
+    return wrong
+
+
+def fold(*names: str) -> tuple[str, ...]:
+    """``names`` as DuckDB compares identifiers: without regard to case."""
+    return tuple(n.lower() for n in names)
+
+
 def _quote(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
 
@@ -299,9 +352,10 @@ def _comment(con: Any, catalog: str, found: Rows) -> None:
     """Each table's, view's and column's comment as `_meta` describes it; cleared when it does not.
 
     A view's columns get none: DuckDB takes no `COMMENT ON COLUMN` for a view.
+    Names match without regard to case, as DuckDB's identifiers do.
     """
-    tables = {(t["schema"], t["name"]): t.get("description") for t in found.get("tables") or []}
-    columns = {(c["schema"], c["table"], c["name"]): c.get("description") for c in found.get("columns") or []}
+    tables = {fold(t["schema"], t["name"]): t.get("description") for t in found.get("tables") or []}
+    columns = {fold(c["schema"], c["table"], c["name"]): c.get("description") for c in found.get("columns") or []}
     relations = con.execute(
         """
         SELECT schema_name, table_name, comment, 'TABLE' FROM duckdb_tables() WHERE database_name = $1
@@ -311,7 +365,7 @@ def _comment(con: Any, catalog: str, found: Rows) -> None:
         [catalog],
     ).fetchall()
     for schema, name, held, kind in relations:
-        wanted = tables.get((schema, name))
+        wanted = tables.get(fold(schema, name))
         if schema != SCHEMA and held != wanted:
             con.execute(f"COMMENT ON {kind} {catalog}.{_quote(schema)}.{_quote(name)} IS {_literal(wanted)}")
     held_columns = con.execute(
@@ -324,7 +378,7 @@ def _comment(con: Any, catalog: str, found: Rows) -> None:
         [catalog, SCHEMA],
     ).fetchall()
     for schema, table, name, held in held_columns:
-        wanted = columns.get((schema, table, name))
+        wanted = columns.get(fold(schema, table, name))
         if held != wanted:
             target = ".".join([catalog, *map(_quote, (schema, table, name))])
             con.execute(f"COMMENT ON COLUMN {target} IS {_literal(wanted)}")

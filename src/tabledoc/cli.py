@@ -58,6 +58,8 @@ def main(argv: list[str] | None = None) -> int:
             if not catalog:
                 raise SpecError("give the catalog: --ducklake or FDL_WORKING")
             data = args.data_path or os.environ.get("FDL_DATA_PATH")
+            if args.assets and not args.out:
+                raise SpecError("--assets links its files into --out's assets/; give --out too")
             target = Target(catalog, data, args.out, args.assets, args.unlisted)
             if load(options, target, report, strict=args.strict) is not None:
                 print(f"wrote {target.catalog}" + (f" and {target.out}" if target.out else ""), file=sys.stderr)

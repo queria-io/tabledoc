@@ -6,7 +6,7 @@ import pytest
 
 from tabledoc import Options
 from tabledoc.cli import main
-from tabledoc.load import ALIAS, Target, attached, load
+from tabledoc.load import ALIAS, Target, attached, data_path, load
 from tabledoc.report import Report, SpecError
 
 DATASET = "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\n"
@@ -156,3 +156,57 @@ def test_cli_reads_the_catalog_from_the_environment(write, catalog, monkeypatch)
     monkeypatch.setenv("FDL_DATA_PATH", data)
     assert main(["load", "--root", str(root), "--quiet"]) == 0
     assert query(path, data, f"SELECT title FROM {ALIAS}._meta.dataset") == [("Shop",)]
+
+
+def test_a_value_meta_cannot_hold_is_an_error(write, catalog):
+    path, data = catalog
+    root = project(write)
+    (root / "tabledoc.yml").write_text(
+        DATASET + "name: shop\nissued: 2026-10\nqueria: {themes: trade}\n", encoding="utf-8"
+    )
+    report = Report()
+    assert load(Options(root, with_source=False), Target(str(path), data), report) is None
+    assert sorted(f.message for f in report.findings if f.code == "meta-type") == [
+        "_meta.dataset: issued cannot be written as DATE",
+        "_meta.dataset: themes cannot be written as VARCHAR[]",
+    ]
+
+
+def test_names_match_without_regard_to_case(write, catalog):
+    path, data = catalog
+    root = project(write)
+    (root / "sales" / "Orders.yml").write_text(
+        TABLE + "description: Upper.\nprimary_key: [ID]\ncolumns: [{name: ID, description: The order}]\n",
+        encoding="utf-8",
+    )
+    (root / "sales" / "orders.yml").unlink()
+    (root / "sales" / "orders.md").unlink()
+    report = Report()
+    assert load(Options(root, with_source=False), Target(str(path), data, unlisted=True), report) is not None, (
+        report.render()
+    )
+    assert query(path, data, f"SELECT name FROM {ALIAS}._meta.tables ORDER BY name") == [
+        ("Orders",),
+        ("extra",),
+        ("recent",),
+    ]
+    comments = f"SELECT comment FROM duckdb_tables() WHERE database_name = '{ALIAS}' AND table_name = 'orders'"
+    assert query(path, data, comments) == [("Upper.",)]
+
+
+def test_a_quote_in_the_path(write, tmp_path):
+    folder = tmp_path / "it's"
+    (folder / "data").mkdir(parents=True)
+    with attached(str(folder / "w.sqlite"), (folder / "data").as_posix() + "/") as con:
+        con.execute(f"CREATE TABLE {ALIAS}.main.t AS SELECT 1 AS x")
+
+
+def test_data_path_follows_fdl_clones_note(tmp_path):
+    working = tmp_path / "work.sqlite"
+    note = tmp_path / "work.sqlite.fdl.json"
+    note.write_text(json.dumps({"storage": "s3://bucket/repo/", "data_dir": "data/"}))
+    assert data_path(str(working), None) == "s3://bucket/repo/data/"
+    assert data_path("ducklake:" + str(working), None) == "s3://bucket/repo/data/"
+    note.write_text(json.dumps({"data": str(tmp_path / "d")}))
+    assert data_path(str(working), None) == (tmp_path / "d").resolve().as_posix() + "/"
+    assert data_path(str(working), "given/") == "given/"
