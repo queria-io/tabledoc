@@ -10,6 +10,7 @@ tabledoc reads the description of a dataset that people write in YAML and Markdo
 - Semantics (join keys, dimensions, metrics) follow dbt's semantic layer
 - In a dbt project, descriptions, SQL and lineage come from `target/manifest.json`
 - From Python, `tabledoc.read` returns the checked description, with the guides and the files they link to by path and sha256
+- `tabledoc load` writes the description into a DuckLake catalog as the tables of its `_meta` schema, so it travels with the data
 
 ## Install
 
@@ -55,6 +56,7 @@ metrics:
 
 ```bash
 tabledoc validate            # check
+tabledoc load --ducklake work.sqlite   # check, then write it into the catalog's _meta schema
 ```
 
 In a dbt project, run `dbt compile` first, and write `tabledoc.yml` next to `dbt_project.yml`.

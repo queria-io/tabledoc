@@ -1,13 +1,15 @@
-"""tabledoc validate."""
+"""tabledoc validate and tabledoc load."""
 
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from .description import Options, read
+from .load import Target, load
 from .report import Level, Report, SpecError
 
 
@@ -23,19 +25,42 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=_version())
     commands = p.add_subparsers(dest="command", required=True)
     v = commands.add_parser("validate", help="check the description")
-    v.add_argument("--root", type=Path, default=Path.cwd(), help="the folder of tabledoc.yml (default: here)")
-    v.add_argument("--manifest", type=Path, default=None, help="dbt's manifest.json (default: target/manifest.json)")
-    v.add_argument("--profiles", type=Path, default=None, help="dbt's profiles.yml (default: DBT_PROFILES_DIR, else the root)")
-    v.add_argument("--quiet", action="store_true", help="hide info findings")
-    v.add_argument("--strict", action="store_true", help="fail on warnings too")
+    _common(v)
+    w = commands.add_parser("load", help="check the description and write it into a DuckLake catalog's _meta schema")
+    _common(w)
+    w.add_argument("--ducklake", default=None, help="the DuckLake catalog (default: FDL_WORKING)")
+    w.add_argument(
+        "--data-path", default=None, help="where new data files go (default: FDL_DATA_PATH, else fdl clone's note)"
+    )
+    w.add_argument("--out", type=Path, default=None, help="also write dataset.json and assets/ for fdl commit here")
+    w.add_argument("--assets", type=Path, default=None, help="files of the asset columns, linked into --out's assets/")
+    w.add_argument("--unlisted", action="store_true", help="write the tables with no description as not published")
     return p
+
+
+def _common(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--root", type=Path, default=Path.cwd(), help="the folder of tabledoc.yml (default: here)")
+    p.add_argument("--manifest", type=Path, default=None, help="dbt's manifest.json (default: target/manifest.json)")
+    p.add_argument("--profiles", type=Path, default=None, help="dbt's profiles.yml (default: DBT_PROFILES_DIR, else the root)")
+    p.add_argument("--quiet", action="store_true", help="hide info findings")
+    p.add_argument("--strict", action="store_true", help="fail on warnings too")
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     report = Report()
+    options = Options(args.root, args.manifest, args.profiles, with_source=False)
     try:
-        read(Options(args.root, args.manifest, args.profiles, with_source=False), report)
+        if args.command == "validate":
+            read(options, report)
+        else:
+            catalog = args.ducklake or os.environ.get("FDL_WORKING")
+            if not catalog:
+                raise SpecError("give the catalog: --ducklake or FDL_WORKING")
+            data = args.data_path or os.environ.get("FDL_DATA_PATH")
+            target = Target(catalog, data, args.out, args.assets, args.unlisted)
+            if load(options, target, report, strict=args.strict) is not None:
+                print(f"wrote {target.catalog}" + (f" and {target.out}" if target.out else ""), file=sys.stderr)
     except SpecError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

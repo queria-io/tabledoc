@@ -6,11 +6,12 @@ sidebar:
 description: tabledoc が読むファイル、その検査、プログラムに返す値を定めます。
 ---
 
-tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) の書き方を定め、検査し、ほかのプログラムのために読むツールです。特定のデータの置き場や配信先には依存しません。書き手のファイルが正です。
+tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) の書き方を定め、検査し、ほかのプログラムのために読むツールです。特定の配信先には依存しません。`tabledoc load` は説明を DuckLake のカタログに書きます。書き手のファイルが正です。
 
 ## コマンド
 
 - `tabledoc validate`: 書き手のファイルを検査します
+- `tabledoc load`: 検査してから、説明を DuckLake のカタログに書きます ([DuckLake のカタログに書く](#ducklake-のカタログに書く))
 
 エラーがあると終了コード 1 (`--strict` では警告も)、ファイルを読めないときは 2 で終わります。
 
@@ -195,6 +196,7 @@ d.schemas   # [{"name": "timeseries", "title": "Time series"}]
 d.tables    # [{"schema": "timeseries", "name": "series", "sql": …, "depends_on": […], "guide": …, "columns": […]}]
 d.files     # [File(path="README.md", sha256="…", bytes=1234, media_type="text/markdown"), …]
 d.source    # {"repository": "https://github.com/…", "commit": "…", "path": "", "dirty": False}
+d.catalogs  # {"other": "https://…"}: SQL が読むほかのデータセット (SQL の中の名前 → URL)
 d.content(d.files[0])  # そのファイルの中身
 ```
 
@@ -204,11 +206,38 @@ d.content(d.files[0])  # そのファイルの中身
 - テーブルは `schema`・`name` の順に並べ、キーの順も決まっています。同じファイルからは同じ値を返します
 - 構造 (型・NULL・行数・ビューかどうか) は入れません
 
+## DuckLake のカタログに書く
+
+`tabledoc load` は `validate` と同じ検査をしてから、説明を [DuckLake](https://ducklake.select) のカタログの `_meta` スキーマのテーブルとして書きます。カタログを読むプログラムは、データと一緒に説明も SQL で読めます。
+
+```bash
+tabledoc load --ducklake work.sqlite --data-path data/ --out .fdl/pack
+```
+
+- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ `fdl clone` がカタログの横に記録したフォルダ)
+- `--out`: `fdl commit` に渡すフォルダも書きます。`dataset.json` (`--dataset` に渡す主キーと asset の列) と `assets/` (`--assets` に渡す `_meta.files` のファイル) です。`--assets <フォルダ>` を付けると、その下のファイルも `assets/` にリンクします。フォルダは空か、前の `load` が書いたものでなければなりません
+- `--unlisted`: 説明の無いテーブルとビューにも `_meta.tables` の行を作り、`published` を false にします
+- 説明があってカタログに無いテーブルはエラーです。エラー (`--strict` では警告も) があると何も書きません
+
+| テーブル | キー | 1 行の単位 |
+| --- | --- | --- |
+| `_meta.dataset` | | データセット: `title`・`description`・`language`・`keywords`・`homepage`・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` |
+| `_meta.schemas` | `schema` | スキーマ: `title`・`description` |
+| `_meta.tables` | `schema`・`name` | テーブルとビュー: `title`・`description`・`keywords`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`materialized`・`sql`・`depends_on`・`source_path` |
+| `_meta.columns` | `schema`・`table`・`name` | 説明のある列: `title`・`description`・`entity` (結合キーの名前) |
+| `_meta.files` | `path` | ガイドと文書: `sha256`・`bytes`・`media_type`・`kind` (`guide` か `doc`)・`schema`・`table` (ガイドの対象)・`position` (`docs` の順番)・`title` |
+
+- `queria:` のキーのうち Queria がカタログから読むものも列にします。`_meta.dataset` の `title_kana`・`themes`・`cover`・`ai_context` と、`_meta.tables` の `published`・`themes`・`ai_context` です。読み手は知らない列を無視します
+- `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
+- ファイルの中身はカタログに入れません。`_meta.files.sha256` は asset の列で、FDL では `fdl commit --assets` が中身ごとにファイルをアップロードします
+- テーブル・ビュー・列の説明は DuckDB のコメント (`COMMENT ON`) にも書くので、`DESCRIBE` や `duckdb_tables()` でも読めます。ビューの列には書きません
+- `_meta` のテーブルは毎回 1 つのトランザクションで作り直します。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql` と `depends_on` をカタログの `_meta` から引き継ぎます
+
 ## 以前の形式
 
 すべてのデータセットを一度に書き換えずに済むように、tabledoc は置き換える前の形式も読みます。新しく書くのは tabledoc の形式だけです。
 
-- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。最上位の `title_kana`・`themes`・`cover`・`ai_context` は `queria:` の下にあるものとして扱います。`catalogs` は `depends_on` に使い、返す値には入れません
+- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。最上位の `title_kana`・`themes`・`cover`・`ai_context` は `queria:` の下にあるものとして扱います。`catalogs` は `depends_on` に使い、`catalogs` として返します
 - フロントマターに `$schema: https://queria.io/schemas/table/v1.json` を持つ Markdown は、フロントマターをテーブルのファイル、本文をガイドとして読みます。`table:` で対応を決め、`fields` は `columns`、`published`・`themes`・`ai_context` は `queria:` の下として扱います。ガイドはその Markdown のパスで、送る本文はフロントマターを外したものです
 - 列の `semantic: {role, name, agg}` は次のように読み替えます。`role: entity` → `entity: {type: foreign, name}`、その列だけで `primary_key` になっていれば `type: primary`。`role: dimension` → `dimension: categorical`。`role: measure` → テーブルの metrics に `{name: <列名>, agg, expr: <列名>}` (`agg` が無ければ警告)
 - 同じフォルダに `tabledoc.yml` と `queria.yml` があるとエラーになります

@@ -6,11 +6,12 @@ sidebar:
 description: The files tabledoc reads, how it checks them, and what it returns to a program.
 ---
 
-tabledoc defines how people write the description of a dataset (YAML and Markdown, or a dbt project's yml), checks it, and reads it for other programs. It depends on no particular data store or host. The files the author writes are the source.
+tabledoc defines how people write the description of a dataset (YAML and Markdown, or a dbt project's yml), checks it, and reads it for other programs. It depends on no particular host; `tabledoc load` writes the description into a DuckLake catalog. The files the author writes are the source.
 
 ## Commands
 
 - `tabledoc validate`: check the author's files
+- `tabledoc load`: check them and write the description into a DuckLake catalog ([Writing into a DuckLake catalog](#writing-into-a-ducklake-catalog))
 
 It exits with 1 when there are errors (with `--strict`, warnings too) and 2 when the files cannot be read at all.
 
@@ -195,6 +196,7 @@ d.schemas   # [{"name": "timeseries", "title": "Time series"}]
 d.tables    # [{"schema": "timeseries", "name": "series", "sql": …, "depends_on": […], "guide": …, "columns": […]}]
 d.files     # [File(path="README.md", sha256="…", bytes=1234, media_type="text/markdown"), …]
 d.source    # {"repository": "https://github.com/…", "commit": "…", "path": "", "dirty": False}
+d.catalogs  # {"other": "https://…"}: the other datasets the SQL reads, by the name it reads them under
 d.content(d.files[0])  # the bytes of that file
 ```
 
@@ -204,11 +206,38 @@ d.content(d.files[0])  # the bytes of that file
 - Tables are sorted by `schema`, then `name`, and keys come in a fixed order. The same files give the same records
 - The structure (types, nullability, row counts, whether a table is a view) is not in it
 
+## Writing into a DuckLake catalog
+
+`tabledoc load` checks the description as `validate` does, then writes it into a [DuckLake](https://ducklake.select) catalog as the tables of the `_meta` schema. Any program that reads the catalog reads the description with it, with SQL.
+
+```bash
+tabledoc load --ducklake work.sqlite --data-path data/ --out .fdl/pack
+```
+
+- `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where new data files go (default: `FDL_DATA_PATH`, else the folder `fdl clone` noted beside the catalog)
+- `--out`: also write the folder `fdl commit` takes: `dataset.json` (`--dataset`, the primary keys and asset columns) and `assets/` (`--assets`, the files in `_meta.files`). With `--assets <folder>`, the files below it are linked into `assets/` too. The folder has to be empty or written by an earlier `load`
+- `--unlisted`: the catalog's tables and views that have no description get a row in `_meta.tables` with `published` false
+- A described table that is not in the catalog is an error. On an error (with `--strict`, a warning) nothing is written
+
+| Table | Key | One row per |
+| --- | --- | --- |
+| `_meta.dataset` | | the dataset: `title`, `description`, `language`, `keywords`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` |
+| `_meta.schemas` | `schema` | schema: `title`, `description` |
+| `_meta.tables` | `schema`, `name` | table or view: `title`, `description`, `keywords`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `materialized`, `sql`, `depends_on`, `source_path` |
+| `_meta.columns` | `schema`, `table`, `name` | column described: `title`, `description`, `entity` (the join key's name) |
+| `_meta.files` | `path` | guide or document: `sha256`, `bytes`, `media_type`, `kind` (`guide` or `doc`), `schema`, `table` (what the guide is for), `position` (the order of `docs`), `title` |
+
+- The keys under `queria:` that Queria reads from the catalog are columns too: `title_kana`, `themes`, `cover`, `ai_context` on `_meta.dataset`, and `published`, `themes`, `ai_context` on `_meta.tables`. Readers ignore columns they do not know
+- `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
+- The files are not in the catalog. `_meta.files.sha256` is an asset column: with FDL, `fdl commit --assets` uploads each file by its content
+- The descriptions of tables, views and columns are also written as DuckDB comments (`COMMENT ON`), so `DESCRIBE` and `duckdb_tables()` show them. A view's columns get none
+- The `_meta` tables are dropped and written again each time, in one transaction. Without a dbt build (no `sql` in the description), each table keeps the `sql` and `depends_on` the catalog's `_meta` holds
+
 ## The older format
 
 So that every dataset need not be rewritten at once, tabledoc also reads the format it replaces. Only tabledoc's format is written anew.
 
-- Without `tabledoc.yml`, `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) is read as `tabledoc.yml`. Its top-level `title_kana`, `themes`, `cover` and `ai_context` are read as if under `queria:`. `catalogs` is used for `depends_on` and not returned
+- Without `tabledoc.yml`, `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) is read as `tabledoc.yml`. Its top-level `title_kana`, `themes`, `cover` and `ai_context` are read as if under `queria:`. `catalogs` is used for `depends_on` and returned as `catalogs`
 - Markdown whose front matter has `$schema: https://queria.io/schemas/table/v1.json` is read as a table file (the front matter) and its guide (the text below). `table:` says which table, `fields` is `columns`, and `published`, `themes` and `ai_context` are read as if under `queria:`. The guide is that Markdown's path, and what is sent is the text without the front matter
 - A field's `semantic: {role, name, agg}` is read as: `role: entity` → `entity: {type: foreign, name}`, or `type: primary` when the column alone is the `primary_key`; `role: dimension` → `dimension: categorical`; `role: measure` → a metric `{name: <column>, agg, expr: <column>}` on the table (without `agg`, a warning)
 - `tabledoc.yml` and `queria.yml` in the same folder is an error

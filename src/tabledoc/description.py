@@ -43,6 +43,8 @@ class Description:
     files: list[files.File]
     #: The Git working copy around the root; None outside Git or without ``with_source``.
     source: dict[str, Any] | None = None
+    #: Alias -> repository URL of each other dataset the SQL reads (from dbt's profiles.yml).
+    catalogs: dict[str, str] | None = None
 
     def content(self, file: files.File) -> bytes:
         return files.content(self.root, file.path)
@@ -193,6 +195,7 @@ def read(options: Options, report: Report) -> Description:
         tables=[_ordered(t) for t in shaped],
         files=sent,
         source=git.source(root) if options.with_source else None,
+        catalogs={**attached, **dataset.catalogs} or None,
     )
 
 

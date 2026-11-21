@@ -10,6 +10,7 @@ tabledoc は、人が YAML と Markdown (または dbt のプロジェクトの 
 - semantic (結合キー・ディメンション・メトリクス) は dbt のセマンティックレイヤーの書き方にそろえています
 - dbt のプロジェクトでは、説明・SQL・依存関係を `target/manifest.json` から取ります
 - Python からは `tabledoc.read` で、検査した説明を読めます。ガイドとそこから参照するファイルはパスと sha256 で並べます
+- `tabledoc load` は説明を DuckLake のカタログの `_meta` スキーマのテーブルとして書きます。説明はデータと一緒に配布されます
 
 ## インストール
 
@@ -55,6 +56,7 @@ metrics:
 
 ```bash
 tabledoc validate            # 検査する
+tabledoc load --ducklake work.sqlite   # 検査して、カタログの _meta スキーマに書く
 ```
 
 dbt のプロジェクトでは先に `dbt compile` を実行し、`dbt_project.yml` の隣に `tabledoc.yml` を書きます。
