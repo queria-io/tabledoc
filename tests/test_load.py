@@ -82,10 +82,30 @@ def test_writes_meta_comments_and_the_folder_for_fdl(write, catalog, tmp_path):
     assert {"schema": "sales", "name": "orders", "primary_key": ["id"], "fields": [{"name": "file", "asset": True}]} in (
         structure["tables"]
     )
-    assert {"schema": "_meta", "name": "files", "primary_key": ["path"], "fields": [{"name": "sha256", "asset": True}]} in (
-        structure["tables"]
-    )
+    assert {
+        "schema": "_meta",
+        "name": "files",
+        "primary_key": ["path"],
+        "fields": [{"name": "sha256", "asset": True}],
+        "profile": False,
+    } in structure["tables"]
+    # Queria does not list sales.extra (no description), so fdl makes no profile of it.
+    assert {"schema": "sales", "name": "extra", "profile": False} in structure["tables"]
+    assert not [t for t in structure["tables"] if t["name"] == "recent"]
     assert (out / "assets" / "files" / "README.md").read_text() == "Overview.\n"
+
+
+def test_a_table_not_published_gets_no_profile(write, catalog, tmp_path):
+    path, data = catalog
+    root = project(write)
+    (root / "sales" / "recent.yml").write_text(TABLE + "description: The last orders.\nqueria: {published: false}\n")
+    out = root / ".fdl" / "pack"
+    report = Report()
+    assert load(Options(root, with_source=False), Target(str(path), data, out), report) is not None, report.render()
+    tables = json.loads((out / "dataset.json").read_text())["tables"]
+    assert {"schema": "sales", "name": "recent", "profile": False} in tables
+    # Without --unlisted Queria lists sales.extra, so it keeps its profile.
+    assert not [t for t in tables if t["name"] == "extra"]
 
 
 def test_a_second_load_replaces_meta_and_clears_comments(write, catalog):

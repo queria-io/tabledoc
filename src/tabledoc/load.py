@@ -107,21 +107,21 @@ def check_out(out: Path) -> None:
         raise SpecError(f"{out} holds files tabledoc did not write; give an empty folder")
 
 
-def write_out(description: Description, out: Path, assets: Path | None) -> None:
+def write_out(description: Description, out: Path, assets: Path | None, unlisted: set[meta.Key] | None = None) -> None:
     try:
-        _write_out(description, out, assets)
+        _write_out(description, out, assets, unlisted)
     except OSError as exc:
         raise SpecError(f"cannot write {out}: {exc}") from exc
 
 
-def _write_out(description: Description, out: Path, assets: Path | None) -> None:
+def _write_out(description: Description, out: Path, assets: Path | None, unlisted: set[meta.Key] | None) -> None:
     check_out(out)
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
     # Hidden, so fdl commit leaves it out of the version.
     (out / MARK).write_text("written by tabledoc load; the next load replaces this folder\n", encoding="utf-8")
-    structure = json.dumps(meta.structure(description), ensure_ascii=False, indent=2)
+    structure = json.dumps(meta.structure(description, unlisted), ensure_ascii=False, indent=2)
     (out / "dataset.json").write_text(structure + "\n", encoding="utf-8")
     (out / ASSETS).mkdir()
     meta.write_assets(description, out / ASSETS, assets)
@@ -169,6 +169,7 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
         check_out(target.out)
     import duckdb
 
+    unlisted = None
     try:
         with attached(target.catalog, data_path(target.catalog, target.data_path)) as con:
             _missing(con, description, report)
@@ -181,6 +182,6 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
     except duckdb.Error as exc:
         raise SpecError(f"cannot write {meta.SCHEMA} in {target.catalog}: {exc}") from exc
     if target.out is not None:
-        write_out(description, target.out, target.assets)
+        write_out(description, target.out, target.assets, unlisted)
     return description
 
