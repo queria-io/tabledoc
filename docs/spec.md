@@ -135,10 +135,10 @@ Types, nullability and row counts are not written. The data store holds the stru
 
 When the root has `dbt_project.yml`, tabledoc reads `target/manifest.json` (`--manifest` changes it). Run `dbt compile` (or a build) first; without a manifest, tabledoc warns and reads only the table files.
 
-- The tables are the enabled models materialized as `table`, `view` or `incremental`, under the model's `schema` and `alias`. Ephemeral and disabled models, seeds, snapshots and tests make no table, so they are not listed. A model with no description is listed with its `sql` and `depends_on` only
+- The tables are the enabled models materialized as `table`, `view` or `incremental`, under the model's `schema` and `alias`. Ephemeral and disabled models, seeds, snapshots and tests make no table, so they are not listed. A model with no description is listed with what dbt fills in only (`materialized`, `sql`, `depends_on`, `source_path`)
 - The description comes from the model's yml. `description` and the columns' `description` as they are; keys dbt does not have (`title`, `primary_key`, `sources`, a column's `title`, `asset` and so on) and `queria` under `config.meta`
 - Semantics come from the columns' `entity`, `dimension` and `granularity`, and from the semantic layer's simple `metrics`
-- `sql` is `compiled_code`. `depends_on` is read from it by DuckDB's parser. A table of another dataset is written `<repository URL>#<schema>.<table>`, where the URL comes from the DuckLake ATTACHes in `profiles.yml` (`--profiles`, else `DBT_PROFILES_DIR`, else the root)
+- `materialized` is the model's materialization, `source_path` its `original_file_path`, and `sql` its `compiled_code`. `depends_on` is read from it by DuckDB's parser. A table of another dataset is written `<repository URL>#<schema>.<table>`, where the URL comes from the DuckLake ATTACHes in `profiles.yml` (`--profiles`, else `DBT_PROFILES_DIR`, else the root)
 - A guide is the `.md` with the same name next to the model's `.sql` (dbt ignores `.md` files without a docs block)
 - A table is described in one place. When both a table file and dbt's yml describe it, that is an error. When dbt's yml says nothing about it, the table file is read, and `sql` comes from dbt
 
@@ -233,7 +233,7 @@ tabledoc load --ducklake work.sqlite --data-path data/ --out .fdl/pack
 - `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
 - The files are not in the catalog. `_meta.files.sha256` is an asset column: with FDL, `fdl commit --assets` uploads each file by its content
 - The descriptions of tables, views and columns are also written as DuckDB comments (`COMMENT ON`), so `DESCRIBE` and `duckdb_tables()` show them. A view's columns get none
-- The `_meta` tables are dropped and written again each time, in one transaction. Without a dbt build (no `sql` in the description), each table keeps the `sql` and `depends_on` the catalog's `_meta` holds
+- The `_meta` tables are dropped and written again each time, in one transaction. Without a dbt build (no `sql` in the description), each table keeps the `materialized`, `sql`, `depends_on` and `source_path` the catalog's `_meta` holds
 
 ## The older format
 

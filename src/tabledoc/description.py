@@ -103,11 +103,11 @@ def _merge(
                 f"{model.schema}.{model.name} is described in dbt's yml and in {found.path}; keep one",
                 model.path,
             )
-        sql = {"sql": model.record["sql"]} if "sql" in model.record and "sql" not in found.record else {}
+        built = {k: model.record[k] for k in shape.BUILT_KEYS if k in model.record and k not in found.record}
         merged[model.key] = source.Table(
             found.schema,
             found.name,
-            record={**found.record, **sql},
+            record={**found.record, **built},
             path=found.path,
             guide=found.guide or model.guide,
         )

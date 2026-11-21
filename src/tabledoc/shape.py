@@ -38,9 +38,13 @@ TABLE_KEYS = (
     "sources",
     "temporal_coverage",
     "spatial_coverage",
+    "materialized",
     "sql",
     "depends_on",
+    "source_path",
 )
+#: What dbt fills in from the build, not what the author writes.
+BUILT_KEYS = ("materialized", "sql", "depends_on", "source_path")
 COLUMN_KEYS = ("name", "title", "description", "asset")
 METRIC_KEYS = ("name", "agg", "expr", "description")
 
@@ -110,4 +114,4 @@ def table(record: dict[str, Any]) -> dict[str, Any]:
 def described(record: dict[str, Any]) -> bool:
     """Whether ``record`` says anything an author writes, beyond the SQL dbt fills in."""
     shaped = table(record)
-    return bool(set(shaped) - {"sql", "depends_on"})
+    return bool(set(shaped) - set(BUILT_KEYS))

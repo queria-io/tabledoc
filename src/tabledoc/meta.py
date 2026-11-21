@@ -24,7 +24,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .description import README, Description
-from .shape import QUERIA
+from .shape import BUILT_KEYS, QUERIA
 
 SCHEMA = "_meta"
 
@@ -181,7 +181,7 @@ def rows(description: Description, carried: Rows | None = None, unlisted: set[Ke
         {
             "schema": t["schema"],
             "name": t["name"],
-            **_pick(kept.get((t["schema"], t["name"]), {}), ["sql", "depends_on"]),
+            **_pick(kept.get((t["schema"], t["name"]), {}), BUILT_KEYS),
             **_record(t, columns["tables"][2:], "table"),
         }
         for t in description.tables

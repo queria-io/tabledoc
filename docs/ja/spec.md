@@ -135,10 +135,10 @@ columns:
 
 ルートに `dbt_project.yml` があると、tabledoc は `target/manifest.json` (`--manifest` で変更できます) を読みます。先に `dbt compile` (またはビルド) を実行してください。manifest が無いときは警告を出し、テーブルのファイルだけを読みます。
 
-- テーブルは、有効なモデルのうち `materialized` が `table`・`view`・`incremental` のものです。モデルの `schema` と `alias` で名前を決めます。`ephemeral` と無効なモデル、seed・snapshot・テストはテーブルにならないので並べません。説明の無いモデルは `sql` と `depends_on` だけで並べます
+- テーブルは、有効なモデルのうち `materialized` が `table`・`view`・`incremental` のものです。モデルの `schema` と `alias` で名前を決めます。`ephemeral` と無効なモデル、seed・snapshot・テストはテーブルにならないので並べません。説明の無いモデルは dbt が埋める値 (`materialized`・`sql`・`depends_on`・`source_path`) だけで並べます
 - 説明はモデルの yml から取ります。`description` と列の `description` はそのまま、dbt に無いキー (`title`・`primary_key`・`sources`・列の `title`・`asset` など) と `queria` は `config.meta` に書きます
 - semantic は列の `entity`・`dimension`・`granularity` と、セマンティックレイヤーの simple の `metrics` から取ります
-- `sql` は `compiled_code` です。`depends_on` は DuckDB の構文解析で SQL から読みます。ほかのデータセットのテーブルは `<リポジトリの URL>#<schema>.<table>` と書き、URL は `profiles.yml` (`--profiles`、無ければ `DBT_PROFILES_DIR`、無ければルート) の DuckLake の ATTACH から引きます
+- `materialized` はモデルの materialization、`source_path` は `original_file_path`、`sql` は `compiled_code` です。`depends_on` は DuckDB の構文解析で SQL から読みます。ほかのデータセットのテーブルは `<リポジトリの URL>#<schema>.<table>` と書き、URL は `profiles.yml` (`--profiles`、無ければ `DBT_PROFILES_DIR`、無ければルート) の DuckLake の ATTACH から引きます
 - ガイドはモデルの `.sql` の隣の同じ名前の `.md` です (dbt は docs ブロックの無い `.md` を無視します)
 - 1 つのテーブルの説明は 1 か所に書きます。テーブルのファイルと dbt の yml の両方に説明があると、エラーになります。dbt の yml に説明が無ければテーブルのファイルを読み、`sql` は dbt から取ります
 
@@ -233,7 +233,7 @@ tabledoc load --ducklake work.sqlite --data-path data/ --out .fdl/pack
 - `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
 - ファイルの中身はカタログに入れません。`_meta.files.sha256` は asset の列で、FDL では `fdl commit --assets` が中身ごとにファイルをアップロードします
 - テーブル・ビュー・列の説明は DuckDB のコメント (`COMMENT ON`) にも書くので、`DESCRIBE` や `duckdb_tables()` でも読めます。ビューの列には書きません
-- `_meta` のテーブルは毎回 1 つのトランザクションで作り直します。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql` と `depends_on` をカタログの `_meta` から引き継ぎます
+- `_meta` のテーブルは毎回 1 つのトランザクションで作り直します。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `materialized`・`sql`・`depends_on`・`source_path` をカタログの `_meta` から引き継ぎます
 
 ## 以前の形式
 

@@ -232,7 +232,14 @@ def test_dbt_models(write):
     assert not report.failed, report.render()
     tables = {(t["schema"], t["name"]): t for t in document["tables"]}
     assert set(tables) == {("s", "orders"), ("s", "base"), ("py", "python")}
-    assert tables[("s", "base")] == {"schema": "s", "name": "base", "sql": "select 1 as id", "depends_on": []}
+    assert tables[("s", "base")] == {
+        "schema": "s",
+        "name": "base",
+        "materialized": "table",
+        "sql": "select 1 as id",
+        "depends_on": [],
+        "source_path": "models/base.sql",
+    }
     assert tables[("py", "python")]["title"] == "Made in Python"
     assert tables[("py", "python")]["sql"] == "select 1 as id from s.base"
     assert tables[("s", "orders")] == {
@@ -241,8 +248,10 @@ def test_dbt_models(write):
         "title": "Orders",
         "description": "One row per order",
         "primary_key": ["id"],
+        "materialized": "table",
         "sql": "select 1 as id from s.base",
         "depends_on": ["s.base"],
+        "source_path": "models/orders.sql",
         "guide": "models/orders.md",
         "columns": [
             {"name": "id", "title": "ID", "entity": {"type": "primary", "name": "order"}},
