@@ -214,13 +214,22 @@ def rows(description: Description, carried: Rows | None = None, unlisted: set[Ke
     }
 
 
-def structure(description: Description) -> dict[str, Any]:
+def published(table: dict[str, Any]) -> bool:
+    """Whether Queria lists a described table: unless `published` under `queria:` is false."""
+    return _extensions(table, "table").get("published") is not False
+
+
+def structure(description: Description, unlisted: set[Key] | None = None) -> dict[str, Any]:
     """What `fdl commit --dataset` takes: the primary keys and asset columns, and no description.
 
     fdl writes them as the tags `fdl.primary_key`, `fdl.assets` and
     `fdl.catalogs`. The `_meta` tables get their keys, and `_meta.files.sha256`
-    is an asset column.
+    is an asset column. The tables Queria does not list (`published` false,
+    ``unlisted`` and `_meta`) get `"profile": false`, the tag `fdl.profile`:
+    fdl makes no profile of what nobody reads.
     """
+    described = {fold(t["schema"], t["name"]) for t in description.tables}
+    unprofiled = {"profile": False}
     tables = [
         {
             "schema": t["schema"],
@@ -231,8 +240,13 @@ def structure(description: Description) -> dict[str, Any]:
                 if (assets := [c for c in t.get("columns") or [] if c.get("asset") is True])
                 else {}
             ),
+            **({} if published(t) else unprofiled),
         }
         for t in description.tables
+    ] + [
+        {"schema": s, "name": n, **unprofiled}
+        for s, n in sorted(unlisted or set())
+        if fold(s, n) not in described and s != SCHEMA
     ]
     meta = [
         {
@@ -240,6 +254,7 @@ def structure(description: Description) -> dict[str, Any]:
             "name": table,
             **({"primary_key": key} if key else {}),
             **({"fields": [{"name": FILES_ASSET, "asset": True}]} if table == "files" else {}),
+            **unprofiled,
         }
         for table, (_, key) in TABLES.items()
     ]
