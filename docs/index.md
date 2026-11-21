@@ -3,15 +3,16 @@ title: tabledoc
 sidebar:
   label: Introduction
   order: 1
-description: Checks the description of a dataset written in YAML and Markdown (or a dbt project's yml) and builds one JSON file for machines to read.
+description: Checks the description of a dataset written in YAML and Markdown (or a dbt project's yml) and reads it for other programs.
 ---
 
-tabledoc reads the description of a dataset that people write in YAML and Markdown (or in a dbt project's yml), checks it, and builds one JSON file for machines to read: `tabledoc.json`.
+tabledoc reads the description of a dataset that people write in YAML and Markdown (or in a dbt project's yml), checks it, and reads it for other programs.
 
 - One YAML file per table, next to a Markdown guide. Keys follow dbt's `models:` entries
 - Semantics (join keys, dimensions, metrics) follow dbt's semantic layer
 - In a dbt project, descriptions, SQL and lineage come from `target/manifest.json`
-- `tabledoc.json` refers to the guides and the files they link to by path and sha256; `tabledoc push` sends what a receiver lacks
+- From Python, `tabledoc.read` returns the checked description, with the guides and the files they link to by path and sha256
+- `tabledoc load` writes the description into a DuckLake catalog as the tables of its `_meta` schema, so it travels with the data
 
 ## Install
 
@@ -57,12 +58,11 @@ metrics:
 
 ```bash
 tabledoc validate            # check
-tabledoc build               # check and write target/tabledoc.json
-tabledoc push https://example.com/metadata   # send it, with TABLEDOC_TOKEN as the Bearer token
+tabledoc load --ducklake work.sqlite   # check, then write it into the catalog's _meta schema
 ```
 
 In a dbt project, run `dbt compile` first, and write `tabledoc.yml` next to `dbt_project.yml`.
 
 ## Specification
 
-The [specification](/spec) defines the files, the checks and `tabledoc.json`. The JSON Schemas are served at `https://queria-io.github.io/tabledoc/schemas/`.
+The [specification](/spec) defines the files, the checks and what `tabledoc.read` returns. The JSON Schemas are served at `https://queria-io.github.io/tabledoc/schemas/`.

@@ -14,7 +14,6 @@ FOLDER = Path(__file__).parent / "schemas"
 BASE = "https://queria-io.github.io/tabledoc/schemas/"
 DATASET = BASE + "dataset/v1.json"
 TABLE = BASE + "table/v1.json"
-TABLEDOC = BASE + "tabledoc/v1.json"
 
 #: The formats before tabledoc, still read (see legacy.py).
 LEGACY_BASE = "https://queria.io/schemas/"

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-from tabledoc.build import Options, build, to_json
+from tabledoc import Options, read
 from tabledoc.report import Report, SpecError
 
 import pytest
@@ -14,8 +14,9 @@ TABLE = "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"
 
 def run(root, **kwargs):
     report = Report()
-    built = build(Options(root, with_source=False, **kwargs), report)
-    return built.document, report
+    d = read(Options(root, with_source=False, **kwargs), report)
+    document = {"dataset": d.dataset, "schemas": d.schemas, "tables": d.tables, "files": [f.entry() for f in d.files]}
+    return document, report
 
 
 def codes(report):
@@ -86,7 +87,7 @@ def test_tables_by_place_with_guides_and_linked_files(write):
         "media_type": "image/png",
     }
     again, _ = run(root)
-    assert to_json(again) == to_json(document)
+    assert json.dumps(again) == json.dumps(document)
 
 
 def test_the_older_format(write):
@@ -129,6 +130,8 @@ def test_the_older_format(write):
     sent = next(f for f in document["files"] if f["path"] == "models/a.md")
     assert sent["sha256"] == hashlib.sha256(b"The guide.\n").hexdigest()
     assert "guide" not in document["tables"][1]
+    d = read(Options(root, with_source=False), Report())
+    assert d.content(next(f for f in d.files if f.path == "models/a.md")) == b"The guide.\n"
 
 
 @pytest.mark.parametrize(
@@ -229,7 +232,14 @@ def test_dbt_models(write):
     assert not report.failed, report.render()
     tables = {(t["schema"], t["name"]): t for t in document["tables"]}
     assert set(tables) == {("s", "orders"), ("s", "base"), ("py", "python")}
-    assert tables[("s", "base")] == {"schema": "s", "name": "base", "sql": "select 1 as id", "depends_on": []}
+    assert tables[("s", "base")] == {
+        "schema": "s",
+        "name": "base",
+        "materialized": "table",
+        "sql": "select 1 as id",
+        "depends_on": [],
+        "source_path": "models/base.sql",
+    }
     assert tables[("py", "python")]["title"] == "Made in Python"
     assert tables[("py", "python")]["sql"] == "select 1 as id from s.base"
     assert tables[("s", "orders")] == {
@@ -238,8 +248,10 @@ def test_dbt_models(write):
         "title": "Orders",
         "description": "One row per order",
         "primary_key": ["id"],
+        "materialized": "table",
         "sql": "select 1 as id from s.base",
         "depends_on": ["s.base"],
+        "source_path": "models/orders.sql",
         "guide": "models/orders.md",
         "columns": [
             {"name": "id", "title": "ID", "entity": {"type": "primary", "name": "order"}},
