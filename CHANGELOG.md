@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.3.0 (2026-11-21)
+
+### Features
+
+- Mark the tables Queria does not list with "profile": false in dataset.json
+  ([#6](https://github.com/queria-io/tabledoc/pull/6),
+  [`fae794f`](https://github.com/queria-io/tabledoc/commit/fae794f21bf1288164f6a812e9b56e86c05fa7ff))
+
+
 ## v0.2.0 (2026-11-21)
 
 ### Documentation
