@@ -1,6 +1,6 @@
 """The files whose content is sent: guides, README.md, docs, and what they link to.
 
-tabledoc.json names each by its path under the root, with its sha256. A
+Each is named by its path under the root, with its sha256. A
 Markdown table file of the older format is sent without its front matter.
 """
 

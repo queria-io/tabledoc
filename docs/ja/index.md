@@ -3,15 +3,16 @@ title: tabledoc
 sidebar:
   label: はじめに
   order: 1
-description: YAML と Markdown (または dbt のプロジェクトの yml) で書いたデータセットの説明を検査し、機械が読む 1 つの JSON を作ります。
+description: YAML と Markdown (または dbt のプロジェクトの yml) で書いたデータセットの説明を検査し、ほかのプログラムのために読みます。
 ---
 
-tabledoc は、人が YAML と Markdown (または dbt のプロジェクトの yml) で書くデータセットの説明を検査し、機械が読む 1 つの JSON (`tabledoc.json`) を作るツールです。
+tabledoc は、人が YAML と Markdown (または dbt のプロジェクトの yml) で書くデータセットの説明を検査し、ほかのプログラムのために読むツールです。
 
 - テーブルごとに YAML を 1 つ書き、隣に Markdown のガイドを置きます。キーは dbt の `models:` の項目と同じです
 - semantic (結合キー・ディメンション・メトリクス) は dbt のセマンティックレイヤーの書き方にそろえています
 - dbt のプロジェクトでは、説明・SQL・依存関係を `target/manifest.json` から取ります
-- `tabledoc.json` はガイドとそこから参照するファイルをパスと sha256 で並べます。`tabledoc push` は受け手に無いファイルを送ります
+- Python からは `tabledoc.read` で、検査した説明を読めます。ガイドとそこから参照するファイルはパスと sha256 で並べます
+- `tabledoc load` は説明を DuckLake のカタログの `_meta` スキーマのテーブルとして書きます。説明はデータと一緒に配布されます
 
 ## インストール
 
@@ -57,12 +58,11 @@ metrics:
 
 ```bash
 tabledoc validate            # 検査する
-tabledoc build               # 検査して target/tabledoc.json を書く
-tabledoc push https://example.com/metadata   # 送る。TABLEDOC_TOKEN を Bearer トークンに使う
+tabledoc load --ducklake work.sqlite   # 検査して、カタログの _meta スキーマに書く
 ```
 
 dbt のプロジェクトでは先に `dbt compile` を実行し、`dbt_project.yml` の隣に `tabledoc.yml` を書きます。
 
 ## 仕様
 
-ファイル・検査・`tabledoc.json` は[仕様](/ja/spec)で定めています。JSON Schema は `https://queria-io.github.io/tabledoc/schemas/` で配っています。
+ファイル・検査・`tabledoc.read` が返す値は[仕様](/ja/spec)で定めています。JSON Schema は `https://queria-io.github.io/tabledoc/schemas/` で配っています。

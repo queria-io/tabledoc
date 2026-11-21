@@ -1,9 +1,9 @@
-"""Records as tabledoc.json holds them, from what an author wrote.
+"""Records as a Description holds them, from what an author wrote.
 
 Every reader of a description (table files, the older formats, dbt) turns it
 into a record in the table file's form first; the functions here turn that
-form into the one tabledoc.json writes. Keys come out in a fixed order, so the
-same input gives the same bytes.
+form into one. Keys come out in a fixed order, so the
+same input gives the same records.
 """
 
 from __future__ import annotations
@@ -38,9 +38,13 @@ TABLE_KEYS = (
     "sources",
     "temporal_coverage",
     "spatial_coverage",
+    "materialized",
     "sql",
     "depends_on",
+    "source_path",
 )
+#: What dbt fills in from the build, not what the author writes.
+BUILT_KEYS = ("materialized", "sql", "depends_on", "source_path")
 COLUMN_KEYS = ("name", "title", "description", "asset")
 METRIC_KEYS = ("name", "agg", "expr", "description")
 
@@ -108,6 +112,6 @@ def table(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def described(record: dict[str, Any]) -> bool:
-    """Whether ``record`` says anything an author writes, beyond the SQL a build fills in."""
+    """Whether ``record`` says anything an author writes, beyond the SQL dbt fills in."""
     shaped = table(record)
-    return bool(set(shaped) - {"sql", "depends_on"})
+    return bool(set(shaped) - set(BUILT_KEYS))

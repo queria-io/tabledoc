@@ -3,20 +3,17 @@ title: Specification (v1)
 sidebar:
   label: Specification
   order: 2
-description: The files tabledoc reads, how it checks them, and the tabledoc.json it builds.
+description: The files tabledoc reads, how it checks them, and what it returns to a program.
 ---
 
-tabledoc reads the description of a dataset that people write (YAML and Markdown, or a dbt project's yml) and builds one JSON file for machines to read: `tabledoc.json`. It depends on no particular data store or host.
-
-`tabledoc.json` is to the description what dbt's `manifest.json` is to a project: people do not edit it. The files the author writes are the source.
+tabledoc defines how people write the description of a dataset (YAML and Markdown, or a dbt project's yml), checks it, and reads it for other programs. It depends on no particular host; `tabledoc load` writes the description into a DuckLake catalog. The files the author writes are the source.
 
 ## Commands
 
 - `tabledoc validate`: check the author's files
-- `tabledoc build`: check them and write `target/tabledoc.json`
-- `tabledoc push <URL>`: send `target/tabledoc.json` and the files it lists to a receiver ([push](#push))
+- `tabledoc load`: check them and write the description into a DuckLake catalog ([Writing into a DuckLake catalog](#writing-into-a-ducklake-catalog))
 
-`validate` and `build` exit with 1 when there are errors (with `--strict`, warnings too) and 2 when the files cannot be read at all.
+It exits with 1 when there are errors (with `--strict`, warnings too) and 2 when the files cannot be read at all.
 
 ## Files
 
@@ -138,10 +135,10 @@ Types, nullability and row counts are not written. The data store holds the stru
 
 When the root has `dbt_project.yml`, tabledoc reads `target/manifest.json` (`--manifest` changes it). Run `dbt compile` (or a build) first; without a manifest, tabledoc warns and reads only the table files.
 
-- The tables are the enabled models materialized as `table`, `view` or `incremental`, under the model's `schema` and `alias`. Ephemeral and disabled models, seeds, snapshots and tests make no table, so they are not listed. A model with no description is listed with its `sql` and `depends_on` only
+- The tables are the enabled models materialized as `table`, `view` or `incremental`, under the model's `schema` and `alias`. Ephemeral and disabled models, seeds, snapshots and tests make no table, so they are not listed. A model with no description is listed with what dbt fills in only (`materialized`, `sql`, `depends_on`, `source_path`)
 - The description comes from the model's yml. `description` and the columns' `description` as they are; keys dbt does not have (`title`, `primary_key`, `sources`, a column's `title`, `asset` and so on) and `queria` under `config.meta`
 - Semantics come from the columns' `entity`, `dimension` and `granularity`, and from the semantic layer's simple `metrics`
-- `sql` is `compiled_code`. `depends_on` is read from it by DuckDB's parser. A table of another dataset is written `<repository URL>#<schema>.<table>`, where the URL comes from the DuckLake ATTACHes in `profiles.yml` (`--profiles`, else `DBT_PROFILES_DIR`, else the root)
+- `materialized` is the model's materialization, `source_path` its `original_file_path`, and `sql` its `compiled_code`. `depends_on` is read from it by DuckDB's parser. A table of another dataset is written `<repository URL>#<schema>.<table>`, where the URL comes from the DuckLake ATTACHes in `profiles.yml` (`--profiles`, else `DBT_PROFILES_DIR`, else the root)
 - A guide is the `.md` with the same name next to the model's `.sql` (dbt ignores `.md` files without a docs block)
 - A table is described in one place. When both a table file and dbt's yml describe it, that is an error. When dbt's yml says nothing about it, the table file is read, and `sql` comes from dbt
 
@@ -178,84 +175,77 @@ In dbt, `metrics` need the semantic layer (`semantic_model: true` and a time spi
 
 ## Keys for one reader
 
-Keys only one reader uses are written under that reader's name. tabledoc does not check them and copies them to `annotations.<reader>` in `tabledoc.json`.
+Keys only one reader uses are written under that reader's name. tabledoc does not check them and returns them under `annotations.<reader>`.
 
 - Queria's keys are written under `queria:`, the one reader tabledoc knows by name. Queria checks them
 - Other readers' keys go under `annotations: {<reader>: {...}}`
 
-## tabledoc.json
+## Reading from Python
 
-What `tabledoc build` writes. The author's files in one document, with the older formats read as today's.
+Programs that send the description somewhere, or turn it into another format, read it with `tabledoc.read`. It checks the files as `validate` does and returns the description with the older formats read as today's.
 
-```json
-{
-  "$schema": "https://queria-io.github.io/tabledoc/schemas/tabledoc/v1.json",
-  "generator": "tabledoc 0.1.0",
-  "source": {
-    "repository": "https://github.com/queria-io/dataset-boj",
-    "commit": "4e07e0e…",
-    "path": "",
-    "dirty": false
-  },
-  "dataset": {
-    "name": "boj",
-    "title": "Bank of Japan time-series statistics",
-    "licenses": [{ "id": "boj-copyright", "url": "https://www.boj.or.jp/en/about/copyright.htm" }],
-    "guide": "README.md",
-    "docs": ["docs/methodology.md"],
-    "annotations": { "queria": { "themes": ["economy"] } }
-  },
-  "schemas": [{ "name": "timeseries", "title": "Time series" }],
-  "tables": [
-    {
-      "schema": "timeseries",
-      "name": "series",
-      "title": "Series",
-      "primary_key": ["db", "series_code"],
-      "sql": "SELECT …",
-      "depends_on": ["timeseries.databases"],
-      "guide": "models/timeseries/mart/series.md",
-      "columns": [{ "name": "db", "title": "Database", "dimension": { "type": "categorical" } }]
-    }
-  ],
-  "files": [
-    { "path": "README.md", "sha256": "…", "bytes": 1234, "media_type": "text/markdown" },
-    { "path": "models/timeseries/mart/series.md", "sha256": "…", "bytes": 2345, "media_type": "text/markdown" }
-  ]
-}
+```python
+import tabledoc
+
+report = tabledoc.Report()
+d = tabledoc.read(tabledoc.Options(root), report)  # root: the folder of tabledoc.yml
+if report.failed:
+    print(report.render())
+d.dataset   # {"name": "boj", "title": …, "guide": "README.md", "docs": […], "annotations": {…}}
+d.schemas   # [{"name": "timeseries", "title": "Time series"}]
+d.tables    # [{"schema": "timeseries", "name": "series", "sql": …, "depends_on": […], "guide": …, "columns": […]}]
+d.files     # [File(path="README.md", sha256="…", bytes=1234, media_type="text/markdown"), …]
+d.source    # {"repository": "https://github.com/…", "commit": "…", "path": "", "dirty": False}
+d.catalogs  # {"other": "https://…"}: the other datasets the SQL reads, by the name it reads them under
+d.content(d.files[0])  # the bytes of that file
 ```
 
-- `source` is the Git working copy: `repository` is the `origin` remote as an https URL (without credentials or `.git`), `commit` is HEAD, `path` goes from the repository's root to the folder of `tabledoc.yml`, and `dirty` says whether there were changes not committed. Outside Git it is left out. A receiver leaves `source` and `generator` out when it compares two documents
-- Documents are referred to by path, not included. `files` lists every file whose content is sent (guides, README, `docs`, and what they link to) with its sha256, size and media type. `guide`, `docs` and `schemas[].guide` are paths in `files`
+- `source` is the Git working copy: `repository` is the `origin` remote as an https URL (without credentials or `.git`), `commit` is HEAD, `path` goes from the repository's root to the folder of `tabledoc.yml`, and `dirty` says whether there were changes not committed. It is None outside Git, or with `Options(with_source=False)`
+- Documents are referred to by path. `files` lists every file whose content is meant to go with the description (guides, README, `docs`, and what they link to) with its sha256, size and media type. `guide`, `docs` and `schemas[].guide` are paths in `files`. `content` gives a file's bytes; for an older-format Markdown table file, the text without its front matter
 - Semantics always come out as `{type, name}` (`dimension: categorical` is `{"type": "categorical"}`)
-- Tables are sorted by `schema`, then `name`. The same input gives the same bytes
+- Tables are sorted by `schema`, then `name`, and keys come in a fixed order. The same files give the same records
 - The structure (types, nullability, row counts, whether a table is a view) is not in it
 
-## push
+## Writing into a DuckLake catalog
 
-`tabledoc push <URL>` sends `target/tabledoc.json` (`--file` changes it) with `Authorization: Bearer <token>`, the token from `--token` or `TABLEDOC_TOKEN`.
+`tabledoc load` checks the description as `validate` does, then writes it into a [DuckLake](https://ducklake.select) catalog as the tables of the `_meta` schema. Any program that reads the catalog reads the description with it, with SQL.
 
-```
-PUT <URL>                               tabledoc.json (Content-Encoding: gzip)
-  ← 409 {"missing": ["<sha256>", …]}    the receiver lacks these files
-PUT <URL without query>/files/<sha256>  each file's content, Content-Type its media type
-PUT <URL>                               again: 201 for a new revision, 200 for the same content
+```bash
+tabledoc load --ducklake work.sqlite --data-path data/ --out .fdl/pack
 ```
 
-The URL may carry a query (such as `?version=`); it is sent with the document only. Before sending, tabledoc checks that each file still has the sha256 in `tabledoc.json`.
+- `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where new data files go (default: `FDL_DATA_PATH`, else the folder `fdl clone` noted beside the catalog)
+- `--out`: also write the folder `fdl commit` takes: `dataset.json` (`--dataset`, the primary keys and asset columns) and `assets/` (`--assets`, the files in `_meta.files`). With `--assets <folder>`, the files below it are linked into `assets/` too. The folder has to be empty or written by an earlier `load`
+- `--unlisted`: the catalog's tables and views that have no description get a row in `_meta.tables` with `published` false
+- A described table or column, or a primary key column, that is not in the catalog is an error. Names match without regard to case, as in DuckDB
+- A value its `_meta` column cannot hold is an error: `issued` other than `YYYY-MM-DD`, or a key under `queria:` of another type (such as `themes` written as a string)
+- On an error (with `--strict`, a warning) nothing is written
+
+| Table | Key | One row per |
+| --- | --- | --- |
+| `_meta.dataset` | | the dataset: `title`, `description`, `language`, `keywords`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` |
+| `_meta.schemas` | `schema` | schema: `title`, `description` |
+| `_meta.tables` | `schema`, `name` | table or view: `title`, `description`, `keywords`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `materialized`, `sql`, `depends_on`, `source_path` |
+| `_meta.columns` | `schema`, `table`, `name` | column described: `title`, `description`, `entity` (the join key's name) |
+| `_meta.files` | `path` | guide or document: `sha256`, `bytes`, `media_type`, `kind` (`guide` or `doc`), `schema`, `table` (what the guide is for), `position` (the order of `docs`), `title` |
+
+- The keys under `queria:` that Queria reads from the catalog are columns too: `title_kana`, `themes`, `cover`, `ai_context` on `_meta.dataset`, and `published`, `themes`, `ai_context` on `_meta.tables`. Readers ignore columns they do not know
+- `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
+- The files are not in the catalog. `_meta.files.sha256` is an asset column: with FDL, `fdl commit --assets` uploads each file by its content
+- The descriptions of tables, views and columns are also written as DuckDB comments (`COMMENT ON`), so `DESCRIBE` and `duckdb_tables()` show them. A view's columns get none
+- The `_meta` tables are dropped and written again each time, in one transaction. Without a dbt build (no `sql` in the description), each table keeps the `materialized`, `sql`, `depends_on` and `source_path` the catalog's `_meta` holds
 
 ## The older format
 
 So that every dataset need not be rewritten at once, tabledoc also reads the format it replaces. Only tabledoc's format is written anew.
 
-- Without `tabledoc.yml`, `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) is read as `tabledoc.yml`. Its top-level `title_kana`, `themes`, `cover` and `ai_context` are read as if under `queria:`. `catalogs` is used for `depends_on` and left out of `tabledoc.json`
+- Without `tabledoc.yml`, `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) is read as `tabledoc.yml`. Its top-level `title_kana`, `themes`, `cover` and `ai_context` are read as if under `queria:`. `catalogs` is used for `depends_on` and returned as `catalogs`
 - Markdown whose front matter has `$schema: https://queria.io/schemas/table/v1.json` is read as a table file (the front matter) and its guide (the text below). `table:` says which table, `fields` is `columns`, and `published`, `themes` and `ai_context` are read as if under `queria:`. The guide is that Markdown's path, and what is sent is the text without the front matter
 - A field's `semantic: {role, name, agg}` is read as: `role: entity` → `entity: {type: foreign, name}`, or `type: primary` when the column alone is the `primary_key`; `role: dimension` → `dimension: categorical`; `role: measure` → a metric `{name: <column>, agg, expr: <column>}` on the table (without `agg`, a warning)
 - `tabledoc.yml` and `queria.yml` in the same folder is an error
 
 ## $schema and versions
 
-- tabledoc ships its JSON Schemas and serves them at `https://queria-io.github.io/tabledoc/schemas/<kind>/v<n>.json`. The kinds are `dataset`, `table` and `tabledoc` (the built JSON)
+- tabledoc ships its JSON Schemas and serves them at `https://queria-io.github.io/tabledoc/schemas/<kind>/v<n>.json`. The kinds are `dataset` and `table`
 - Adding keys keeps the version. Changing what a key means, or removing one, makes `v2`, and tabledoc reads both for a while
 - A file with a `$schema` this tabledoc does not know is refused, with a request to upgrade tabledoc
-- A receiver reads `tabledoc.json` by its `$schema`

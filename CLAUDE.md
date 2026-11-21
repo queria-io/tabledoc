@@ -24,7 +24,7 @@ The JSON Schemas in `src/tabledoc/schemas` are served at https://queria-io.githu
 
 - Python 3.10+: `X | Y` unions are fine; nothing newer
 - Comments, docstrings, CLI messages and commit messages in English
-- `tabledoc.json` is deterministic: the same input gives the same bytes
+- Reading is deterministic: the same files give the same records, keys in the same order
 
 ## Commits and releases
 

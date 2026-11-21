@@ -1,18 +1,41 @@
-"""tabledoc validate | build | push."""
+"""tabledoc validate and tabledoc load."""
 
 from __future__ import annotations
 
 import argparse
 import os
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-from . import build as building
-from .build import Options
-from .push import PushError, push
+from .description import Options, read
+from .load import Target, load
 from .report import Level, Report, SpecError
 
-DEFAULT_OUT = Path("target") / "tabledoc.json"
+
+def _version() -> str:
+    try:
+        return f"tabledoc {version('tabledoc')}"
+    except PackageNotFoundError:
+        return "tabledoc"
+
+
+def parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="tabledoc", description="Check a dataset's description.")
+    p.add_argument("--version", action="version", version=_version())
+    commands = p.add_subparsers(dest="command", required=True)
+    v = commands.add_parser("validate", help="check the description")
+    _common(v)
+    w = commands.add_parser("load", help="check the description and write it into a DuckLake catalog's _meta schema")
+    _common(w)
+    w.add_argument("--ducklake", default=None, help="the DuckLake catalog (default: FDL_WORKING)")
+    w.add_argument(
+        "--data-path", default=None, help="where new data files go (default: FDL_DATA_PATH, else fdl clone's note)"
+    )
+    w.add_argument("--out", type=Path, default=None, help="also write dataset.json and assets/ for fdl commit here")
+    w.add_argument("--assets", type=Path, default=None, help="files of the asset columns, linked into --out's assets/")
+    w.add_argument("--unlisted", action="store_true", help="write the tables with no description as not published")
+    return p
 
 
 def _common(p: argparse.ArgumentParser) -> None:
@@ -23,66 +46,32 @@ def _common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--strict", action="store_true", help="fail on warnings too")
 
 
-def parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="tabledoc", description="Check a dataset's description and build tabledoc.json from it.")
-    p.add_argument("--version", action="version", version=building.generator())
-    commands = p.add_subparsers(dest="command", required=True)
-    _common(commands.add_parser("validate", help="check the description"))
-    p_build = commands.add_parser("build", help=f"check the description and write {DEFAULT_OUT}")
-    _common(p_build)
-    p_build.add_argument("--out", type=Path, default=None, help=f"where to write (default: {DEFAULT_OUT} under the root)")
-    p_push = commands.add_parser("push", help="send tabledoc.json and the files it lists")
-    p_push.add_argument("url", help="where to send it, such as https://queria.io/api/datasets/<handle>/<name>/metadata")
-    p_push.add_argument("--root", type=Path, default=Path.cwd(), help="the folder of tabledoc.yml (default: here)")
-    p_push.add_argument("--file", type=Path, default=None, help=f"the tabledoc.json to send (default: {DEFAULT_OUT} under the root)")
-    p_push.add_argument("--token", default=None, help="Bearer token (default: TABLEDOC_TOKEN)")
-    return p
-
-
-def _finish(report: Report, args: argparse.Namespace) -> bool:
+def main(argv: list[str] | None = None) -> int:
+    args = parser().parse_args(argv)
+    report = Report()
+    options = Options(args.root, args.manifest, args.profiles, with_source=False)
+    try:
+        if args.command == "validate":
+            read(options, report)
+        else:
+            catalog = args.ducklake or os.environ.get("FDL_WORKING")
+            if not catalog:
+                raise SpecError("give the catalog: --ducklake or FDL_WORKING")
+            data = args.data_path or os.environ.get("FDL_DATA_PATH")
+            if args.assets and not args.out:
+                raise SpecError("--assets links its files into --out's assets/; give --out too")
+            target = Target(catalog, data, args.out, args.assets, args.unlisted)
+            if load(options, target, report, strict=args.strict) is not None:
+                print(f"wrote {target.catalog}" + (f" and {target.out}" if target.out else ""), file=sys.stderr)
+    except SpecError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     rendered = report.render(show_info=not args.quiet)
     if rendered:
         print(rendered, file=sys.stderr)
     warnings = report.of(Level.WARNING)
     print(f"error {len(report.of(Level.ERROR))} / warning {len(warnings)}", file=sys.stderr)
-    return not (report.failed or (args.strict and warnings))
-
-
-def _check(args: argparse.Namespace) -> int:
-    report = Report()
-    try:
-        built = building.build(Options(args.root, args.manifest, args.profiles), report)
-    except SpecError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    if not _finish(report, args):
-        return 1
-    if args.command == "build":
-        out = args.out or args.root / DEFAULT_OUT
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(building.to_json(built.document), encoding="utf-8")
-        print(f"wrote {out}", file=sys.stderr)
-    return 0
-
-
-def _push(args: argparse.Namespace) -> int:
-    token = args.token or os.environ.get("TABLEDOC_TOKEN")
-    if not token:
-        print("error: give a token with --token or TABLEDOC_TOKEN", file=sys.stderr)
-        return 2
-    try:
-        document = building.read(args.file or args.root / DEFAULT_OUT)
-        reply = push(args.url, document, args.root.resolve(), token, log=lambda m: print(m, file=sys.stderr))
-    except (SpecError, PushError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
-    print("unchanged" if reply.status == 200 else "created", reply.body, file=sys.stderr)
-    return 0
-
-
-def main(argv: list[str] | None = None) -> int:
-    args = parser().parse_args(argv)
-    return _push(args) if args.command == "push" else _check(args)
+    return 1 if report.failed or (args.strict and warnings) else 0
 
 
 if __name__ == "__main__":

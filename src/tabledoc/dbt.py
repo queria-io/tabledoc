@@ -122,7 +122,12 @@ def tables(manifest: dict[str, Any], root: Path, report: Report) -> list[Table]:
             Table(
                 str(node.get("schema", "")),
                 str(node.get("alias") or node.get("name", "")),
-                record={**described, **({"sql": code.strip()} if isinstance(code, str) and code.strip() else {})},
+                record={
+                    **described,
+                    "materialized": config["materialized"],
+                    **({"sql": code.strip()} if isinstance(code, str) and code.strip() else {}),
+                    **({"source_path": node["original_file_path"]} if node.get("original_file_path") else {}),
+                },
                 path=path,
                 guide=guide.relative_to(root).as_posix() if guide.is_file() else None,
             )

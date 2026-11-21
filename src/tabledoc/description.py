@@ -1,17 +1,16 @@
-"""tabledoc.json from what an author wrote under the root."""
+"""A dataset's description, read from what an author wrote under the root."""
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from . import dbt, files, git, lineage, schemas, shape, source
-from .report import Report, SpecError
+from . import dbt, files, git, lineage, shape, source
+from .report import Report
 
 README = "README.md"
 DEFAULT_MANIFEST = Path("target") / "manifest.json"
@@ -29,16 +28,26 @@ class Options:
 
 
 @dataclass(frozen=True)
-class Built:
-    document: dict[str, Any]
+class Description:
+    """What the author wrote, with the older formats read as today's.
+
+    Records are plain dicts and lists, keys in a fixed order. Guides and the
+    files they link to are named by path; ``files`` lists each with its sha256,
+    and ``content`` gives what to send for one.
+    """
+
+    root: Path
+    dataset: dict[str, Any]
+    schemas: list[dict[str, Any]]
+    tables: list[dict[str, Any]]
     files: list[files.File]
+    #: The Git working copy around the root; None outside Git or without ``with_source``.
+    source: dict[str, Any] | None = None
+    #: Alias -> repository URL of each other dataset the SQL reads (from dbt's profiles.yml).
+    catalogs: dict[str, str] | None = None
 
-
-def generator() -> str:
-    try:
-        return f"tabledoc {version('tabledoc')}"
-    except PackageNotFoundError:
-        return "tabledoc"
+    def content(self, file: files.File) -> bytes:
+        return files.content(self.root, file.path)
 
 
 def _profiles(options: Options) -> dict[str, Any]:
@@ -94,11 +103,11 @@ def _merge(
                 f"{model.schema}.{model.name} is described in dbt's yml and in {found.path}; keep one",
                 model.path,
             )
-        sql = {"sql": model.record["sql"]} if "sql" in model.record and "sql" not in found.record else {}
+        built = {k: model.record[k] for k in shape.BUILT_KEYS if k in model.record and k not in found.record}
         merged[model.key] = source.Table(
             found.schema,
             found.name,
-            record={**found.record, **sql},
+            record={**found.record, **built},
             path=found.path,
             guide=found.guide or model.guide,
         )
@@ -160,7 +169,8 @@ def _documents(
     return docs, [(p, w) for p, w in named if p]
 
 
-def build(options: Options, report: Report) -> Built:
+def read(options: Options, report: Report) -> Description:
+    """Read and check the description under ``options.root``; findings go to ``report``."""
     root = options.root.resolve()
     options = Options(root, options.manifest, options.profiles, options.with_source)
     dataset = source.read_dataset(root, report)
@@ -173,23 +183,20 @@ def build(options: Options, report: Report) -> Built:
     sent = files.collect(root, named, report)
     shaped = lineage.fill([_table(t) for t in tables], {**attached, **dataset.catalogs}, report)
     record = dataset.record
-    origin = git.source(root) if options.with_source else None
-    document = {
-        "$schema": schemas.TABLEDOC,
-        "generator": generator(),
-        **({"source": origin} if origin else {}),
-        "dataset": {
+    return Description(
+        root=root,
+        dataset={
             **shape.pick(record, shape.DATASET_KEYS),
             **({"guide": README} if (root / README).is_file() else {}),
             **({"docs": docs} if docs else {}),
             **shape.annotations(record),
         },
-        "schemas": schema_list,
-        "tables": [_ordered(t) for t in shaped],
-        "files": [f.entry() for f in sent],
-    }
-    schemas.check(document, schemas.TABLEDOC, None, report)
-    return Built(document, sent)
+        schemas=schema_list,
+        tables=[_ordered(t) for t in shaped],
+        files=sent,
+        source=git.source(root) if options.with_source else None,
+        catalogs={**attached, **dataset.catalogs} or None,
+    )
 
 
 def _ordered(table: dict[str, Any]) -> dict[str, Any]:
@@ -198,14 +205,3 @@ def _ordered(table: dict[str, Any]) -> dict[str, Any]:
         return table
     order = ["schema", "name", *shape.TABLE_KEYS, "guide", "columns", "metrics", "annotations"]
     return {k: table[k] for k in order if k in table}
-
-
-def to_json(document: dict[str, Any]) -> str:
-    return json.dumps(document, ensure_ascii=False, indent=2) + "\n"
-
-
-def read(path: Path) -> dict[str, Any]:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise SpecError(f"{path} is not here; run tabledoc build first") from exc
