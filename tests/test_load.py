@@ -125,10 +125,10 @@ def test_a_table_not_in_the_catalog_writes_nothing(write, catalog):
 def test_a_column_not_in_the_catalog_is_an_error(write, catalog):
     path, data = catalog
     root = project(write)
-    (root / "sales" / "extra.yml").write_text(TABLE + "columns: [{name: y}]\n", encoding="utf-8")
+    (root / "sales" / "extra.yml").write_text(TABLE + "primary_key: [z]\ncolumns: [{name: y}]\n", encoding="utf-8")
     report = Report()
     assert load(Options(root, with_source=False), Target(str(path), data), report) is None
-    assert [f.code for f in report.findings] == ["column-missing"]
+    assert [f.code for f in report.findings] == ["column-missing", "column-missing"]
 
 
 def test_refuses_a_folder_it_did_not_write(write, catalog, tmp_path):

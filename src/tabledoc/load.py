@@ -106,7 +106,7 @@ def write_out(description: Description, out: Path, assets: Path | None) -> None:
 
 
 def _missing(con: Any, description: Description, report: Report) -> None:
-    """Each described table and column has to be in the catalog."""
+    """Each described table and column, and each primary key column, has to be in the catalog."""
     present = meta.relations(con, ALIAS)
     found = con.execute(
         "SELECT schema_name, table_name, column_name FROM duckdb_columns() WHERE database_name = ?", [ALIAS]
@@ -119,11 +119,12 @@ def _missing(con: Any, description: Description, report: Report) -> None:
         if key not in present:
             report.error("table-missing", f"{'.'.join(key)} is described but is not in the catalog", description.root)
             continue
-        for column in table.get("columns") or []:
-            if column.get("name") not in columns[key]:
+        named = [c.get("name") for c in table.get("columns") or []] + list(table.get("primary_key") or [])
+        for name in dict.fromkeys(named):
+            if name not in columns[key]:
                 report.error(
                     "column-missing",
-                    f"{'.'.join(key)}.{column.get('name')} is described but is not in the catalog",
+                    f"{'.'.join(key)}.{name} is described but is not in the catalog",
                     description.root,
                 )
 
