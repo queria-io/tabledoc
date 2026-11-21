@@ -105,14 +105,27 @@ def write_out(description: Description, out: Path, assets: Path | None) -> None:
     meta.write_assets(description, out / ASSETS, assets)
 
 
-def _missing(description: Description, present: set[meta.Key], report: Report) -> None:
+def _missing(con: Any, description: Description, report: Report) -> None:
+    """Each described table and column has to be in the catalog."""
+    present = meta.relations(con, ALIAS)
+    found = con.execute(
+        "SELECT schema_name, table_name, column_name FROM duckdb_columns() WHERE database_name = ?", [ALIAS]
+    ).fetchall()
+    columns = {(s, t): set() for s, t in present}
+    for schema, table, name in found:
+        columns.setdefault((schema, table), set()).add(name)
     for table in description.tables:
-        if (table["schema"], table["name"]) not in present:
-            report.error(
-                "table-missing",
-                f"{table['schema']}.{table['name']} is described but is not in the catalog",
-                description.root,
-            )
+        key = (table["schema"], table["name"])
+        if key not in present:
+            report.error("table-missing", f"{'.'.join(key)} is described but is not in the catalog", description.root)
+            continue
+        for column in table.get("columns") or []:
+            if column.get("name") not in columns[key]:
+                report.error(
+                    "column-missing",
+                    f"{'.'.join(key)}.{column.get('name')} is described but is not in the catalog",
+                    description.root,
+                )
 
 
 def load(options: Options, target: Target, report: Report, *, strict: bool = False) -> Description | None:
@@ -129,13 +142,12 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
 
     try:
         with attached(target.catalog, data_path(target.catalog, target.data_path)) as con:
-            present = meta.relations(con, ALIAS)
-            _missing(description, present, report)
+            _missing(con, description, report)
             if report.failed:
                 return None
             # Without a dbt build, the SQL and dependencies stay as the catalog has them.
             carried = meta.read(con, ALIAS) if not any("sql" in t for t in description.tables) else None
-            unlisted = present if target.unlisted else None
+            unlisted = meta.relations(con, ALIAS) if target.unlisted else None
             meta.write(con, ALIAS, meta.rows(description, carried, unlisted))
     except duckdb.Error as exc:
         raise SpecError(f"cannot write {meta.SCHEMA} in {target.catalog}: {exc}") from exc
