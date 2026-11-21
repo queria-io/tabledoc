@@ -1,6 +1,23 @@
 # CHANGELOG
 
 
+## v0.2.0 (2026-11-21)
+
+### Documentation
+
+- Add the documentation site built with Blume ([#2](https://github.com/queria-io/tabledoc/pull/2),
+  [`6ae0f45`](https://github.com/queria-io/tabledoc/commit/6ae0f45226b14c62197e24fed1345c0a3f23f95e))
+
+Serve docs/ (English) and docs/ja/ (Japanese) at tabledoc.queria.io with the JSON Schemas under
+  schemas/, from one Pages deployment.
+
+### Features
+
+- Tabledoc load writes the description into a DuckLake catalog's _meta schema
+  ([#5](https://github.com/queria-io/tabledoc/pull/5),
+  [`1957812`](https://github.com/queria-io/tabledoc/commit/1957812e63e9261f853ec30c652aacb75711c394))
+
+
 ## v0.1.0 (2026-11-17)
 
 
