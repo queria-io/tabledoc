@@ -9,7 +9,7 @@
   "properties": {
     "$schema": { "const": "https://queria-io.github.io/tabledoc/schemas/dataset/v1.json" },
     "name": { "$ref": "#/$defs/name" },
-    "title": { "$ref": "#/$defs/text" },
+    "title": { "$ref": "#/$defs/text", "minLength": 1 },
     "description": { "$ref": "#/$defs/text" },
     "schema": { "type": "string", "minLength": 1, "description": "The schema tabledoc load writes the description into; default _tabledoc." },
     "topics": { "$ref": "#/$defs/texts", "description": "Topics, as a repository's topics on GitHub." },
@@ -54,14 +54,14 @@
       "description": "Text in the dataset's language, or a map from a BCP 47 tag to the text in that language.",
       "oneOf": [
         { "type": "string" },
-        { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/tag" }, "additionalProperties": { "type": "string" } }
+        { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/tag" }, "additionalProperties": { "type": "string", "minLength": 1 } }
       ]
     },
     "texts": {
       "description": "A list of text in the dataset's language, or a map from a BCP 47 tag to the list in that language.",
       "oneOf": [
         { "$ref": "#/$defs/strings" },
-        { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/tag" }, "additionalProperties": { "$ref": "#/$defs/strings" } }
+        { "type": "object", "minProperties": 1, "propertyNames": { "$ref": "#/$defs/tag" }, "additionalProperties": { "$ref": "#/$defs/strings", "minItems": 1 } }
       ]
     },
     "path": { "type": "string", "minLength": 1 },

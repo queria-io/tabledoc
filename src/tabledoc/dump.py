@@ -166,7 +166,7 @@ def _with_texts(found: tables.Rows) -> tables.Rows:
 
     def text(where: tuple[str, str, str]) -> dict[str, Any]:
         return {
-            k: v[language] if list(v) == [language] else dict(sorted(v.items()))
+            k: next(iter(v.values())) if [t.lower() for t in v] == [language.lower()] else dict(sorted(v.items()))
             for k, v in by_where.get(where, {}).items()
         }
 

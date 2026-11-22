@@ -109,6 +109,9 @@ DATASET_OWN = ("title_kana", "cover", "ai_context")
 TABLE_OWN = ("published", "ai_context")
 #: The columns of `texts` that hold text, one language a row.
 TEXTS = ("title", "description", "topics")
+#: The tables every load wrote, an earlier tabledoc's too (it had no `texts`): a schema
+#: holding them all is a description's.
+_EVERY_LOAD = frozenset(TABLES) - {"texts"}
 
 Rows = dict[str, list[dict[str, Any]]]
 Key = tuple[str, str]
@@ -377,7 +380,7 @@ def spelled_schema(con: Any, catalog: str, schema: str) -> str:
 
 def relations(con: Any, catalog: str, schema: str = SCHEMA) -> tuple[set[Key], set[Key], dict[Key, dict[str, str]]]:
     """(tables, views, each one's columns and types) of ``catalog``, but those of a description's
-    schema: ``schema``, and each schema that holds every table of `TABLES` (such as one an
+    schema: ``schema``, and each schema that holds every table of `_EVERY_LOAD` (such as one an
     earlier load wrote into). Names match without regard to case."""
     found = con.execute(
         """
@@ -391,7 +394,7 @@ def relations(con: Any, catalog: str, schema: str = SCHEMA) -> tuple[set[Key], s
     for s, n, v in found:
         if not v:
             held.setdefault(s.lower(), set()).add(n.lower())
-    skipped = {schema.lower()} | {s for s, names in held.items() if names >= set(TABLES)}
+    skipped = {schema.lower()} | {s for s, names in held.items() if names >= _EVERY_LOAD}
     kept = [(s, n, v) for s, n, v in found if s.lower() not in skipped]
     columns: dict[Key, dict[str, str]] = {(s, n): {} for s, n, _ in kept}
     for s, n, name, kind in con.execute(

@@ -388,3 +388,11 @@ def test_sends_fdl_token_to_the_remote_of_a_working_metadata(tmp_path, monkeypat
     )
     monkeypatch.delenv("FDL_TOKEN")
     assert remote_secret(str(catalog)) is None
+
+
+def test_unlisted_leaves_out_a_description_an_earlier_tabledoc_wrote(write, catalog):
+    root = project(write)
+    assert run(root, catalog, schema="_queria") is not None
+    sql(catalog, "DROP TABLE lake._queria.texts")
+    assert run(root, catalog, unlisted=True) is not None
+    assert held(catalog, "tables", "schema", "name") == [("sales", "extra"), ("sales", "orders"), ("sales", "recent")]
