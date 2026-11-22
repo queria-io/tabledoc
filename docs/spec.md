@@ -6,13 +6,14 @@ sidebar:
 description: The files tabledoc reads, how it checks them, and what it returns to a program.
 ---
 
-tabledoc defines how people write the description of a dataset (YAML and Markdown, or a dbt project's yml), checks it, and reads it for other programs. It depends on no particular host; `tabledoc load` writes the description into a DuckLake catalog as ordinary tables of one schema (`_tabledoc` by default), and `tabledoc dump` writes the files back from it. The files the author writes are the source.
+tabledoc defines how people write the description of a dataset (YAML and Markdown, or a dbt project's yml), checks it, and reads it for other programs. It depends on no particular host; `tabledoc load` writes the description into a DuckLake catalog as ordinary tables of one schema (`_tabledoc` by default), `tabledoc dump` writes the files back from it, and `tabledoc export --markdown` writes it as Markdown files for AI assistants and people to read. The files the author writes are the source.
 
 ## Commands
 
 - `tabledoc validate`: check the author's files
 - `tabledoc load`: check them and write the description into a DuckLake catalog ([Writing into a DuckLake catalog](#writing-into-a-ducklake-catalog))
 - `tabledoc dump`: write the files of the description a catalog holds ([Writing the files from a catalog](#writing-the-files-from-a-catalog))
+- `tabledoc export --markdown`: check them and write them as Markdown, one file per table ([Writing Markdown for AI](#writing-markdown-for-ai))
 
 It exits with 1 when there are errors (with `--strict`, warnings too) and 2 when the files or the catalog cannot be read or written at all.
 
@@ -278,6 +279,27 @@ tabledoc dump --ducklake work.sqlite --out description/
 - A file already in the folder is not replaced, and nothing is written, unless `--force`. A path in the catalog that would leave the folder is an error
 - Each table file is at `<schema>/<table>.yml`, and its guide at `<schema>/<table>/README.md`. The Markdown files of a folder other than `README.md` are listed in that folder's `docs`
 - What the tables do not hold is not written: primary keys, asset columns, an entity's type (written `foreign`), dimensions, granularity, metrics, keys for other readers, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--unlisted` wrote gets no table file. `sql` and `depends_on` are written only for a table without `source_path` (one dbt does not build)
+
+## Writing Markdown for AI
+
+`tabledoc export --markdown <folder>` checks the description as `validate` does, then writes it as Markdown: one file for the dataset, one for each schema and one for each table. AI assistants and people read the folder as it is, or it is published with the data's documentation.
+
+```bash
+tabledoc export --markdown ai-docs/
+```
+
+| File | Content |
+| --- | --- |
+| `README.md` | The dataset's title, description, licenses, sources and the other keys of `tabledoc.yml`; its schemas and tables, each with a link and the first paragraph of its description; its documents; then its overview (`README.md`) |
+| `<schema>/README.md` | The schema's title and description, its tables and documents, then its guide |
+| `<schema>/<table>/README.md` | The table's title, description, primary key, licenses, sources, `materialized`; its columns (title, description, semantics, `asset`) and metrics as tables; the tables it reads and the tables that read it, as links when they are in the dataset; its SQL; its documents; then its guide |
+
+- The files are at the [paths in the dataset](#paths-in-the-dataset), and every other file of `files` (documents, images) is written at its path too, so the links in the guides keep working
+- A guide comes after a rule (`---`) as written. Its headings are not changed
+- Keys for one reader (`queria:`, `annotations:`) are not written
+- Types, nullability and row counts are not in the description, so they are not written either
+- A file already in the folder is not replaced, and nothing is written, unless `--force`. Files of an earlier export that are no longer written stay in the folder
+- On an error (with `--strict`, a warning) nothing is written
 
 ## The older format
 
