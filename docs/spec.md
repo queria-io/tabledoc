@@ -6,7 +6,7 @@ sidebar:
 description: The files tabledoc reads, how it checks them, and what it returns to a program.
 ---
 
-tabledoc defines how people write the description of a dataset (YAML and Markdown, or a dbt project's yml), checks it, and reads it for other programs. It depends on no particular host; `tabledoc load` writes the description into a DuckLake catalog as the tables of the [`_fdl` schema](https://fdl.queria.io/spec/fdl-schema) FDL defines, and `tabledoc dump` writes the files back from it. The files the author writes are the source.
+tabledoc defines how people write the description of a dataset (YAML and Markdown, or a dbt project's yml), checks it, and reads it for other programs. It depends on no particular host; `tabledoc load` writes the description into a DuckLake catalog as ordinary tables of one schema (`_queria` by default), and `tabledoc dump` writes the files back from it. The files the author writes are the source.
 
 ## Commands
 
@@ -70,6 +70,7 @@ queria:
 | --- | --- | --- |
 | `$schema` | yes | The format and its version |
 | `name` | yes | The dataset's name: `^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
+| `schema` | | The schema `tabledoc load` writes the description into; default `_queria` |
 | `title`, `description`, `topics`, `homepage`, `language`, `issued`, `update_frequency` | | `language` is a BCP 47 tag; `issued` is `YYYY-MM-DD` |
 | `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` | | Written in a table file, the value is that table's alone |
 | `schemas` | | `name`, `title`, `description`, `guide` (the path of the schema's guide; default `<name>/README.md` when it is there), `docs` (the schema's other documents) |
@@ -154,7 +155,7 @@ In the dataset, each folder is one thing described: the root is the dataset, `<s
 
 ## dbt projects
 
-When the root has `dbt_project.yml`, tabledoc reads `target/manifest.json` (`--manifest` changes it). Run `dbt compile` (or a build) first; without a manifest, tabledoc warns and reads only the table files. `load` gives this as info instead when the catalog has a table dbt built (one with the attribute `dbt-source-path`), since it keeps that SQL.
+When the root has `dbt_project.yml`, tabledoc reads `target/manifest.json` (`--manifest` changes it). Run `dbt compile` (or a build) first; without a manifest, tabledoc warns and reads only the table files. `load` gives this as info instead when the catalog has a table dbt built (one with a `source_path`), since it keeps that SQL.
 
 - The tables are the enabled models materialized as `table`, `view` or `incremental`, under the model's `schema` and `alias`. Ephemeral and disabled models, seeds, snapshots and tests make no table, so they are not listed. A model with no description is listed with what dbt fills in only (`materialized`, `sql`, `depends_on`, `source_path`)
 - The description comes from the model's yml. `description` and the columns' `description` as they are; keys dbt does not have (`title`, `primary_key`, `sources`, a column's `title`, `asset` and so on) and `queria` under `config.meta`
@@ -229,56 +230,52 @@ d.content(d.files[0])  # the bytes of that file
 
 ## Writing into a DuckLake catalog
 
-`tabledoc load` checks the description as `validate` does, then writes it into a [DuckLake](https://ducklake.select) catalog as the tables of the [`_fdl` schema](https://fdl.queria.io/spec/fdl-schema). FDL defines those tables; any program that reads the catalog reads the description with it, with SQL.
-
-tabledoc reads and writes `_fdl` only through the fdl CLI (fdl-cli, a dependency of tabledoc): `fdl meta objects` lists the tables and views, `fdl meta dump` reads `_fdl`, and `fdl meta set --replace --stdin` writes it and runs FDL's checks. The catalog is fdl's working metadata, the `.sqlite` file `fdl clone` makes.
+`tabledoc load` checks the description as `validate` does, then writes it into a [DuckLake](https://ducklake.select) catalog as ordinary tables of one schema: `_queria` unless `schema` in `tabledoc.yml` or `--schema` names another. They are versioned with the data, and any program that reads the catalog reads the description with SQL. With fdl, the catalog is the working metadata `fdl clone` makes, and `fdl commit` makes a version of it.
 
 ```bash
 tabledoc load --ducklake work.sqlite --out build/assets
 fdl commit work.sqlite -m "..." --assets build/assets
 ```
 
-- `--ducklake`: fdl's working metadata (default: `FDL_WORKING`)
-- `--out`: also write the folder `fdl commit --assets` takes: each file of `_fdl.files` under `files/<path>`. With `--assets <folder>`, the files below it (those of the build's asset columns) are linked under `data/`. The folder has to be empty or written by an earlier `load`, and outside `.fdl/`, which only fdl writes
-- `--unlisted`: the catalog's tables and views that have no description get a row in `_fdl.tables` with `profile` false, and the attribute `queria-published` false
-- A described table or column, or a primary key column, that is not in the catalog is an error, and so is an `asset` column that is not `varchar`. Names match without regard to case, as in DuckDB
-- What `fdl meta set --replace --stdin` refuses (`issued` other than `YYYY-MM-DD`, say) is an error, given with fdl's reason
+- `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where new data files go (default: `FDL_DATA_PATH`, else the folder `fdl clone` noted beside the catalog)
+- `--schema`: the schema to write into (default: `schema` in `tabledoc.yml`, else `_queria`)
+- `--out`: also write the folder `fdl commit --assets` takes: each file of the `files` table under `files/<path>`. With `--assets <folder>`, the files below it (those of the build's asset columns) are linked under `data/`. The folder has to be empty or written by an earlier `load`, and outside `.fdl/`, which only fdl writes
+- `--unlisted`: the catalog's tables and views that have no description get a row in `tables` with `published` false
+- A described table or column, or a primary key column, that is not in the catalog is an error, and so is an `asset` column that is not `varchar`. Names match without regard to case, as in DuckDB, and are written as the catalog spells them
+- A value its column cannot hold (`issued` other than `YYYY-MM-DD`, say) is an error
 - On an error (with `--strict`, a warning) nothing is written
 
-| Table | From |
-| --- | --- |
-| `_fdl.dataset` | `tabledoc.yml`: `title`, `description`, `language`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` |
-| `_fdl.schemas` | `schemas[]` with a `title` or a `description` |
-| `_fdl.tables` | each table and view described: `title`, `description`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `primary_key`, `profile` (false when `published` under `queria:` is false), `sql` (not for a view: the metadata holds its SQL), `depends_on` |
-| `_fdl.columns` | each column with a `title`, a `description` or `asset: true` |
-| `_fdl.files` | the [files in the dataset](#paths-in-the-dataset): `path`, `sha256`, `bytes`, `media_type` |
-| `_fdl.catalogs` | the other datasets the SQL reads, by the name it reads them under |
-| `_fdl.attributes` | the keys under `queria:` and `annotations:` of the dataset, the tables and the columns |
+| Table | Primary key | From |
+| --- | --- | --- |
+| `dataset` | `id` (always `dataset`) | `tabledoc.yml`: `title`, `description`, `language`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage`, `topics`; `title_kana`, `cover` and `ai_context` under `queria:` |
+| `schemas` | `schema` | `schemas[]` with a `title` or a `description` |
+| `tables` | `schema`, `name` | each table and view described: `title`, `description`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `topics`, `sql`, `depends_on`, dbt's `materialized` and `source_path`; `published` and `ai_context` under `queria:` |
+| `columns` | `schema`, `table`, `name` | each column with a `title`, a `description` or an `entity`: `entity` is the entity's `name` (a code system such as `lg_code`) |
+| `files` | `path` | the [files in the dataset](#paths-in-the-dataset): `path`, `sha256`, `bytes`, `media_type` |
 
-- `topics` (or `keywords`, its earlier name) becomes Queria's `topics`, the attribute `queria-topics`, unless `queria:` has `topics`. `themes` under `queria:` is not written
-- A key for one reader becomes the attribute `<reader>-<key>`, with `_` in the key written `-`: `title_kana` under `queria:` is `queria-title-kana`. The value is the JSON of what was written
-- What `_fdl` has no column for is written as an attribute: a column's `entity` (its `name`) as `queria-entity`; the `commercial_use`, `share_alike` and `attribution_required` of the licenses as `queria-license-terms`, by license id (`{"<id>": {"commercial_use": true}}`), on the dataset or the table; dbt's `materialized` and `source_path` as `dbt-materialized` and `dbt-source-path` on the table or view
-- `licenses` is a list of `{id, spdx, url, title}`; a license written as a string is `{id}`
-- The files are not in the catalog. `_fdl.files.sha256` is an asset column: `fdl commit --assets` uploads each file by its content
-- `fdl meta set --replace --stdin` makes `_fdl` hold these rows and no others. Without a dbt build (no `sql` in the description), each table keeps the `sql`, `depends_on`, `dbt-materialized` and `dbt-source-path` the catalog's `_fdl` holds
-- Names are written as the catalog spells them
-- The `_meta` schema tabledoc 0.3 wrote is left as it is; FDL does not read it. Drop it once with DuckDB if you like
+- `topics` (or `keywords`, its earlier name) unless `queria:` has `topics`. `themes` under `queria:` is not written
+- `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
+- A view's row has no `sql` or `depends_on`: the metadata holds the view's SQL
+- Keys under `annotations:` for readers other than Queria are not written
+- The files are not in the catalog. `files.sha256` holds the sha256 of each, and `fdl commit --assets` uploads each file by its content
+- Rows are added, changed and removed by their primary key, so a load changes only the cells that differ. Without a dbt build (no `sql` in the description), each table keeps the `sql`, `depends_on`, `materialized` and `source_path` the catalog holds
+- Primary keys and asset columns are not written into these tables: FDL takes them as its own declarations
 - tabledoc writes no comments (`COMMENT ON`)
 
 ## Writing the files from a catalog
 
-`tabledoc dump` writes the files of the description a catalog's `_fdl` holds, read with `fdl meta dump`: `tabledoc.yml`, a table file for each table described, and every file of `_fdl.files` at its path. `tabledoc load` reads them back to the same `_fdl`.
+`tabledoc dump` writes the files of the description a catalog holds: `tabledoc.yml`, a table file for each table described, and every file of the `files` table at its path. `tabledoc load` reads them back to the same tables.
 
 ```bash
 tabledoc dump --ducklake work.sqlite --out description/
 ```
 
-- `--ducklake`: fdl's working metadata (default: `FDL_WORKING`). `--out`: the folder (default: here), outside `.fdl/`
-- `--files`: where the files of `_fdl.files` are, as `<files>/<sha256>`: a folder or an http(s) URL. Default: `assets/` of the repository `fdl clone` noted beside the catalog. Each file is checked against its sha256
+- `--ducklake`: the catalog (default: `FDL_WORKING`). `--schema`: the schema the description is in (default: `_queria`). `--out`: the folder (default: here), outside `.fdl/`
+- `--files`: where the files of the `files` table are, as `<files>/<sha256>`: a folder or an http(s) URL. Default: `assets/` of the repository `fdl clone` noted beside the catalog. Each file is checked against its sha256
 - `--name`: the dataset's `name` in `tabledoc.yml`. Default: the last part of the repository's URL
 - A file already in the folder is not replaced, and nothing is written, unless `--force`
 - Each table file is at `<schema>/<table>.yml`, and its guide at `<schema>/<table>/README.md`. The Markdown files of a folder other than `README.md` are listed in that folder's `docs`
-- What `_fdl` does not hold is not written: an entity's type (`primary` for a column that alone is the primary key, else `foreign`), dimensions, granularity, metrics, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--unlisted` wrote gets no table file. `sql` and `depends_on` are written only for a table without the attribute `dbt-source-path` (one dbt does not build)
+- What the tables do not hold is not written: primary keys, asset columns, an entity's type (written `foreign`), dimensions, granularity, metrics, keys for other readers, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--unlisted` wrote gets no table file. `sql` and `depends_on` are written only for a table without `source_path` (one dbt does not build)
 
 ## The older format
 

@@ -15,6 +15,7 @@ QUERIA = "queria"
 
 DATASET_KEYS = (
     "name",
+    "schema",
     "title",
     "description",
     "topics",

@@ -1,13 +1,14 @@
-"""tabledoc dump: the `_fdl` schema of fdl's working metadata (`fdl meta dump`) back to the files an author writes.
+"""tabledoc dump: the description a DuckLake catalog holds (`_queria` unless told otherwise) back to the files an author writes.
 
     tabledoc.yml                  the dataset, the schemas, and the root's other documents
     <schema>/<table>.yml          each table described
-    every file of _fdl.files      at its path: README.md and the other documents of each folder
+    every file of the files table at its path: README.md and the other documents of each folder
 
-Loading the files dump wrote gives the same `_fdl` again, but for what `_fdl`
-does not keep: an entity's type (written `primary` for a column that alone is
-the primary key, else `foreign`), dimensions, granularity, metrics, and
-`catalogs`, which come from dbt's profiles.yml.
+Loading the files dump wrote gives the same tables again, but for what they do
+not keep: an entity's type (written `primary` for a column that alone is the
+primary key, else `foreign`), dimensions, granularity, metrics, `catalogs`
+(from dbt's profiles.yml), primary keys and asset columns (declared to FDL),
+and keys for readers other than Queria.
 """
 
 from __future__ import annotations
@@ -23,8 +24,9 @@ from typing import Any
 
 import yaml
 
-from . import fdl, schemas
+from . import queria, schemas
 from .description import README
+from .load import ALIAS, attached, data_path
 from .report import SpecError
 from .shape import QUERIA
 from .source import DATASET_FILE
@@ -42,17 +44,19 @@ DATASET_KEYS = (
     "temporal_coverage",
     "spatial_coverage",
 )
-TABLE_KEYS = ("title", "description", "primary_key", "licenses", "sources", "temporal_coverage", "spatial_coverage")
+TABLE_KEYS = ("title", "description", "licenses", "sources", "temporal_coverage", "spatial_coverage")
 
 
 @dataclass(frozen=True)
 class Source:
-    #: fdl's working metadata (the .sqlite `fdl clone` made).
+    #: The DuckLake catalog, such as fdl's working metadata.
     catalog: str
-    #: Where each file of `_fdl.files` is, as `<files>/<sha256>`: a folder or an http(s) URL.
+    #: Where each file of the files table is, as `<files>/<sha256>`: a folder or an http(s) URL.
     files: str | None = None
     #: The dataset's name in tabledoc.yml.
     name: str | None = None
+    #: The schema the description is in.
+    schema: str = queria.SCHEMA
 
 
 def _note(catalog: str) -> dict[str, Any]:
@@ -119,40 +123,10 @@ def _fields(row: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
     return picked
 
 
-def _keys(attributes: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Reader -> key -> value of one thing, from its rows of `_fdl.attributes`."""
-    found: dict[str, dict[str, Any]] = {}
-    for row in sorted(attributes, key=lambda r: r["key"]):
-        reader, key = fdl.split_key(row["key"])
-        found.setdefault(reader, {})[key] = row["value"]
-    return found
-
-
-#: Attributes load makes from keys of its own; dump writes them back there.
-OWN = {QUERIA: ("license_terms", "entity"), fdl.DBT: fdl.DBT_KEYS}
-
-
-def _readers(attributes: list[dict[str, Any]]) -> dict[str, Any]:
-    """`queria:` and `annotations:` of one thing, but the attributes load makes from its own keys."""
-    found = {
-        reader: kept
-        for reader, keys in _keys(attributes).items()
-        if (kept := {k: v for k, v in keys.items() if k not in OWN.get(reader, ())})
-    }
-    others = {k: v for k, v in found.items() if k != QUERIA}
-    return {**({QUERIA: found[QUERIA]} if QUERIA in found else {}), **({"annotations": others} if others else {})}
-
-
-def _with_terms(fields: dict[str, Any], attributes: list[dict[str, Any]]) -> dict[str, Any]:
-    """``fields`` with each license's terms from Queria's `license_terms`."""
-    terms = _keys(attributes).get(QUERIA, {}).get("license_terms") or {}
-    if not terms or not fields.get("licenses"):
-        return fields
-    licenses = [
-        {**({"id": lic} if isinstance(lic, str) else lic), **terms[i]} if (i := lic if isinstance(lic, str) else lic.get("id")) in terms else lic
-        for lic in fields["licenses"]
-    ]
-    return {**fields, "licenses": licenses}
+def _queria(row: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    """`queria:` of one row: its columns that are Queria's own, but `topics`, written at the top."""
+    own = {k: _plain(row[k]) for k in keys if k != "topics" and row.get(k) is not None}
+    return {QUERIA: own} if own else {}
 
 
 def _documents(paths: list[str], folder: str) -> list[str]:
@@ -164,63 +138,42 @@ def _documents(paths: list[str], folder: str) -> list[str]:
     ]
 
 
-def _column(row: dict[str, Any], primary_key: list[str], attributes: list[dict[str, Any]]) -> dict[str, Any]:
-    entity = _keys(attributes).get(QUERIA, {}).get("entity")
-    kind = "primary" if primary_key == [row["name"]] else "foreign"
+def _column(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": row["name"],
         **_fields(row, ("title", "description")),
-        **({"entity": {"type": kind, "name": entity}} if entity else {}),
-        **({"asset": True} if row.get("asset") else {}),
-        **_readers(attributes),
+        **({"entity": {"type": "foreign", "name": row["entity"]}} if row.get("entity") else {}),
     }
 
 
-def _unlisted_only(table: dict[str, Any], attributes: list[dict[str, Any]], columns: list[Any]) -> bool:
+def _unlisted_only(table: dict[str, Any], columns: list[Any]) -> bool:
     """A row `load --unlisted` writes for a table with no description, and nothing else."""
-    said = {k for k, v in table.items() if v is not None and k not in ("schema", "name", "profile")}
-    keys = [a["key"] for a in attributes]
-    return not said and not columns and keys == [fdl.attribute_key(QUERIA, "published")]
+    said = {k for k, v in table.items() if v is not None and k not in ("schema", "name")}
+    return said == {"published"} and table["published"] is False and not columns
 
 
-def documents(found: fdl.Rows, name: str) -> dict[str, dict[str, Any]]:
+def documents(found: queria.Rows, name: str) -> dict[str, dict[str, Any]]:
     """The YAML files of the description in ``found``, by path."""
     paths = sorted(f["path"] for f in found.get("files") or [])
-    attributes = found.get("attributes") or []
-
-    def of(schema: str = "", table: str = "", column: str = "") -> list[dict[str, Any]]:
-        return [a for a in attributes if (a.get("schema", ""), a.get("table", ""), a.get("column", "")) == (schema, table, column)]
-
     tables = sorted(found.get("tables") or [], key=lambda t: (t["schema"], t["name"]))
     columns = found.get("columns") or []
     written: dict[str, dict[str, Any]] = {}
     for table in tables:
         schema, table_name = table["schema"], table["name"]
         own = [c for c in columns if (c["schema"], c["table"]) == (schema, table_name)]
-        own += [
-            {"schema": schema, "table": table_name, "name": name}
-            for name in dict.fromkeys(
-                a["column"] for a in attributes if (a.get("schema"), a.get("table")) == (schema, table_name) and a.get("column")
-            )
-            if name not in {c["name"] for c in own}
-        ]
-        if _unlisted_only(table, of(schema, table_name), own):
+        if _unlisted_only(table, own):
             continue
-        key = list(table.get("primary_key") or [])
         docs = _documents(paths, f"{schema}/{table_name}")
-        authored = not _keys(of(schema, table_name)).get(fdl.DBT, {}).get("source_path")
+        authored = not table.get("source_path")
         written[f"{schema}/{table_name}.yml"] = {
             "$schema": schemas.TABLE,
-            **_with_terms(_fields(table, TABLE_KEYS), of(schema, table_name)),
+            **_fields(table, TABLE_KEYS),
+            **({"topics": list(table["topics"])} if table.get("topics") else {}),
             **({"sql": table["sql"]} if authored and table.get("sql") else {}),
             **({"depends_on": list(table["depends_on"])} if authored and table.get("depends_on") else {}),
             **({"docs": docs} if docs else {}),
-            **(
-                {"columns": [_column(c, key, of(schema, table_name, c["name"])) for c in own]}
-                if own
-                else {}
-            ),
-            **_readers(of(schema, table_name)),
+            **({"columns": [_column(c) for c in own]} if own else {}),
+            **_queria(table, queria.TABLE_OWN),
         }
     described = {s["schema"]: s for s in found.get("schemas") or []}
     names = sorted(set(described) | {t["schema"] for t in tables})
@@ -235,10 +188,11 @@ def documents(found: fdl.Rows, name: str) -> dict[str, dict[str, Any]]:
         DATASET_FILE: {
             "$schema": schemas.DATASET,
             "name": name,
-            **_with_terms(_fields(dataset, DATASET_KEYS), of()),
+            **_fields(dataset, DATASET_KEYS),
+            **({"topics": list(dataset["topics"])} if dataset.get("topics") else {}),
             **({"schemas": schema_list} if schema_list else {}),
             **({"docs": docs} if docs else {}),
-            **_readers(of()),
+            **_queria(dataset, queria.DATASET_OWN),
         },
         **written,
     }
@@ -261,15 +215,21 @@ def render(record: dict[str, Any]) -> str:
 
 
 def dump(source: Source, out: Path, *, force: bool = False) -> list[str]:
-    """Write the files of the description in ``source``'s `_fdl` under ``out``; their paths.
+    """Write the files of the description in ``source``'s schema under ``out``; their paths.
 
     Refused when one of them is already there, unless ``force``.
     """
     if ".fdl" in out.resolve().parts:
         raise SpecError(f"{out} is inside .fdl/, which only fdl writes; give a folder outside it")
-    found = fdl.dump(source.catalog)
-    if not any(found.values()):
-        raise SpecError(f"{source.catalog} has nothing in {fdl.SCHEMA}")
+    import duckdb
+
+    try:
+        with attached(source.catalog, data_path(source.catalog, None)) as con:
+            found = queria.read(con, ALIAS, source.schema)
+    except duckdb.Error as exc:
+        raise SpecError(f"cannot read {source.schema} in {source.catalog}: {exc}") from exc
+    if not found:
+        raise SpecError(f"{source.catalog} has no {source.schema} schema")
     texts = {path: render(record).encode("utf-8") for path, record in documents(found, dataset_name(source)).items()}
     entries = sorted(found.get("files") or [], key=lambda f: f["path"])
     clash = sorted(p for p in [*texts, *(f["path"] for f in entries)] if (out / p).exists())

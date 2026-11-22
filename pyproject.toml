@@ -8,7 +8,6 @@ requires-python = ">=3.10"
 authors = [{ name = "flo8s" }]
 dependencies = [
     "duckdb>=1.1",
-    "fdl-cli>=0.34",
     "jsonschema>=4.18",
     "pyyaml>=6.0",
     "referencing>=0.30",
@@ -37,6 +36,3 @@ major_on_zero = false
 [dependency-groups]
 dev = ["pytest>=8"]
 
-[tool.uv.sources]
-# fdl meta load, dump and objects arrive in fdl-cli 0.34; until it is released.
-fdl-cli = { git = "https://github.com/queria-io/fdl", rev = "a39abe8020b2f4eaf1379c44a57b940cfd4a3e39" }

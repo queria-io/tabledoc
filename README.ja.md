@@ -10,7 +10,7 @@ tabledoc は、人が YAML と Markdown (または dbt のプロジェクトの 
 - semantic (結合キー・ディメンション・メトリクス) は dbt のセマンティックレイヤーの書き方にそろえています
 - dbt のプロジェクトでは、説明・SQL・依存関係を `target/manifest.json` から取ります
 - Python からは `tabledoc.read` で、検査した説明を読めます。ガイドとそこから参照するファイルはパスと sha256 で並べます
-- `tabledoc load` は説明を DuckLake のカタログに、[FDL](https://fdl.queria.io) が定める `_fdl` スキーマのテーブルとして書きます。説明はデータと一緒に配布されます。`tabledoc dump` はそこからファイルを書き戻します
+- `tabledoc load` は説明を DuckLake のカタログに、1 つのスキーマ (既定は `_queria`) の普通のテーブルとして書きます。説明はデータと一緒に配布され、[FDL](https://fdl.queria.io) でデータと一緒にバージョン管理されます。`tabledoc dump` はそこからファイルを書き戻します
 
 ## インストール
 
@@ -56,7 +56,7 @@ metrics:
 
 ```bash
 tabledoc validate            # 検査する
-tabledoc load --ducklake work.sqlite   # 検査して、カタログの _fdl スキーマに書く
+tabledoc load --ducklake work.sqlite   # 検査して、カタログの _queria スキーマに書く
 tabledoc dump --ducklake work.sqlite --out description/   # カタログからファイルを書き戻す
 ```
 

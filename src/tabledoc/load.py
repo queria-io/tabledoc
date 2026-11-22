@@ -1,19 +1,23 @@
-"""tabledoc load: write a description into the `_fdl` schema of fdl's working metadata, and the files `fdl commit` uploads.
+"""tabledoc load: write a description into a DuckLake catalog, and the files `fdl commit` uploads.
 
-The working metadata is the one `fdl clone` made and the build wrote. `fdl meta set --replace --stdin`
-writes the description's rows (`fdl.rows`) into its `_fdl` schema, and the folder
-``out`` gets the files of `_fdl.files` (for `fdl commit --assets`).
+The catalog is the one the build wrote (with fdl, the working metadata `fdl clone`
+made). The description's rows (`queria.rows`) go into the tables of a schema
+of it (`_queria` unless told otherwise), and the folder ``out`` gets the files
+of its `files` table (for `fdl commit --assets`).
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from . import fdl
+from . import queria
 from .description import MANIFEST_MISSING, Description, Options, read
 from .report import Finding, Level, Report, SpecError
 
@@ -21,16 +25,82 @@ from .report import Finding, Level, Report, SpecError
 MARK = ".tabledoc-load"
 
 
+ALIAS = "lake"
+#: Marks a folder load wrote, which the next load may replace.
+
+
 @dataclass(frozen=True)
 class Target:
-    #: fdl's working metadata (the .sqlite `fdl clone` made).
-    working: str
-    #: The folder for `fdl commit --assets`; None writes `_fdl` only.
+    #: The DuckLake catalog: a .sqlite or .duckdb file, or a ducklake: path.
+    catalog: str
+    #: Where new data files go; default the note `fdl clone` wrote beside the catalog.
+    data_path: str | None = None
+    #: The folder for `fdl commit --assets`; None writes the catalog only.
     out: Path | None = None
     #: Files the build made for its asset columns, linked into ``out/data``.
     assets: Path | None = None
-    #: Write the tables and views that have no description, as not published.
+    #: Write the catalog's tables that have no description, as not published.
     unlisted: bool = False
+    #: The schema to write into; default tabledoc.yml's `schema`, else `_queria`.
+    schema: str | None = None
+
+
+def data_path(catalog: str, given: str | None) -> str | None:
+    """``given``, else where `fdl clone` noted in ``<catalog>.fdl.json`` that new data files go.
+
+    As fdl reads the note: the storage's data folder (``--storage``), else the
+    local folder (``--data``), else None (the catalog's own data path).
+    """
+    if given:
+        return given
+    note = Path(catalog.removeprefix("ducklake:") + ".fdl.json")
+    if not note.is_file():
+        return None
+    try:
+        state = json.loads(note.read_text(encoding="utf-8"))
+        storage, data, data_dir = state.get("storage"), state.get("data"), state.get("data_dir")
+    except (OSError, ValueError, AttributeError) as exc:
+        raise SpecError(f"cannot read {note}: {exc}") from exc
+    if storage:
+        if not data_dir:
+            raise SpecError(f"{note} names a storage but no data_dir; give --data-path")
+        base = storage if "://" in storage else Path(storage).resolve().as_posix()
+        return base.rstrip("/") + "/" + data_dir
+    return Path(data).resolve().as_posix() + "/" if data else None
+
+
+def _string(value: str) -> str:
+    """``value`` as an SQL string literal."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+@contextmanager
+def attached(catalog: str, data: str | None) -> Iterator[Any]:
+    """A DuckDB connection with ``catalog`` attached, writable, as ``ALIAS``.
+
+    Every row goes to a data file (`DATA_INLINING_ROW_LIMIT 0`), as fdl commit
+    requires. Files over HTTP are read with httpfs and DuckDB's own secrets.
+    """
+    import duckdb
+
+    target = catalog if catalog.startswith("ducklake:") else f"ducklake:{catalog}"
+    options = ["DATA_INLINING_ROW_LIMIT 0"]
+    if catalog.endswith(".sqlite"):
+        options.append("META_TYPE 'sqlite'")
+    if data:
+        options += [f"DATA_PATH {_string(data)}", "OVERRIDE_DATA_PATH true"]
+    con = duckdb.connect()
+    try:
+        con.execute("INSTALL ducklake; LOAD ducklake; INSTALL httpfs; LOAD httpfs;")
+        if catalog.endswith(".sqlite"):
+            con.execute("INSTALL sqlite; LOAD sqlite;")
+        try:
+            con.execute(f"ATTACH {_string(target)} AS {ALIAS} ({', '.join(options)})")
+        except duckdb.Error as exc:
+            raise SpecError(f"cannot open {catalog}: {exc}") from exc
+        yield con
+    finally:
+        con.close()
 
 
 def check_out(out: Path) -> None:
@@ -63,7 +133,7 @@ def _write_out(description: Description, out: Path, assets: Path | None) -> None
 def write_files(description: Description, out: Path, linked: Path | None) -> None:
     """The files `fdl commit --assets out` uploads, found by their content.
 
-    Each file of `_fdl.files` under ``out/files/<path>``, its extension kept so
+    Each file of the files table under ``out/files/<path>``, its extension kept so
     the upload carries its media type. fdl leaves hidden files and folders out,
     so a file with a hidden part in its path goes to ``out/files/<sha256><suffix>``.
     With ``linked`` (the build's own assets), every file below it is linked
@@ -86,18 +156,16 @@ def write_files(description: Description, out: Path, linked: Path | None) -> Non
             target.symlink_to(source)
 
 
-def _missing(columns: dict[fdl.Key, dict[str, str]], description: Description, report: Report) -> None:
+def _missing(columns: dict[queria.Key, dict[str, str]], description: Description, report: Report) -> None:
     """Each described table and column, and each primary key column, has to be in the
-    working metadata, and an asset column has to be varchar. fdl checks these too;
-    here they are named by the file that says them.
+    catalog, and an asset column has to be varchar.
 
-    Names match without regard to case, as DuckDB's identifiers do. A view's columns
-    are known only once it is bound, so fdl checks those.
+    Names match without regard to case, as DuckDB's identifiers do.
     """
-    held = {fdl.fold(*key): {n.lower(): t for n, t in found.items()} for key, found in columns.items()}
-    viewed = {fdl.fold(*key) for key, found in columns.items() if not found}
+    held = {queria.fold(*key): {n.lower(): t for n, t in found.items()} for key, found in columns.items()}
+    viewed = {queria.fold(*key) for key, found in columns.items() if not found}
     for table in description.tables:
-        key = fdl.fold(table["schema"], table["name"])
+        key = queria.fold(table["schema"], table["name"])
         where = f"{table['schema']}.{table['name']}"
         if key not in held:
             report.error("table-missing", f"{where} is described but is not in the catalog", description.root)
@@ -114,14 +182,14 @@ def _missing(columns: dict[fdl.Key, dict[str, str]], description: Description, r
                 report.error("asset-type", f"{where}.{name} holds assets, so it has to be varchar", description.root)
 
 
-def _spelled(description: Description, columns: dict[fdl.Key, dict[str, str]]) -> Description:
+def _spelled(description: Description, columns: dict[queria.Key, dict[str, str]]) -> Description:
     """``description`` with its schemas, tables, columns and primary keys named as the
-    working metadata spells them, which `_fdl` has to match."""
-    names = {fdl.fold(*key): key for key in columns}
+    catalog spells them."""
+    names = {queria.fold(*key): key for key in columns}
     schemas = {key[0].lower(): key[0] for key in columns}
 
     def table(t: dict[str, Any]) -> dict[str, Any]:
-        key = names.get(fdl.fold(t["schema"], t["name"]))
+        key = names.get(queria.fold(t["schema"], t["name"]))
         if key is None:
             return t
         held = {n.lower(): n for n in columns[key]}
@@ -158,32 +226,44 @@ def _carried_over(report: Report) -> None:
     ]
 
 
+def schema_of(target: Target, description: Description) -> str:
+    """``target.schema``, else tabledoc.yml's `schema`, else `_queria`."""
+    return target.schema or description.dataset.get("schema") or queria.SCHEMA
+
+
 def load(options: Options, target: Target, report: Report, *, strict: bool = False) -> Description | None:
-    """Read and check the description, then write it with `fdl meta set --replace --stdin`.
+    """Read and check the description, then write it into the catalog.
 
     Nothing is written when the check fails: on an error, or with ``strict`` on a warning.
     """
     description = read(options, report)
+    if not report.failed:
+        for where, column, kind in queria.unfit(queria.rows(description)):
+            report.error("value-type", f"{where}: {column} cannot be written as {kind}", description.root)
     if report.failed or (strict and _warned(report, but=MANIFEST_MISSING)):
         return None
     if target.out is not None:
         check_out(target.out)
-    tables, views, columns = fdl.objects(target.working)
-    _missing(columns, description, report)
-    if report.failed:
-        return None
-    description = _spelled(description, columns)
-    # Without a dbt build, the SQL and dependencies stay as `_fdl` has them.
-    carried = fdl.dump(target.working)
-    if fdl.built_by_dbt(carried):
-        _carried_over(report)
-    if strict and _warned(report):
-        return None
-    unlisted = tables | views if target.unlisted else None
-    refused = fdl.load(target.working, fdl.rows(description, carried, unlisted, views))
-    if refused:
-        report.error("fdl", refused, description.root)
-        return None
+    schema = schema_of(target, description)
+    import duckdb
+
+    try:
+        with attached(target.catalog, data_path(target.catalog, target.data_path)) as con:
+            tables, views, columns = queria.relations(con, ALIAS, schema)
+            _missing(columns, description, report)
+            if report.failed:
+                return None
+            description = _spelled(description, columns)
+            # Without a dbt build, the SQL and dependencies stay as the catalog has them.
+            carried = queria.read(con, ALIAS, schema)
+            if queria.built_by_dbt(carried):
+                _carried_over(report)
+            if strict and _warned(report):
+                return None
+            unlisted = tables | views if target.unlisted else None
+            queria.write(con, ALIAS, queria.rows(description, carried, unlisted, views), schema)
+    except duckdb.Error as exc:
+        raise SpecError(f"cannot write {schema} in {target.catalog}: {exc}") from exc
     if target.out is not None:
         write_out(description, target.out, target.assets)
     return description

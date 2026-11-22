@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import pytest
-from conftest import fdl_run
+import json
 
-from tabledoc import Options
-from tabledoc import fdl as fdl_rows
+import pytest
+
+from tabledoc import Options, queria
 from tabledoc.cli import main
-from tabledoc.load import Target, load
+from tabledoc.load import ALIAS, Target, attached, data_path, load
 from tabledoc.report import Report, SpecError
 
 DATASET = "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\n"
@@ -15,21 +15,20 @@ TABLE = "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"
 
 @pytest.fixture
 def catalog(lake):
-    """fdl's working metadata with sales.orders, sales.extra and the view sales.recent."""
-    return str(
-        lake(
-            "CREATE SCHEMA lake.sales;"
-            "CREATE TABLE lake.sales.orders AS SELECT 1 AS id, 'a' AS file;"
-            "CREATE TABLE lake.sales.extra AS SELECT 1 AS x;"
-            "CREATE VIEW lake.sales.recent AS SELECT * FROM lake.sales.orders"
-        )
+    """A DuckLake catalog with sales.orders, sales.extra and the view sales.recent."""
+    return lake(
+        "CREATE SCHEMA lake.sales;"
+        "CREATE TABLE lake.sales.orders AS SELECT 1 AS id, 'a' AS file;"
+        "CREATE TABLE lake.sales.extra AS SELECT 1 AS x;"
+        "CREATE VIEW lake.sales.recent AS SELECT * FROM lake.sales.orders"
     )
 
 
 def project(write):
     return write(
         {
-            "tabledoc.yml": DATASET + "name: shop\ntitle: Shop\nlicenses: [CC-BY-4.0]\nqueria: {themes: [trade]}\n",
+            "tabledoc.yml": DATASET
+            + "name: shop\ntitle: Shop\nlicenses: [CC-BY-4.0]\nqueria: {themes: [trade], title_kana: ショップ}\n",
             "README.md": "Overview.\n",
             "sales/orders.yml": TABLE
             + "title: Orders\ndescription: One row is one order.\nprimary_key: [id]\n"
@@ -41,87 +40,121 @@ def project(write):
     )
 
 
-def held(working, table, *columns):
-    """The rows of ``_fdl.<table>`` (from fdl meta dump), as tuples of ``columns``, sorted."""
-    return sorted(tuple(r.get(c) for c in columns) for r in fdl_rows.dump(working).get(table) or [])
+def held(catalog, table, *columns, schema=queria.SCHEMA):
+    """The rows of ``<schema>.<table>``, as tuples of ``columns``, sorted."""
+    with attached(*catalog) as con:
+        found = queria.read(con, ALIAS, schema).get(table) or []
+    return sorted(tuple(r.get(c) for c in columns) for r in found)
 
 
-def run(root, working, report=None, **target):
-    return load(Options(root, with_source=False), Target(working, **target), report or Report())
+def run(root, catalog, report=None, **target):
+    return load(Options(root, with_source=False), Target(*catalog, **target), report or Report())
 
 
-def test_writes_fdl_and_the_folder_for_fdl_commit(write, catalog, tmp_path):
+def sql(catalog, statement):
+    with attached(*catalog) as con:
+        return con.execute(statement).fetchall()
+
+
+def test_writes_queria_and_the_folder_for_fdl_commit(write, catalog, tmp_path):
     root = project(write)
     out = tmp_path / "pack"
     report = Report()
     assert run(root, catalog, report, out=out, unlisted=True) is not None, report.render()
-    assert held(catalog, "dataset", "title", "licenses") == [("Shop", [{"id": "CC-BY-4.0", "spdx": None, "url": None, "title": None}])]
-    assert held(catalog, "tables", "name", "primary_key", "profile") == [
+    assert held(catalog, "dataset", "id", "title", "title_kana", "licenses") == [
+        ("dataset", "Shop", "ショップ", [{"id": "CC-BY-4.0"}])
+    ]
+    assert held(catalog, "tables", "name", "title", "published") == [
         ("extra", None, False),
-        ("orders", ["id"], None),
+        ("orders", "Orders", None),
         ("recent", None, None),
     ]
-    assert held(catalog, "columns", "name", "asset") == [("file", True), ("id", None)]
+    assert held(catalog, "columns", "name", "description", "entity") == [("id", "The order", "order")]
     assert held(catalog, "files", "path", "media_type") == [
         ("README.md", "text/markdown"),
         ("sales/orders/README.md", "text/markdown"),
-    ]
-    assert held(catalog, "attributes", "table", "column", "key", "value") == [
-        ("extra", "", "queria-published", False),
-        ("orders", "id", "queria-entity", "order"),
     ]
     assert (out / "files" / "README.md").read_text() == "Overview.\n"
     assert (out / "files" / "sales" / "orders" / "README.md").read_text() == "Guide.\n"
 
 
-def test_topics_and_keywords_are_queria_topics(write, catalog):
+def test_queria_keys_are_columns(write, catalog):
     root = project(write)
-    (root / "tabledoc.yml").write_text(DATASET + "name: shop\ntitle: Shop\ntopics: [retail]\nqueria: {themes: [trade]}\n")
-    (root / "sales" / "recent.yml").write_text(TABLE + "description: x\nkeywords: [latest]\n")
+    (root / "tabledoc.yml").write_text(
+        DATASET + "name: shop\ntopics: [retail]\nqueria: {cover: cover.png, ai_context: {hint: x}}\n"
+    )
+    (root / "sales" / "recent.yml").write_text(TABLE + "description: x\nkeywords: [latest]\nqueria: {published: false}\n")
     report = Report()
     assert run(root, catalog, report) is not None, report.render()
-    # queria: themes is no longer written.
-    assert held(catalog, "attributes", "table", "key", "value") == [
-        ("", "queria-topics", ["retail"]),
-        ("orders", "queria-entity", "order"),
-        ("recent", "queria-topics", ["latest"]),
+    assert held(catalog, "dataset", "topics", "cover", "ai_context") == [(["retail"], "cover.png", {"hint": "x"})]
+    assert held(catalog, "tables", "name", "topics", "published") == [("orders", None, None), ("recent", ["latest"], False)]
+
+
+def test_license_terms_stay_in_licenses(write, catalog):
+    root = project(write)
+    (root / "tabledoc.yml").write_text(
+        DATASET + "name: shop\nlicenses: [{id: x, url: https://x.example, commercial_use: true, share_alike: false}]\n"
+    )
+    assert run(root, catalog) is not None
+    assert held(catalog, "dataset", "licenses") == [
+        ([{"id": "x", "url": "https://x.example", "commercial_use": True, "share_alike": False}],)
     ]
 
 
-def test_a_table_not_published_gets_no_profile(write, catalog):
+def test_a_view_gets_no_sql(write, catalog):
     root = project(write)
-    (root / "sales" / "recent.yml").write_text(TABLE + "description: The last orders.\nqueria: {published: false}\n")
-    report = Report()
-    assert run(root, catalog, report) is not None, report.render()
-    assert held(catalog, "tables", "name", "profile") == [("orders", None), ("recent", False)]
-
-
-def test_a_view_keeps_its_sql_in_the_metadata(write, catalog):
-    root = project(write)
-    (root / "sales" / "recent.yml").write_text(TABLE + "description: x\nsql: select 1\n")
+    (root / "sales" / "recent.yml").write_text(TABLE + "description: x\nsql: select 1\ndepends_on: [sales.orders]\n")
     (root / "sales" / "orders.yml").write_text(TABLE + "title: Orders\nsql: select 1 as id, 'a' as file\n")
     assert run(root, catalog) is not None
-    assert held(catalog, "tables", "name", "sql") == [("orders", "select 1 as id, 'a' as file"), ("recent", None)]
+    assert held(catalog, "tables", "name", "sql", "depends_on") == [
+        ("orders", "select 1 as id, 'a' as file", None),
+        ("recent", None, None),
+    ]
 
 
-def test_a_second_load_replaces_fdl(write, catalog):
+def test_a_second_load_changes_only_what_differs(write, catalog):
     root = project(write)
     run(root, catalog)
-    (root / "sales" / "orders.yml").write_text(TABLE + "title: Orders\n", encoding="utf-8")
+    snapshots = "SELECT count(*) FROM lake.snapshots()"
+    before = sql(catalog, snapshots)
     assert run(root, catalog) is not None
+    # Nothing differs, so nothing is written.
+    assert sql(catalog, snapshots) == before
+    (root / "sales" / "orders.yml").write_text(TABLE + "title: Orders again\n", encoding="utf-8")
+    assert run(root, catalog) is not None
+    assert held(catalog, "tables", "name", "title") == [("orders", "Orders again"), ("recent", None)]
     assert held(catalog, "columns", "name") == []
 
 
 def test_keeps_the_sql_without_a_build(write, catalog):
     root = project(write)
     run(root, catalog)
-    fdl_run("meta", "set", catalog, "sales.orders", "sql", "select 1")
-    fdl_run("meta", "set", catalog, "sales.orders", "depends_on", "sales.extra")
+    sql(catalog, "UPDATE lake._queria.tables SET sql = 'select 1', depends_on = ['sales.extra'], "
+        "source_path = 'models/orders.sql' WHERE name = 'orders'")
     run(root, catalog)
-    assert held(catalog, "tables", "name", "sql", "depends_on") == [
-        ("orders", "select 1", ["sales.extra"]),
-        ("recent", None, None),
+    assert held(catalog, "tables", "name", "sql", "depends_on", "source_path") == [
+        ("orders", "select 1", ["sales.extra"], "models/orders.sql"),
+        ("recent", None, None, None),
     ]
+
+
+def test_a_missing_manifest_is_info_when_dbt_built_before(write, catalog):
+    root = project(write)
+    write({"dbt_project.yml": "name: p\n"})
+    run(root, catalog)
+    sql(catalog, "UPDATE lake._queria.tables SET source_path = 'm.sql' WHERE name = 'orders'")
+    report = Report()
+    assert load(Options(root, with_source=False), Target(*catalog), report, strict=True)
+    assert [(f.level.value, f.code) for f in report.findings] == [("info", "manifest-missing")]
+
+
+def test_writes_into_the_schema_it_is_told(write, catalog):
+    root = project(write)
+    assert run(root, catalog, schema="docs") is not None
+    assert held(catalog, "dataset", "title", schema="docs") == [("Shop",)]
+    (root / "tabledoc.yml").write_text(DATASET + "name: shop\nschema: notes\ntitle: Notes\n")
+    assert run(root, catalog) is not None
+    assert held(catalog, "dataset", "title", schema="notes") == [("Notes",)]
 
 
 def test_an_asset_column_has_to_be_varchar(write, catalog):
@@ -144,7 +177,7 @@ def test_a_table_not_in_the_catalog_writes_nothing(write, catalog):
     report = Report()
     assert run(root, catalog, report) is None
     assert [f.code for f in report.findings] == ["table-missing"]
-    assert not any(fdl_rows.dump(catalog).values())
+    assert sql(catalog, "SELECT count(*) FROM duckdb_schemas() WHERE schema_name = '_queria'") == [(0,)]
 
 
 def test_a_column_not_in_the_catalog_is_an_error(write, catalog):
@@ -174,22 +207,23 @@ def test_cli_needs_a_catalog(write, monkeypatch, capsys):
 
 def test_cli_reads_the_catalog_from_the_environment(write, catalog, monkeypatch):
     root = project(write)
-    monkeypatch.setenv("FDL_WORKING", catalog)
+    monkeypatch.setenv("FDL_WORKING", catalog[0])
+    monkeypatch.setenv("FDL_DATA_PATH", catalog[1])
     assert main(["load", "--root", str(root), "--quiet"]) == 0
     assert held(catalog, "dataset", "title") == [("Shop",)]
 
 
-def test_what_fdl_refuses_is_an_error(write, catalog):
+def test_a_value_the_table_cannot_hold_is_an_error(write, catalog):
     root = project(write)
     (root / "tabledoc.yml").write_text(DATASET + "name: shop\nissued: 2026-10\n", encoding="utf-8")
     report = Report()
     assert run(root, catalog, report) is None
-    assert [f.code for f in report.findings] == ["fdl"]
-    assert "issued" in report.findings[0].message
-    assert not any(fdl_rows.dump(catalog).values())
+    assert [f.message for f in report.findings if f.code == "value-type"] == [
+        "_queria.dataset: issued cannot be written as DATE",
+    ]
 
 
-def test_names_match_without_regard_to_case(write, catalog):
+def test_names_are_written_as_the_catalog_spells_them(write, catalog):
     root = project(write)
     (root / "sales" / "Orders.yml").write_text(
         TABLE + "description: Upper.\nprimary_key: [ID]\ncolumns: [{name: ID, description: The order}]\n",
@@ -199,39 +233,16 @@ def test_names_match_without_regard_to_case(write, catalog):
     (root / "sales" / "orders.md").unlink()
     report = Report()
     assert run(root, catalog, report, unlisted=True) is not None, report.render()
-    # Written as the working metadata spells them, which _fdl has to match.
-    assert held(catalog, "tables", "name", "primary_key") == [("extra", None), ("orders", ["id"]), ("recent", None)]
+    assert held(catalog, "tables", "name") == [("extra",), ("orders",), ("recent",)]
     assert held(catalog, "columns", "name") == [("id",)]
 
 
-def test_what_fdl_has_no_column_for_goes_to_attributes(write, catalog):
-    root = project(write)
-    (root / "tabledoc.yml").write_text(
-        DATASET + "name: shop\nlicenses: [{id: x, url: https://x.example, commercial_use: true, share_alike: false}]\n"
-    )
-    (root / "sales" / "orders.yml").write_text(TABLE + "title: Orders\nsql: select 1\n")
-    report = Report()
-    assert run(root, catalog, report) is not None, report.render()
-    assert held(catalog, "dataset", "licenses") == [([{"id": "x", "spdx": None, "url": "https://x.example", "title": None}],)]
-    terms = [r["value"] for r in fdl_rows.dump(catalog)["attributes"] if r["key"] == "queria-license-terms"]
-    assert terms == [{"x": {"commercial_use": True, "share_alike": False}}]
-
-
-def test_dbt_keys_are_kept_without_a_build(write, catalog):
-    root = project(write)
-    run(root, catalog)
-    fdl_run("meta", "set", catalog, "sales.orders", "dbt-materialized", '"table"')
-    fdl_run("meta", "set", catalog, "sales.orders", "dbt-source-path", '"models/orders.sql"')
-    run(root, catalog)
-    dbt = [(r["key"], r["value"]) for r in fdl_rows.dump(catalog)["attributes"] if r["key"].startswith("dbt-")]
-    assert sorted(dbt) == [("dbt-materialized", "table"), ("dbt-source-path", "models/orders.sql")]
-
-
-def test_a_missing_manifest_is_info_when_dbt_built_before(write, catalog):
-    root = project(write)
-    write({"dbt_project.yml": "name: p\n"})
-    run(root, catalog)
-    fdl_run("meta", "set", catalog, "sales.orders", "dbt-source-path", '"m.sql"')
-    report = Report()
-    assert load(Options(root, with_source=False), Target(catalog), report, strict=True)
-    assert [(f.level.value, f.code) for f in report.findings] == [("info", "manifest-missing")]
+def test_data_path_follows_fdl_clones_note(tmp_path):
+    working = tmp_path / "work.sqlite"
+    note = tmp_path / "work.sqlite.fdl.json"
+    note.write_text(json.dumps({"storage": "s3://bucket/repo/", "data_dir": "data/"}))
+    assert data_path(str(working), None) == "s3://bucket/repo/data/"
+    assert data_path("ducklake:" + str(working), None) == "s3://bucket/repo/data/"
+    note.write_text(json.dumps({"data": str(tmp_path / "d")}))
+    assert data_path(str(working), None) == (tmp_path / "d").resolve().as_posix() + "/"
+    assert data_path(str(working), "given/") == "given/"
