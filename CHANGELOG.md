@@ -1,13 +1,25 @@
 # CHANGELOG
 
 
-## v0.3.0 (2026-11-21)
+## v0.3.0 (2026-11-22)
 
 ### Features
 
 - Mark the tables Queria does not list with "profile": false in dataset.json
   ([#6](https://github.com/queria-io/tabledoc/pull/6),
   [`fae794f`](https://github.com/queria-io/tabledoc/commit/fae794f21bf1288164f6a812e9b56e86c05fa7ff))
+
+- Tabledoc export --markdown writes one Markdown file per table for AI to read
+  ([#10](https://github.com/queria-io/tabledoc/pull/10),
+  [`b2d8fca`](https://github.com/queria-io/tabledoc/commit/b2d8fca31619936304d8e108266c94e28687ec33))
+
+- Write names, descriptions and topics in more than one language
+  ([#9](https://github.com/queria-io/tabledoc/pull/9),
+  [`727289b`](https://github.com/queria-io/tabledoc/commit/727289bc3dda8ebc820d141514b71798d26d20e3))
+
+- Write the description into ordinary tables of a schema, and add tabledoc dump
+  ([#7](https://github.com/queria-io/tabledoc/pull/7),
+  [`4d88f7d`](https://github.com/queria-io/tabledoc/commit/4d88f7d1418802d0bc943e438a866808e81492ff))
 
 
 ## v0.2.0 (2026-11-21)
