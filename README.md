@@ -4,12 +4,13 @@
 
 [日本語](README.ja.md)
 
-tabledoc reads the description of a dataset that people write in YAML and Markdown (or in a dbt project's yml), checks it, and reads it for other programs.
+tabledoc makes a dataset's tables readable by people and AI. It takes what dbt already knows about the tables (descriptions, SQL and lineage from `target/manifest.json`), adds what people and AI write in YAML and Markdown (titles, column descriptions, join keys, guides), checks the result, and writes it as Markdown files or as tables in a DuckLake catalog.
 
 - One YAML file per table, next to a Markdown guide. Keys follow dbt's `models:` entries
 - Semantics (join keys, dimensions, metrics) follow dbt's semantic layer
 - In a dbt project, descriptions, SQL and lineage come from `target/manifest.json`
 - From Python, `tabledoc.read` returns the checked description, with the guides and the files they link to by path and sha256
+- `tabledoc export --markdown <folder>` writes one Markdown file per table (columns, semantics, primary key, lineage, SQL and the guide) and one for the dataset that lists them, for AI assistants and people to read
 - `tabledoc load` writes the description into a DuckLake catalog as ordinary tables of one schema (`_tabledoc` by default), so it travels with the data and is versioned with it by [FDL](https://fdl.queria.io). `tabledoc dump` writes the files back from it
 
 ## Install
@@ -58,6 +59,7 @@ metrics:
 tabledoc validate            # check
 tabledoc load --ducklake work.sqlite   # check, then write it into the catalog's _tabledoc schema
 tabledoc dump --ducklake work.sqlite --out description/   # the files again, from the catalog
+tabledoc export --markdown ai-docs/   # one Markdown file per table, for AI to read
 ```
 
 In a dbt project, run `dbt compile` first, and write `tabledoc.yml` next to `dbt_project.yml`.
