@@ -71,7 +71,7 @@ queria:
 | `$schema` | 必須 | 書式とバージョン |
 | `name` | 必須 | データセットの名前。`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
 | `schema` | | `tabledoc load` が説明を書くスキーマ。既定は `_tabledoc` |
-| `title`・`description`・`topics`・`homepage`・`language`・`issued`・`update_frequency` | | `language` は BCP 47 のタグ、`issued` は `YYYY-MM-DD` |
+| `title`・`description`・`topics`・`homepage`・`language`・`issued`・`update_frequency` | | `language` は BCP 47 のタグで、言語を付けずに書いた文字列の言語です ([言語](#言語))。`issued` は `YYYY-MM-DD` |
 | `licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` | | テーブルのファイルに書くと、そのテーブルだけの値になります |
 | `schemas` | | `name`・`title`・`description`・`guide` (スキーマのガイドのパス。省くと、あれば `<name>/README.md`)・`docs` (スキーマのほかの文書) |
 | `docs` | | データセットのほかの文書のパス |
@@ -127,6 +127,30 @@ columns:
 - `table: <schema>.<table>` を書くと、置き場所よりそちらを優先します。ほかの深さに置くときは必須です
 - 同じテーブルを 2 つのファイルが説明していると、エラーになります
 - テーブルのファイルを dbt の `models/` に置いても、dbt は読みません (`models:` の外のキーを dbt は無視します)
+
+## 言語
+
+人が読む文字列は、複数の言語で書けます。値を BCP 47 のタグから文字列への対応で書くか、文字列だけを書きます。文字列だけのときは、データセットの `language` の言語として読みます。
+
+```yaml
+language: ja
+title:
+  ja: 日本銀行時系列統計
+  en: Bank of Japan time-series statistics
+topics:
+  ja: [日本銀行, 金利]
+  en: [Bank of Japan, interest rates]
+columns:
+  - name: db
+    title: {ja: データベース, en: Database}
+    description: databases の db と同じ
+```
+
+- どちらの形でも書けるキーは、データセット・スキーマ・テーブル・列の `title`・`description`・`topics`、`licenses`・`sources`・`contributors` の `title`、`metrics` の `description` です。`topics` はタグから一覧への対応にします
+- ほかのキーは値を 1 つだけ持ちます (`title_kana`・`homepage`・名前・パスなど)
+- タグは BCP 47 として検査します。文字列が 1 つも無い対応はエラーです
+- dbt のプロジェクトの yml では、`description` は文字列だけで、`language` の言語として読みます。dbt はそこに対応を受け付けません
+- `tabledoc.read` はこれらの値を常に対応で返します。文字列だけの値は `{<language>: 文字列}`、`language` が無ければ `{und: 文字列}` になります
 
 ## ガイドと文書
 
@@ -253,6 +277,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 | `columns` | `schema`・`table`・`name` | `title`・`description`・`entity` のどれかがある列。`entity` は entity の `name` (`lg_code` などのコード体系) です |
 | `files` | `path` | [データセットの中のファイル](#データセットの中のパス): `path`・`sha256`・`bytes`・`media_type` |
 
+- [言語](#言語)のキーは `MAP(VARCHAR, VARCHAR)` (`topics` は `MAP(VARCHAR, VARCHAR[])`) として、`tabledoc.read` が返す言語ごとの対応のまま書きます。`language` はそのまま書きます
 - `topics` (以前の名前の `keywords`) は、`queria:` に `topics` が無ければ書きます。`queria:` の `themes` は書きません
 - `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
 - ビューの行には `sql` と `depends_on` を書きません。ビューの SQL はメタデータが持ちます
