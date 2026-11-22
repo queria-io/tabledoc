@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import posixpath
+import re
 from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
@@ -22,6 +23,7 @@ from typing import Any
 from . import languages
 from .description import README, Description
 from .report import SpecError
+from .source import EXPORT_MARK
 
 Table = dict[str, Any]
 
@@ -38,8 +40,14 @@ def _grid(head: list[str], rows: list[list[Any]]) -> list[str]:
     return [_row(head), _row("---" for _ in head), *(_row(r) for r in rows)] if rows else []
 
 
+def _target(target: Any) -> str:
+    """A link destination, in <> when a space or a parenthesis would end it early."""
+    text = str(target)
+    return f"<{text}>" if re.search(r"[\s()<>]", text) else text
+
+
 def _link(title: Any, target: Any) -> str:
-    return f"[{title or target}]({target})" if target else str(title or "")
+    return f"[{title or target}]({_target(target)})" if target else str(title or "")
 
 
 def _value(value: Any) -> str:
@@ -62,6 +70,7 @@ FACTS = (
     ("language", "Language"),
     ("topics", "Topics"),
     ("homepage", "Homepage"),
+    ("repository", "Repository"),
     ("issued", "Issued"),
     ("update_frequency", "Update frequency"),
     ("licenses", "Licenses"),
@@ -105,7 +114,7 @@ def _text(description: Any) -> list[str]:
 
 
 def _summary(description: Any) -> str:
-    return str(description or "").strip().split("\n\n")[0]
+    return re.split(r"\n[ \t]*\n", str(description or "").strip())[0]
 
 
 def _semantics(column: dict[str, Any]) -> str:
@@ -137,7 +146,7 @@ def _table_link(reference: str, here: str, keys: set[str]) -> str:
     if reference not in keys:
         return f"- `{reference}`"
     schema, name = reference.split(".", 1)
-    return f"- [`{reference}`]({_relative(_path(schema, name), here)})"
+    return f"- [`{reference}`]({_target(_relative(_path(schema, name), here))})"
 
 
 def _guide(d: Description, path: str | None) -> list[str]:
@@ -147,7 +156,7 @@ def _guide(d: Description, path: str | None) -> list[str]:
 
 
 def _documents(paths: Iterable[str], here: str) -> list[str]:
-    return [f"- [{posixpath.basename(p)}]({_relative(p, here)})" for p in paths]
+    return [f"- {_link(posixpath.basename(p), _relative(p, here))}" for p in paths]
 
 
 def _table(d: Description, table: Table, readers: dict[str, list[str]], keys: set[str]) -> str:
@@ -174,7 +183,7 @@ def _table(d: Description, table: Table, readers: dict[str, list[str]], keys: se
 
 def _table_list(tables: list[Table], here: str) -> list[str]:
     return [
-        f"- [`{_key(t)}`]({_relative(_path(t['schema'], t['name']), here)})"
+        f"- [`{_key(t)}`]({_target(_relative(_path(t['schema'], t['name']), here))})"
         + (f" {t['title']}" if t.get("title") else "")
         + (f": {_summary(t['description'])}" if t.get("description") else "")
         for t in tables
@@ -195,7 +204,7 @@ def _schema(d: Description, schema: dict[str, Any], tables: list[Table]) -> str:
 
 def _dataset(d: Description, schemas: list[dict[str, Any]], tables: list[Table]) -> str:
     def part(schema: dict[str, Any]) -> list[str]:
-        title = f"### [{schema.get('title') or schema['name']} (`{schema['name']}`)]({_path(schema['name'])})"
+        title = f"### [{schema.get('title') or schema['name']} (`{schema['name']}`)]({_target(_path(schema['name']))})"
         listed = _table_list([t for t in tables if t["schema"] == schema["name"]], README)
         return ["", title, *_text(_summary(schema.get("description"))), *_block(listed)]
 
@@ -204,7 +213,7 @@ def _dataset(d: Description, schemas: list[dict[str, Any]], tables: list[Table])
         _heading(record.get("title"), record["name"]),
         *_text(record.get("description")),
         *_block(_facts(record)),
-        *(["", "## Tables", *[line for s in schemas for line in part(s)]] if tables else []),
+        *(["", "## Tables", *[line for s in schemas for line in part(s)]] if schemas else []),
         *_section("Documents", _documents(record.get("docs") or [], README)),
         *_guide(d, record.get("guide")),
     ]
@@ -254,13 +263,25 @@ def render(d: Description) -> dict[str, bytes]:
 
 
 def export(d: Description, out: Path, *, force: bool = False) -> list[str]:
-    """Write :func:`render`'s files under ``out``. Refused when one is already there, unless ``force``."""
+    """Write :func:`render`'s files under ``out``. Refused when one is already there, unless ``force``.
+
+    ``out`` gets a `.tabledoc-export` file, so that reading the root does not read the copies in it.
+    """
+    if ".fdl" in out.resolve().parts:
+        raise SpecError(f"{out} is inside .fdl/, which only fdl writes; give a folder outside it")
+    if out.exists() and not out.is_dir():
+        raise SpecError(f"{out} is a file; give a folder")
     rendered = render(d)
     clash = sorted(p for p in rendered if (out / p).exists())
     if clash and not force:
         raise SpecError(f"{', '.join(clash)} already in {out}; give --force to replace them")
-    for path, content in sorted(rendered.items()):
-        target = out / path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(content)
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+        (out / EXPORT_MARK).write_text("written by tabledoc export; tabledoc does not read this folder\n", encoding="utf-8")
+        for path, content in sorted(rendered.items()):
+            target = out / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+    except OSError as exc:
+        raise SpecError(f"cannot write {out}: {exc}") from exc
     return sorted(rendered)
