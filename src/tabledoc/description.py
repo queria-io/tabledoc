@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-from . import dbt, files, git, lineage, shape, source
+from . import dbt, files, git, languages, lineage, shape, source
 from .report import Report
 
 README = "README.md"
@@ -220,15 +220,19 @@ def read(options: Options, report: Report) -> Description:
         for t in shaped
     ]
     sent = files.collect(root, named, report)
+    language = str(record.get("language") or languages.UNDETERMINED)
     return Description(
         root=root,
-        dataset={
-            **shape.pick(record, shape.DATASET_KEYS),
-            **top,
-            **shape.annotations(record),
-        },
-        schemas=[s for s in schema_list if set(s) - {"name"}],
-        tables=[_ordered(t) for t in placed_tables],
+        dataset=languages.dataset(
+            {
+                **shape.pick(record, shape.DATASET_KEYS),
+                **top,
+                **shape.annotations(record),
+            },
+            language,
+        ),
+        schemas=[languages.schema(s, language) for s in schema_list if set(s) - {"name"}],
+        tables=[languages.table(_ordered(t), language) for t in placed_tables],
         files=sent,
         source=git.source(root) if options.with_source else None,
         catalogs={**attached, **dataset.catalogs} or None,

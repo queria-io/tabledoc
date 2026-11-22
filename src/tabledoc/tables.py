@@ -1,9 +1,11 @@
 """A description as the rows of the tables of one schema: `_tabledoc` by default, `_queria` for Queria.
 
-    dataset   one row, id 'dataset': its title, description, licenses...  key: id
+    dataset   one row, id 'dataset': its language, licenses...  key: id
     schemas   one row per schema described          key: schema
     tables    one row per table or view             key: schema, name
     columns   one row per column described          key: schema, table, name
+    texts     title, description and topics of each, one row per language
+                                                    key: schema, table, column, language
     files     the documents and what they link to   key: path
 
 They are ordinary tables of the catalog, versioned with the data. FDL does not
@@ -19,7 +21,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from . import shape
+from . import languages, shape
 from .description import Description
 from .shape import BUILT_KEYS, QUERIA
 
@@ -41,9 +43,7 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
     "dataset": (
         {
             "id": "VARCHAR",
-            "title": "VARCHAR",
             "title_kana": "VARCHAR",
-            "description": "VARCHAR",
             "language": "VARCHAR",
             "homepage": "VARCHAR",
             "repository": "VARCHAR",
@@ -54,21 +54,17 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
             "contributors": "STRUCT(title VARCHAR, path VARCHAR, roles VARCHAR[])[]",
             "temporal_coverage": _COVERAGE["temporal_coverage"],
             "spatial_coverage": "VARCHAR[]",
-            "topics": "VARCHAR[]",
             "cover": "VARCHAR",
             "ai_context": "JSON",
         },
         ("id",),
     ),
-    "schemas": ({"schema": "VARCHAR", "title": "VARCHAR", "description": "VARCHAR"}, ("schema",)),
+    "schemas": ({"schema": "VARCHAR"}, ("schema",)),
     "tables": (
         {
             "schema": "VARCHAR",
             "name": "VARCHAR",
-            "title": "VARCHAR",
-            "description": "VARCHAR",
             **_COVERAGE,
-            "topics": "VARCHAR[]",
             "published": "BOOLEAN",
             "ai_context": "JSON",
             "sql": "VARCHAR",
@@ -82,11 +78,21 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
             "schema": "VARCHAR",
             "table": "VARCHAR",
             "name": "VARCHAR",
-            "title": "VARCHAR",
-            "description": "VARCHAR",
             "entity": "VARCHAR",
         },
         ("schema", "table", "name"),
+    ),
+    "texts": (
+        {
+            "schema": "VARCHAR",
+            "table": "VARCHAR",
+            "column": "VARCHAR",
+            "language": "VARCHAR",
+            "title": "VARCHAR",
+            "description": "VARCHAR",
+            "topics": "VARCHAR[]",
+        },
+        ("schema", "table", "column", "language"),
     ),
     "files": (
         {"path": "VARCHAR", "sha256": "VARCHAR", "bytes": "BIGINT", "media_type": "VARCHAR"},
@@ -99,8 +105,10 @@ DATASET_ID = "dataset"
 #: Asset columns of `_tabledoc` itself, declared to FDL.
 ASSETS = {"files": ("sha256",)}
 #: What `queria:` may say, as columns: of the dataset, and of a table.
-DATASET_OWN = ("title_kana", "topics", "cover", "ai_context")
-TABLE_OWN = ("topics", "published", "ai_context")
+DATASET_OWN = ("title_kana", "cover", "ai_context")
+TABLE_OWN = ("published", "ai_context")
+#: The columns of `texts` that hold text, one language a row.
+TEXTS = ("title", "description", "topics")
 
 Rows = dict[str, list[dict[str, Any]]]
 Key = tuple[str, str]
@@ -128,21 +136,79 @@ def _licenses(value: Any) -> list[dict[str, Any]] | None:
 
 
 def _queria_keys(record: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
-    """The keys of ``queria:`` that are columns, with `topics` (or `keywords`) from the record itself."""
+    """The keys of ``queria:`` that are columns."""
     own = _own(record)
-    found = {k: own[k] for k in keys if k in own and own[k] is not None}
-    if "topics" in keys and "topics" not in found and _present(record.get("topics")):
-        found["topics"] = record["topics"]
-    return found
+    return {k: own[k] for k in keys if k in own and own[k] is not None}
 
 
-def _record(record: dict[str, Any], columns: dict[str, str], own: tuple[str, ...]) -> dict[str, Any]:
+def _single(value: Any, language: str) -> Any:
+    """``value`` with each text in ``language`` alone (see ``languages.one``)."""
+    if isinstance(value, dict):
+        return languages.one(value, language)
+    if isinstance(value, list):
+        return [{k: languages.one(v, language) for k, v in e.items()} if isinstance(e, dict) else e for e in value]
+    return value
+
+
+def _record(
+    record: dict[str, Any], columns: dict[str, str], own: tuple[str, ...], language: str
+) -> dict[str, Any]:
     licenses = _licenses(record.get("licenses"))
+    texts = ("homepage", *languages.LISTS)
+    picked = _pick(record, [c for c in columns if c not in own and c != "licenses"])
     return {
-        **_pick(record, [c for c in columns if c not in own and c != "licenses"]),
-        **({"licenses": licenses} if licenses else {}),
+        **{k: _single(v, language) if k in texts else v for k, v in picked.items()},
+        **({"licenses": _single(licenses, language)} if licenses else {}),
         **_queria_keys(record, own),
     }
+
+
+def _texts(record: dict[str, Any], where: tuple[str, str, str], language: str) -> list[dict[str, Any]]:
+    """The rows of `texts` for ``record`` at (schema, table, column), one per language.
+
+    `topics` under `queria:` wins over the record's own.
+    """
+    topics = _own(record).get("topics")
+    values = {
+        **{k: record[k] for k in TEXTS if isinstance(record.get(k), dict)},
+        **({"topics": languages.as_map(topics, language)} if topics else {}),
+    }
+    tags = sorted({tag for value in values.values() if value for tag in value})
+    schema, table, column = where
+    return [
+        {
+            "schema": schema,
+            "table": table,
+            "column": column,
+            "language": tag,
+            **{k: value[tag] for k, value in values.items() if value and tag in value},
+        }
+        for tag in tags
+    ]
+
+
+def several(description: Description) -> list[str]:
+    """Where text outside `texts` is written in more than one language: only the one in
+    `language` is written. As ``<where>: <key>``."""
+    found = []
+
+    def look(where: str, record: dict[str, Any]) -> None:
+        for key, value in record.items():
+            if key == "homepage" and languages.several(value):
+                found.append(f"{where}: {key}")
+            if key in languages.LISTS and isinstance(value, list):
+                found.extend(
+                    f"{where}: {key}.{k}"
+                    for e in value
+                    if isinstance(e, dict)
+                    for k, v in e.items()
+                    if languages.several(v)
+                )
+
+    look("dataset", description.dataset)
+    for t in description.tables:
+        look(f"{t['schema']}.{t['name']}", t)
+    return found
 
 
 def _entity(column: dict[str, Any]) -> str | None:
@@ -181,6 +247,7 @@ def rows(
     where = description.source or {}
     folder = where.get("path") or ""
     dataset = description.dataset
+    language = str(dataset.get("language") or languages.UNDETERMINED)
     if not dataset.get("repository") and where.get("repository"):
         dataset = {**dataset, "repository": where["repository"]}
 
@@ -188,7 +255,7 @@ def rows(
         if t.get("source_path") and folder:
             t = {**t, "source_path": f"{folder}/{t['source_path']}"}
         merged = {**kept.get(fold(t["schema"], t["name"]), {}), **t}
-        record = _record(merged, table_columns, TABLE_OWN)
+        record = _record(merged, table_columns, TABLE_OWN, language)
         if unlisted is not None and not _said(t) and record.get("published") is None:
             record["published"] = False
         if fold(t["schema"], t["name"]) in viewed:
@@ -199,12 +266,8 @@ def rows(
 
     unlisted_keys = [(s, n) for s, n in sorted(unlisted or set()) if fold(s, n) not in described]
     return {
-        "dataset": [{"id": DATASET_ID, **_record(dataset, columns["dataset"], DATASET_OWN)}],
-        "schemas": [
-            {"schema": s["name"], **_pick(s, ["title", "description"])}
-            for s in description.schemas
-            if s.get("title") or s.get("description")
-        ],
+        "dataset": [{"id": DATASET_ID, **_record(dataset, columns["dataset"], DATASET_OWN, language)}],
+        "schemas": [{"schema": s["name"]} for s in description.schemas if s.get("title") or s.get("description")],
         "tables": [table(t) for t in description.tables]
         + [table({"schema": s, "name": n}) for s, n in unlisted_keys],
         "columns": [
@@ -212,12 +275,23 @@ def rows(
                 "schema": t["schema"],
                 "table": t["name"],
                 "name": c["name"],
-                **_pick(c, ["title", "description"]),
                 **({"entity": e} if (e := _entity(c)) else {}),
             }
             for t in description.tables
             for c in t.get("columns") or []
             if c.get("name") and (c.get("title") or c.get("description") or _entity(c))
+        ],
+        "texts": [
+            *_texts(dataset, ("", "", ""), language),
+            *(r for s in description.schemas for r in _texts(s, (s["name"], "", ""), language)),
+            *(r for t in description.tables for r in _texts(t, (t["schema"], t["name"], ""), language)),
+            *(
+                r
+                for t in description.tables
+                for c in t.get("columns") or []
+                if c.get("name")
+                for r in _texts(c, (t["schema"], t["name"], c["name"]), language)
+            ),
         ],
         "files": [f.entry() for f in description.files],
     }

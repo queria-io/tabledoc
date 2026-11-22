@@ -61,15 +61,15 @@ def test_writes_queria_and_the_folder_for_fdl_commit(write, catalog, tmp_path):
     out = tmp_path / "pack"
     report = Report()
     assert run(root, catalog, report, out=out, unlisted=True) is not None, report.render()
-    assert held(catalog, "dataset", "id", "title", "title_kana", "licenses") == [
-        ("dataset", "Shop", "ショップ", [{"id": "CC-BY-4.0"}])
+    assert held(catalog, "dataset", "id", "title_kana", "licenses") == [("dataset", "ショップ", [{"id": "CC-BY-4.0"}])]
+    assert held(catalog, "tables", "name", "published") == [("extra", False), ("orders", None), ("recent", None)]
+    assert held(catalog, "columns", "name", "entity") == [("id", "order")]
+    assert held(catalog, "texts", "schema", "table", "column", "language", "title", "description") == [
+        ("", "", "", "und", "Shop", None),
+        ("sales", "orders", "", "und", "Orders", "One row is one order."),
+        ("sales", "orders", "id", "und", None, "The order"),
+        ("sales", "recent", "", "und", None, "The last orders."),
     ]
-    assert held(catalog, "tables", "name", "title", "published") == [
-        ("extra", None, False),
-        ("orders", "Orders", None),
-        ("recent", None, None),
-    ]
-    assert held(catalog, "columns", "name", "description", "entity") == [("id", "The order", "order")]
     assert held(catalog, "files", "path", "media_type") == [
         ("README.md", "text/markdown"),
         ("sales/orders/README.md", "text/markdown"),
@@ -86,8 +86,9 @@ def test_queria_keys_are_columns(write, catalog):
     (root / "sales" / "recent.yml").write_text(TABLE + "description: x\nkeywords: [latest]\nqueria: {published: false}\n")
     report = Report()
     assert run(root, catalog, report) is not None, report.render()
-    assert held(catalog, "dataset", "topics", "cover", "ai_context") == [(["retail"], "cover.png", {"hint": "x"})]
-    assert held(catalog, "tables", "name", "topics", "published") == [("orders", None, None), ("recent", ["latest"], False)]
+    assert held(catalog, "dataset", "cover", "ai_context") == [("cover.png", {"hint": "x"})]
+    assert held(catalog, "tables", "name", "published") == [("orders", None), ("recent", False)]
+    assert held(catalog, "texts", "table", "topics") == [("", ["retail"]), ("orders", None), ("orders", None), ("recent", ["latest"])]
 
 
 def test_license_terms_stay_in_licenses(write, catalog):
@@ -122,7 +123,7 @@ def test_a_second_load_changes_only_what_differs(write, catalog):
     assert sql(catalog, snapshots) == before
     (root / "sales" / "orders.yml").write_text(TABLE + "title: Orders again\n", encoding="utf-8")
     assert run(root, catalog) is not None
-    assert held(catalog, "tables", "name", "title") == [("orders", "Orders again"), ("recent", None)]
+    assert held(catalog, "texts", "table", "title") == [("", "Shop"), ("orders", "Orders again"), ("recent", None)]
     assert held(catalog, "columns", "name") == []
 
 
@@ -151,10 +152,10 @@ def test_a_missing_manifest_is_info_when_dbt_built_before(write, catalog):
 def test_writes_into_the_schema_it_is_told(write, catalog):
     root = project(write)
     assert run(root, catalog, schema="docs") is not None
-    assert held(catalog, "dataset", "title", schema="docs") == [("Shop",)]
+    assert held(catalog, "texts", "table", "column", "title", schema="docs")[:1] == [("", "", "Shop")]
     (root / "tabledoc.yml").write_text(DATASET + "name: shop\nschema: notes\ntitle: Notes\n")
     assert run(root, catalog) is not None
-    assert held(catalog, "dataset", "title", schema="notes") == [("Notes",)]
+    assert held(catalog, "texts", "table", "column", "title", schema="notes")[:1] == [("", "", "Notes")]
 
 
 def test_a_schema_named_in_another_case_is_the_one_the_catalog_holds(write, catalog):
@@ -162,7 +163,7 @@ def test_a_schema_named_in_another_case_is_the_one_the_catalog_holds(write, cata
     assert run(root, catalog, schema="docs") is not None
     (root / "tabledoc.yml").write_text(DATASET + "name: shop\ntitle: Again\n")
     assert run(root, catalog, schema="Docs") is not None
-    assert held(catalog, "dataset", "title", schema="docs") == [("Again",)]
+    assert held(catalog, "texts", "table", "column", "title", schema="docs")[:1] == [("", "", "Again")]
 
 
 def test_an_asset_column_has_to_be_varchar(write, catalog):
@@ -218,7 +219,31 @@ def test_cli_reads_the_catalog_from_the_environment(write, catalog, monkeypatch)
     monkeypatch.setenv("FDL_WORKING", catalog[0])
     monkeypatch.setenv("FDL_DATA_PATH", catalog[1])
     assert main(["load", "--root", str(root), "--quiet"]) == 0
-    assert held(catalog, "dataset", "title") == [("Shop",)]
+    assert held(catalog, "texts", "table", "column", "title")[:1] == [("", "", "Shop")]
+
+
+def test_text_in_more_than_one_language_is_a_row_for_each(write, catalog):
+    root = project(write)
+    (root / "tabledoc.yml").write_text(
+        DATASET
+        + "name: shop\nlanguage: ja\ntitle: {ja: 店, en: Shop}\ntopics: {ja: [小売], en: [retail]}\n"
+        + "homepage: {ja: https://example.jp, en: https://example.com}\n"
+    )
+    (root / "sales" / "orders.yml").write_text(
+        TABLE + "title: 注文\ncolumns: [{name: id, title: {ja: ID, en: Order ID}}]\n", encoding="utf-8"
+    )
+    report = Report()
+    assert run(root, catalog, report) is not None, report.render()
+    assert held(catalog, "texts", "table", "column", "language", "title", "topics") == [
+        ("", "", "en", "Shop", ["retail"]),
+        ("", "", "ja", "店", ["小売"]),
+        ("orders", "", "ja", "注文", None),
+        ("orders", "id", "en", "Order ID", None),
+        ("orders", "id", "ja", "ID", None),
+        ("recent", "", "ja", None, None),
+    ]
+    assert held(catalog, "dataset", "language", "homepage") == [("ja", "https://example.jp")]
+    assert [f.code for f in report.findings] == ["one-language"]
 
 
 def test_a_value_the_table_cannot_hold_is_an_error(write, catalog):

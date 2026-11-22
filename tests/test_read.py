@@ -49,7 +49,7 @@ def test_tables_by_place_with_guides_and_linked_files(write):
     assert not report.failed, report.render()
     assert document["dataset"] == {
         "name": "shop",
-        "title": "Shop",
+        "title": {"en": "Shop"},
         "language": "en",
         "issued": "2026-10-30",
         "guide": "README.md",
@@ -66,7 +66,7 @@ def test_tables_by_place_with_guides_and_linked_files(write):
     assert orders == {
         "schema": "sales",
         "name": "orders",
-        "title": "Orders",
+        "title": {"en": "Orders"},
         "primary_key": ["id"],
         "guide": "sales/orders/README.md",
         "columns": [
@@ -246,13 +246,13 @@ def test_dbt_models(write):
         "depends_on": [],
         "source_path": "models/base.sql",
     }
-    assert tables[("py", "python")]["title"] == "Made in Python"
+    assert tables[("py", "python")]["title"] == {"und": "Made in Python"}
     assert tables[("py", "python")]["sql"] == "select 1 as id from s.base"
     assert tables[("s", "orders")] == {
         "schema": "s",
         "name": "orders",
-        "title": "Orders",
-        "description": "One row per order",
+        "title": {"und": "Orders"},
+        "description": {"und": "One row per order"},
         "primary_key": ["id"],
         "materialized": "table",
         "sql": "select 1 as id from s.base",
@@ -260,10 +260,10 @@ def test_dbt_models(write):
         "source_path": "models/orders.sql",
         "guide": "s/orders/README.md",
         "columns": [
-            {"name": "id", "title": "ID", "entity": {"type": "primary", "name": "order"}},
-            {"name": "day", "description": "Day", "dimension": {"type": "time"}, "granularity": "day"},
+            {"name": "id", "title": {"und": "ID"}, "entity": {"type": "primary", "name": "order"}},
+            {"name": "day", "description": {"und": "Day"}, "dimension": {"type": "time"}, "granularity": "day"},
         ],
-        "metrics": [{"name": "total", "agg": "sum", "expr": "amount", "description": "Sum"}],
+        "metrics": [{"name": "total", "agg": "sum", "expr": "amount", "description": {"und": "Sum"}}],
         "annotations": {"queria": {"themes": ["x"]}},
     }
 
@@ -338,3 +338,28 @@ def test_one_file_for_two_paths_is_an_error(write):
     )
     _, report = run(root)
     assert codes(report) == ["file-named-twice"]
+
+
+def test_text_in_more_than_one_language(write):
+    root = write(
+        {
+            "tabledoc.yml": DATASET
+            + "name: shop\nlanguage: ja\ntitle: {ja: 店, en: Shop}\ndescription: 店の注文\n"
+            + "topics: {ja: [小売], en: [retail]}\nsources: [{title: {ja: 出典, en: Source}, path: https://x.example}]\n",
+            "sales/orders.yml": TABLE + "columns: [{name: id, title: {en: Order ID}}]\n",
+        }
+    )
+    document, report = run(root)
+    assert not report.failed, report.render()
+    dataset = document["dataset"]
+    assert dataset["title"] == {"ja": "店", "en": "Shop"}
+    assert dataset["description"] == {"ja": "店の注文"}
+    assert dataset["topics"] == {"ja": ["小売"], "en": ["retail"]}
+    assert dataset["sources"] == [{"title": {"ja": "出典", "en": "Source"}, "path": {"ja": "https://x.example"}}]
+    assert document["tables"][0]["columns"] == [{"name": "id", "title": {"en": "Order ID"}}]
+
+
+def test_a_language_tag_is_checked(write):
+    root = write({"tabledoc.yml": DATASET + "name: shop\ntitle: {'not a tag': x}\n"})
+    _, report = run(root)
+    assert [f.code for f in report.findings] == ["schema-violation"]
