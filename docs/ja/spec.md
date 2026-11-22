@@ -72,6 +72,7 @@ queria:
 | `name` | 必須 | データセットの名前。`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
 | `schema` | | `tabledoc load` が説明を書くスキーマ。既定は `_tabledoc` |
 | `title`・`description`・`topics`・`homepage`・`language`・`issued`・`update_frequency` | | `language` は BCP 47 のタグ、`issued` は `YYYY-MM-DD` |
+| `repository` | | データセットのソースコードのリポジトリの URL。例: `https://github.com/queria-io/dataset-boj`。省くと `tabledoc load` は Git の `origin` を使います |
 | `licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` | | テーブルのファイルに書くと、そのテーブルだけの値になります |
 | `schemas` | | `name`・`title`・`description`・`guide` (スキーマのガイドのパス。省くと、あれば `<name>/README.md`)・`docs` (スキーマのほかの文書) |
 | `docs` | | データセットのほかの文書のパス |
@@ -247,7 +248,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 | テーブル | 主キー | 元の値 |
 | --- | --- | --- |
-| `dataset` | `id` (常に `dataset`) | `tabledoc.yml` の `title`・`description`・`language`・`homepage`・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage`・`topics`、`queria:` の `title_kana`・`cover`・`ai_context` |
+| `dataset` | `id` (常に `dataset`) | `tabledoc.yml` の `title`・`description`・`language`・`homepage`・`repository` (無ければ Git の `origin` を https で)・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage`・`topics`、`queria:` の `title_kana`・`cover`・`ai_context` |
 | `schemas` | `schema` | `title` か `description` のある `schemas[]` |
 | `tables` | `schema`・`name` | 説明のあるテーブルとビュー: `title`・`description`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`topics`・`sql`・`depends_on`・`source_path`、`queria:` の `published`・`ai_context` |
 | `columns` | `schema`・`table`・`name` | `title`・`description`・`entity` のどれかがある列。`entity` は entity の `name` (`lg_code` などのコード体系) です |
@@ -255,7 +256,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 - `topics` (以前の名前の `keywords`) は、`queria:` に `topics` が無ければ書きます。`queria:` の `themes` は書きません
 - `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
-- `source_path` はそのテーブルを定義しているファイルのリポジトリ内のパス (dbt の `original_file_path`)、`sql` はそのテーブルを作った SQL です。分からないときはどちらも NULL です。テーブルかビューかは書きません (カタログが持っています)
+- `source_path` はそのテーブルを定義しているファイルの、`repository` のルートからのパス (dbt の `original_file_path` に、Git の作業コピーの中での `tabledoc.yml` のフォルダを前に付けたもの)、`sql` はそのテーブルを作った SQL です。分からないときはどちらも NULL です。テーブルかビューかは書きません (カタログが持っています)
 - ビューの行には `sql` と `depends_on` を書きません。ビューの SQL はメタデータが持ちます
 - `annotations:` のうち Queria 以外の読み手のキーは書きません
 - ファイルの中身はカタログに入れません。`files.sha256` に各ファイルの sha256 を書き、`fdl commit --assets` が中身ごとにファイルをアップロードします

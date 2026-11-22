@@ -15,6 +15,7 @@
     "topics": { "$ref": "#/$defs/strings", "description": "Topics, as a repository's topics on GitHub." },
     "keywords": { "$ref": "#/$defs/strings", "description": "The earlier name of topics, read as topics." },
     "homepage": { "type": "string", "format": "uri" },
+    "repository": { "type": "string", "format": "uri" },
     "language": { "$ref": "#/$defs/language" },
     "issued": { "$ref": "#/$defs/date" },
     "update_frequency": { "$ref": "#/$defs/updateFrequency" },

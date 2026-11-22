@@ -36,6 +36,7 @@ DATASET_KEYS = (
     "description",
     "language",
     "homepage",
+    "repository",
     "issued",
     "update_frequency",
     "licenses",

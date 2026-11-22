@@ -72,6 +72,7 @@ queria:
 | `name` | yes | The dataset's name: `^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
 | `schema` | | The schema `tabledoc load` writes the description into; default `_tabledoc` |
 | `title`, `description`, `topics`, `homepage`, `language`, `issued`, `update_frequency` | | `language` is a BCP 47 tag; `issued` is `YYYY-MM-DD` |
+| `repository` | | The URL of the repository of the dataset's source code, such as `https://github.com/queria-io/dataset-boj`. `tabledoc load` takes Git's `origin` when it is left out |
 | `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` | | Written in a table file, the value is that table's alone |
 | `schemas` | | `name`, `title`, `description`, `guide` (the path of the schema's guide; default `<name>/README.md` when it is there), `docs` (the schema's other documents) |
 | `docs` | | Paths of the dataset's other documents |
@@ -247,7 +248,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 | Table | Primary key | From |
 | --- | --- | --- |
-| `dataset` | `id` (always `dataset`) | `tabledoc.yml`: `title`, `description`, `language`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage`, `topics`; `title_kana`, `cover` and `ai_context` under `queria:` |
+| `dataset` | `id` (always `dataset`) | `tabledoc.yml`: `title`, `description`, `language`, `homepage`, `repository` (else Git's `origin`, as https), `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage`, `topics`; `title_kana`, `cover` and `ai_context` under `queria:` |
 | `schemas` | `schema` | `schemas[]` with a `title` or a `description` |
 | `tables` | `schema`, `name` | each table and view described: `title`, `description`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `topics`, `sql`, `depends_on`, `source_path`; `published` and `ai_context` under `queria:` |
 | `columns` | `schema`, `table`, `name` | each column with a `title`, a `description` or an `entity`: `entity` is the entity's `name` (a code system such as `lg_code`) |
@@ -255,7 +256,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 - `topics` (or `keywords`, its earlier name) unless `queria:` has `topics`. `themes` under `queria:` is not written
 - `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
-- `source_path` is the path, in the repository, of the file that defines the table (dbt's `original_file_path`), and `sql` is the SQL that made it; both are NULL where they are not known. Whether it is a table or a view is not written: the catalog holds that
+- `source_path` is the path of the file that defines the table, from the root of `repository` (dbt's `original_file_path`, under the folder of `tabledoc.yml` in the Git working copy), and `sql` is the SQL that made it; both are NULL where they are not known. Whether it is a table or a view is not written: the catalog holds that
 - A view's row has no `sql` or `depends_on`: the metadata holds the view's SQL
 - Keys under `annotations:` for readers other than Queria are not written
 - The files are not in the catalog. `files.sha256` holds the sha256 of each, and `fdl commit --assets` uploads each file by its content

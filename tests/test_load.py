@@ -314,3 +314,30 @@ def test_drops_a_column_an_earlier_tabledoc_wrote(write, catalog):
     run(root, catalog)
     found = sql(catalog, "SELECT column_name FROM duckdb_columns() WHERE schema_name = '_tabledoc' AND table_name = 'tables'")
     assert ("materialized",) not in found
+
+
+def test_repository_comes_from_git_and_source_path_from_its_root(write, catalog):
+    import subprocess
+
+    nodes = {
+        "model.p.extra": {
+            "resource_type": "model",
+            "name": "extra",
+            "schema": "sales",
+            "alias": "extra",
+            "original_file_path": "models/extra.sql",
+            "config": {"materialized": "table", "enabled": True, "meta": {}},
+            "compiled_code": "select 1 as x",
+            "columns": {},
+            "description": "",
+        }
+    }
+    top = write({"ds/tabledoc.yml": DATASET + "name: shop\n", "ds/dbt_project.yml": "name: p\n",
+                 "ds/target/manifest.json": json.dumps({"nodes": nodes})})
+    for args in (["init", "-q"], ["remote", "add", "origin", "git@github.com:example/shop.git"]):
+        subprocess.run(["git", "-C", str(top), *args], check=True)
+    subprocess.run(["git", "-C", str(top), "-c", "user.name=t", "-c", "user.email=t@example.com",
+                    "commit", "-q", "--allow-empty", "-m", "x"], check=True)
+    load(Options(top / "ds"), Target(*catalog), Report())
+    assert held(catalog, "dataset", "repository") == [("https://github.com/example/shop",)]
+    assert held(catalog, "tables", "name", "source_path") == [("extra", "ds/models/extra.sql")]

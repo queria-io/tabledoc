@@ -46,6 +46,7 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
             "description": "VARCHAR",
             "language": "VARCHAR",
             "homepage": "VARCHAR",
+            "repository": "VARCHAR",
             "issued": "DATE",
             "update_frequency": "VARCHAR",
             "licenses": _LICENSE,
@@ -176,7 +177,16 @@ def rows(
     viewed = {fold(*v) for v in views or set()}
     table_columns = {c: t for c, t in columns["tables"].items() if c not in ("schema", "name")}
 
+    # `repository` from tabledoc.yml, else Git's origin; `source_path` from its root.
+    where = description.source or {}
+    folder = where.get("path") or ""
+    dataset = description.dataset
+    if not dataset.get("repository") and where.get("repository"):
+        dataset = {**dataset, "repository": where["repository"]}
+
     def table(t: dict[str, Any]) -> dict[str, Any]:
+        if t.get("source_path") and folder:
+            t = {**t, "source_path": f"{folder}/{t['source_path']}"}
         merged = {**kept.get(fold(t["schema"], t["name"]), {}), **t}
         record = _record(merged, table_columns, TABLE_OWN)
         if unlisted is not None and not _said(t) and record.get("published") is None:
@@ -189,7 +199,7 @@ def rows(
 
     unlisted_keys = [(s, n) for s, n in sorted(unlisted or set()) if fold(s, n) not in described]
     return {
-        "dataset": [{"id": DATASET_ID, **_record(description.dataset, columns["dataset"], DATASET_OWN)}],
+        "dataset": [{"id": DATASET_ID, **_record(dataset, columns["dataset"], DATASET_OWN)}],
         "schemas": [
             {"schema": s["name"], **_pick(s, ["title", "description"])}
             for s in description.schemas

@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {len(written)} files in {args.out}", file=sys.stderr)
         return 0
     report = Report()
-    options = Options(args.root, args.manifest, args.profiles, with_source=False)
+    options = Options(args.root, args.manifest, args.profiles, with_source=args.command == "load")
     try:
         if args.command == "validate":
             read(options, report)
