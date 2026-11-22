@@ -24,13 +24,13 @@ Paths are relative to the folder that holds `tabledoc.yml` (the root).
 ```
 tabledoc.yml              the dataset (the name is fixed)
 README.md                 the dataset's overview (optional)
-<schema>/<table>.yml      a table (the place is fixed)
-<schema>/<table>.md       the table's guide (optional)
+<schema>/<table>.tabledoc.yml   a table
+<schema>/<table>.md             the table's guide (optional)
 ```
 
-Only the place decides which table a table file describes. Every other document is listed by path under `documents` ([guides and documents](#guides-and-documents)), so it can be kept anywhere under the root.
+One table is described in one file, and its name and place decide which table. Every other document is listed by path under `documents` ([guides and documents](#guides-and-documents)), so it can be kept anywhere under the root.
 
-In a dbt project, tables are described in dbt's yml first; a table file at the same place adds only what dbt has no key for ([dbt projects](#dbt-projects)).
+In a dbt project, a table file sits next to its model's `.sql` instead: `<model>.tabledoc.yml` and `<model>.md` beside `<model>.sql`. dbt's yml can keep to what the build needs, such as tests ([dbt projects](#dbt-projects)).
 
 Folders whose name starts with `.`, and `target/`, `dbt_packages/`, `node_modules/` and `.venv/`, are not read.
 
@@ -83,7 +83,7 @@ queria:
 
 ## Table files
 
-The description of one table. A table file is a YAML file whose `$schema` is `https://tabledoc.queria.io/schemas/table/v1.json`; YAML files without it (dbt's `schema.yml`, say) are not read. The keys follow one entry of dbt's `models:`; keys dbt does not have (`title`, `primary_key`, `sources` and so on) sit at the same level.
+The description of one table. A table file is a YAML file named `<table>.tabledoc.yml` whose `$schema` is `https://tabledoc.queria.io/schemas/table/v1.json`. Other YAML files (dbt's yml, say) are not read as table files. The keys follow one entry of dbt's `models:`; keys dbt does not have (`title`, `primary_key`, `sources` and so on) sit at the same level.
 
 ```yaml
 $schema: https://tabledoc.queria.io/schemas/table/v1.json
@@ -125,9 +125,10 @@ Types, nullability and row counts are not written. The data store holds the stru
 
 ## Which table
 
-- The place decides: a table file at `<schema>/<table>.yml` describes `<schema>.<table>`. A file directly under the root is in the `main` schema
-- A table file at any other depth, or a `name` other than the file name, is an error
-- In a dbt project, a schema folder with the same name as one of dbt's paths in `dbt_project.yml` (`model-paths`, `seed-paths`, `macro-paths` and so on) is an error, so dbt never reads a table file
+- The name and place decide: `<schema>/<table>.tabledoc.yml` describes `<schema>.<table>`. A file directly under the root is in the `main` schema
+- In a dbt project, `<model>.tabledoc.yml` next to `<model>.sql` describes that model's table, named by the model's `schema` and `alias`. A table file there with no model beside it is an error
+- A table file anywhere else, or a `name` other than the file name, is an error
+- dbt reads every yml under its model paths but ignores a file without `models:` and the other keys it knows, so it does not read a table file
 
 ## Languages
 
@@ -158,7 +159,7 @@ columns:
 
 - Documents are listed by path in `documents`: the dataset's in `tabledoc.yml`, a schema's in `schemas[].documents`, a table's in its table file. Paths are relative to the root, and the file can be anywhere under it
 - A document named `README.md` describes the thing it is listed under; it is the thing's guide. The others keep their names
-- Two documents are listed without being written: `README.md` at the root is the dataset's, and the `.md` with the same name next to a table file (`series.md` for `series.yml`) is that table's guide. In a dbt project, the `.md` with the same name next to a model's `.sql` is the table's guide too
+- Two documents are listed without being written: `README.md` at the root is the dataset's, and the `.md` with the same name next to a table file (`series.md` for `series.tabledoc.yml`, or for `series.sql` in a dbt project) is that table's guide
 - Two guides for one thing is an error (a table's `series.md` and a `README.md` in its `documents`, say)
 - Documents have no front matter
 - The files a Markdown document links to with a relative path (images, PDFs, other documents) are sent too. A link that leaves the root is an error; a link to a missing file is a warning; a link to a folder is left alone
@@ -185,7 +186,7 @@ When the root has `dbt_project.yml`, tabledoc reads `target/manifest.json` (`--m
 
 - The tables are the enabled models materialized as `table`, `view` or `incremental`, under the model's `schema` and `alias`. Ephemeral and disabled models, seeds, snapshots and tests make no table, so they are not listed. A model with no description is listed with what dbt fills in only (`materialized`, `sql`, `depends_on`, `source_path`)
 - What dbt has a key for is read from dbt: the model's and the columns' `description`, the primary key from `constraints` (`type: primary_key`, on the model or on one column), and semantics from the columns' `entity`, `dimension` and `granularity` and the semantic layer's simple `metrics`
-- What dbt has no key for (`title`, `topics`, `sources`, `licenses`, `documents`, a column's `title` and `asset`, `queria` and so on) is added in either of two places: `config.meta` of the model and of each column in dbt's yml, or a table file at `<schema>/<table>.yml`, where the model's `schema` and `alias` decide the place. A team that keeps dbt's yml to dbt's keys writes the table file; a team that already uses `config.meta` keeps it
+- What dbt has no key for (`title`, `topics`, `sources`, `licenses`, `documents`, a column's `title` and `asset`, `queria` and so on) is added in either of two places: `config.meta` of the model and of each column in dbt's yml, or the table file `<model>.tabledoc.yml` next to the model's `.sql`. The table file keeps each table's description in a file of its own and dbt's yml to the build; `config.meta` is read for teams that already write there
 - dbt's own keys, `config.meta` and the table file are read together, key by key (and column by column, key by key). A key written in two of them is an error: an empty `description` in dbt counts as not written, and `primary_key` in `config.meta` or a table file beside dbt's `constraints` is an error too
 - A program that changes the description writes each key where it is now, and a key that is not written yet into the table file, so it never rewrites dbt's yml
 - `materialized` is the model's materialization, `source_path` its `original_file_path`, and `sql` its `compiled_code`. `depends_on` is read from it by DuckDB's parser. A table of another dataset is written `<repository URL>#<schema>.<table>`, where the URL comes from the DuckLake ATTACHes in `profiles.yml` (`--profiles`, else `DBT_PROFILES_DIR`, else the root)
@@ -307,7 +308,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--files`: where the files of the `files` table are, as `<files>/<sha256>`: a folder or an http(s) URL. Default: `assets/` of the repository `fdl clone` noted beside the catalog. Each file is checked against its sha256
 - `--name`: the dataset's `name` in `tabledoc.yml`. Default: the last part of the repository's URL
 - A file already in the folder is not replaced, and nothing is written, unless `--force`. A path in the catalog that would leave the folder is an error
-- Each table file is at `<schema>/<table>.yml` and its guide next to it at `<schema>/<table>.md`. The other files of a folder are kept at their paths in the dataset and listed in the `documents` of what the folder describes
+- Each table file is at `<schema>/<table>.tabledoc.yml` and its guide next to it at `<schema>/<table>.md`. The other files of a folder are kept at their paths in the dataset and listed in the `documents` of what the folder describes
 - The rows of `texts` are written as the text alone when there is one language and it is the dataset's `language`, and as a map otherwise
 - What the tables do not hold is not written: primary keys, asset columns, an entity's type (written `foreign`), dimensions, granularity, metrics, keys for other readers, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--unlisted` wrote gets no table file. `sql` and `depends_on` are written only for a table without `source_path` (one dbt does not build)
 

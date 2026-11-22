@@ -24,13 +24,13 @@ tabledoc は、人が書くデータセットの説明 (YAML と Markdown、ま�
 ```
 tabledoc.yml              データセット (名前は固定)
 README.md                 データセットの概要 (任意)
-<schema>/<table>.yml      テーブル (置き場所は固定)
-<schema>/<table>.md       テーブルのガイド (任意)
+<schema>/<table>.tabledoc.yml   テーブル
+<schema>/<table>.md             テーブルのガイド (任意)
 ```
 
-テーブルのファイルがどのテーブルの説明かは、置き場所だけで決めます。ほかの文書は `documents` にパスを並べるので ([ガイドと文書](#ガイドと文書))、ルートの中のどこに置いてもかまいません。
+1 つのテーブルの説明を 1 つのファイルに書き、どのテーブルの説明かはファイルの名前と置き場所で決めます。ほかの文書は `documents` にパスを並べるので ([ガイドと文書](#ガイドと文書))、ルートの中のどこに置いてもかまいません。
 
-dbt のプロジェクトでは、テーブルの説明はまず dbt の yml に書きます。同じ置き場所のテーブルのファイルには、dbt にキーが無いものだけを書きます ([dbt のプロジェクト](#dbt-のプロジェクト))。
+dbt のプロジェクトでは、テーブルのファイルをモデルの `.sql` の隣に置きます。`<model>.sql` の隣の `<model>.tabledoc.yml` と `<model>.md` です。dbt の yml にはテストなどビルドに要るものだけを書けます ([dbt のプロジェクト](#dbt-のプロジェクト))。
 
 `.` で始まるフォルダと、`target/`・`dbt_packages/`・`node_modules/`・`.venv/` は読みません。
 
@@ -83,7 +83,7 @@ queria:
 
 ## テーブルのファイル
 
-テーブル 1 つの説明です。`$schema` が `https://tabledoc.queria.io/schemas/table/v1.json` の YAML をテーブルのファイルとして読み、`$schema` の無い YAML (dbt の `schema.yml` など) は読みません。キーは dbt の `models:` の 1 項目と同じで、dbt に無いキー (`title`・`primary_key`・`sources` など) は同じ階層に並べます。
+テーブル 1 つの説明です。名前が `<table>.tabledoc.yml` で、`$schema` が `https://tabledoc.queria.io/schemas/table/v1.json` の YAML をテーブルのファイルとして読みます。ほかの YAML (dbt の yml など) はテーブルのファイルとして読みません。キーは dbt の `models:` の 1 項目と同じで、dbt に無いキー (`title`・`primary_key`・`sources` など) は同じ階層に並べます。
 
 ```yaml
 $schema: https://tabledoc.queria.io/schemas/table/v1.json
@@ -125,9 +125,10 @@ columns:
 
 ## テーブルとの対応
 
-- 置き場所で決めます。`<schema>/<table>.yml` にあるファイルは `<schema>.<table>` を説明します。ルートの直下に置いたファイルは `main` スキーマです
-- ほかの深さに置いたテーブルのファイルと、ファイル名と違う `name` はエラーです
-- dbt のプロジェクトでは、`dbt_project.yml` の dbt のパス (`model-paths`・`seed-paths`・`macro-paths` など) と同じ名前のスキーマのフォルダはエラーです。dbt がテーブルのファイルを読むことはありません
+- 名前と置き場所で決めます。`<schema>/<table>.tabledoc.yml` は `<schema>.<table>` を説明します。ルートの直下に置いたファイルは `main` スキーマです
+- dbt のプロジェクトでは、`<model>.sql` の隣の `<model>.tabledoc.yml` がそのモデルのテーブルを説明します。テーブル名はモデルの `schema` と `alias` で決まります。隣にモデルの無いテーブルのファイルはエラーです
+- それ以外の場所に置いたテーブルのファイルと、ファイル名と違う `name` はエラーです
+- dbt はモデルのパスの下の yml をすべて読みますが、`models:` など dbt が知るキーの無いファイルは無視するので、テーブルのファイルを読みません
 
 ## 言語
 
@@ -158,7 +159,7 @@ columns:
 
 - 文書は `documents` にパスを並べます。データセットの文書は `tabledoc.yml`、スキーマの文書は `schemas[].documents`、テーブルの文書はテーブルのファイルに書きます。パスはルートからの相対パスで、ファイルはルートの中のどこに置いてもかまいません
 - ファイル名が `README.md` の文書は、並べた先の対象の説明 (ガイド) です。ほかの文書はファイル名のままです
-- 次の 2 つは並べなくても文書になります。ルートの `README.md` はデータセットの説明、テーブルのファイルの隣の同じ名前の `.md` (`series.yml` に対して `series.md`) はそのテーブルのガイドです。dbt のプロジェクトでは、モデルの `.sql` の隣の同じ名前の `.md` もテーブルのガイドです
+- 次の 2 つは並べなくても文書になります。ルートの `README.md` はデータセットの説明、テーブルのファイルの隣の同じ名前の `.md` (`series.tabledoc.yml`、dbt のプロジェクトでは `series.sql` に対して `series.md`) はそのテーブルのガイドです
 - 1 つの対象にガイドが 2 つあるとエラーです (テーブルの `series.md` と、`documents` に並べた `README.md` など)
 - 文書にフロントマターは書きません
 - Markdown が相対パスで指すファイル (画像・PDF・ほかの文書) も一緒に送ります。ルートの外を指すリンクはエラー、無いファイルへのリンクは警告で、フォルダへのリンクは扱いません
@@ -185,7 +186,7 @@ columns:
 
 - テーブルは、有効なモデルのうち `materialized` が `table`・`view`・`incremental` のものです。モデルの `schema` と `alias` で名前を決めます。`ephemeral` と無効なモデル、seed・snapshot・テストはテーブルにならないので並べません。説明の無いモデルは dbt が埋める値 (`materialized`・`sql`・`depends_on`・`source_path`) だけで並べます
 - dbt にキーがあるものは dbt から読みます。モデルと列の `description`、`constraints` の主キー (`type: primary_key`。モデルか 1 つの列に書いたもの)、列の `entity`・`dimension`・`granularity` とセマンティックレイヤーの simple の `metrics` です
-- dbt にキーが無いもの (`title`・`topics`・`sources`・`licenses`・`documents`・列の `title` と `asset`・`queria` など) は、2 つの場所のどちらかに書きます。dbt の yml のモデルと列の `config.meta` か、`<schema>/<table>.yml` のテーブルのファイルです。テーブルのファイルの置き場所は、モデルの `schema` と `alias` で決まります。dbt の yml に dbt のキーだけを書きたいチームはテーブルのファイルに、すでに `config.meta` を使っているチームはそのまま `config.meta` に書けます
+- dbt にキーが無いもの (`title`・`topics`・`sources`・`licenses`・`documents`・列の `title` と `asset`・`queria` など) は、2 つの場所のどちらかに書きます。dbt の yml のモデルと列の `config.meta` か、モデルの `.sql` の隣のテーブルのファイル `<model>.tabledoc.yml` です。テーブルのファイルに書くと、テーブルごとの説明が 1 つのファイルにまとまり、dbt の yml はビルドのことだけになります。`config.meta` は、すでにそこに書いているチームのために読みます
 - dbt のキー・`config.meta`・テーブルのファイルは、キーごとに (列はさらに列ごとに) 合わせて読みます。同じキーが 2 か所にあるとエラーです。dbt の空の `description` は書いていないものとして扱います。dbt の `constraints` があるときに `config.meta` やテーブルのファイルに `primary_key` を書いても、エラーです
 - 説明を書き換えるプログラムは、そのキーが今ある場所に書きます。まだどこにも無いキーはテーブルのファイルに書き、dbt の yml は書き換えません
 - `materialized` はモデルの materialization、`source_path` は `original_file_path`、`sql` は `compiled_code` です。`depends_on` は DuckDB の構文解析で SQL から読みます。ほかのデータセットのテーブルは `<リポジトリの URL>#<schema>.<table>` と書き、URL は `profiles.yml` (`--profiles`、無ければ `DBT_PROFILES_DIR`、無ければルート) の DuckLake の ATTACH から引きます
@@ -307,7 +308,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--files`: `files` テーブルのファイルの置き場所。`<files>/<sha256>` で読みます。フォルダか http(s) の URL です。既定は、`fdl clone` がカタログの横に記録したリポジトリの `assets/` です。各ファイルは sha256 で照合します
 - `--name`: `tabledoc.yml` の `name`。既定はリポジトリの URL の最後の部分です
 - フォルダに同じファイルがあると、`--force` を付けない限り何も書きません。カタログのパスがフォルダの外を指すときはエラーです
-- テーブルのファイルは `<schema>/<table>.yml`、ガイドはその隣の `<schema>/<table>.md` に書きます。フォルダのほかのファイルはデータセットの中のパスのまま書き、そのフォルダが説明する対象の `documents` に並べます
+- テーブルのファイルは `<schema>/<table>.tabledoc.yml`、ガイドはその隣の `<schema>/<table>.md` に書きます。フォルダのほかのファイルはデータセットの中のパスのまま書き、そのフォルダが説明する対象の `documents` に並べます
 - `texts` の行は、1 つの言語だけでそれがデータセットの `language` なら文字列だけで、それ以外は対応で書きます
 - テーブルに無いものは書きません。主キー、asset の列、entity の種類 (`foreign` と書きます)・dimension・granularity・metrics、ほかの読み手のキーと、dbt の `profiles.yml` から取る SQL が読むほかのデータセットです。`--unlisted` だけが書いたテーブルにはテーブルのファイルを作りません。`sql` と `depends_on` は `source_path` の無いテーブル (dbt で作らないテーブル) にだけ書きます
 

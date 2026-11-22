@@ -22,10 +22,10 @@ uv tool install tabledoc   # or: pip install tabledoc
 ## Use
 
 ```
-tabledoc.yml              the dataset
-README.md                 its overview
-sales/orders.yml          the table sales.orders
-sales/orders.md           its guide
+tabledoc.yml                  the dataset
+README.md                     its overview
+sales/orders.tabledoc.yml     the table sales.orders
+sales/orders.md               its guide
 ```
 
 ```yaml
@@ -38,7 +38,7 @@ licenses: [CC-BY-4.0]
 ```
 
 ```yaml
-# sales/orders.yml
+# sales/orders.tabledoc.yml
 $schema: https://tabledoc.queria.io/schemas/table/v1.json
 title: Orders
 description: One row is one order.

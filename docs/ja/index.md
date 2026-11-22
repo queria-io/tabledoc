@@ -24,10 +24,10 @@ uv tool install tabledoc   # または pip install tabledoc
 ## 使い方
 
 ```
-tabledoc.yml              データセット
-README.md                 データセットの概要
-sales/orders.yml          テーブル sales.orders
-sales/orders.md           そのガイド
+tabledoc.yml                  データセット
+README.md                     データセットの概要
+sales/orders.tabledoc.yml     テーブル sales.orders
+sales/orders.md               そのガイド
 ```
 
 ```yaml
@@ -40,7 +40,7 @@ licenses: [CC-BY-4.0]
 ```
 
 ```yaml
-# sales/orders.yml
+# sales/orders.tabledoc.yml
 $schema: https://tabledoc.queria.io/schemas/table/v1.json
 title: 注文
 description: 1 行が 1 件の注文です。
