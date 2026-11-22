@@ -19,6 +19,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from . import shape
 from .description import Description
 from .shape import BUILT_KEYS, QUERIA
 
@@ -164,8 +165,9 @@ def rows(
 
     ``carried`` is the `_tabledoc` the catalog held: without a dbt build (no `sql`
     in the description), each table keeps `sql`, `depends_on`, `materialized`
-    and `source_path` from it. ``unlisted`` are the catalog's tables and views
-    with no description: they are written as not published. ``views`` are the
+    and `source_path` from it. ``unlisted`` are the catalog's tables and views:
+    those with no description, and those dbt built that say nothing but their
+    SQL, are written as not published. ``views`` are the
     catalog's views, whose SQL the metadata already holds.
     """
     columns = {name: {c: t for c, t in spec[0].items() if c != "id"} for name, spec in TABLES.items()}
@@ -178,6 +180,8 @@ def rows(
     def table(t: dict[str, Any]) -> dict[str, Any]:
         merged = {**kept.get(fold(t["schema"], t["name"]), {}), **t}
         record = _record(merged, table_columns, TABLE_OWN)
+        if unlisted is not None and not _said(t) and record.get("published") is None:
+            record["published"] = False
         if fold(t["schema"], t["name"]) in viewed:
             # The metadata holds a view's SQL, and so what it reads.
             record.pop("sql", None)
@@ -208,6 +212,12 @@ def rows(
         ],
         "files": [f.entry() for f in description.files],
     }
+
+
+def _said(table: dict[str, Any]) -> bool:
+    """Whether an author described ``table``: more than the SQL dbt fills in."""
+    record = {k: v for k, v in table.items() if k not in ("schema", "name", "guide", "docs")}
+    return bool(table.get("guide") or table.get("docs")) or shape.described(record)
 
 
 def published(table: dict[str, Any]) -> bool:

@@ -263,3 +263,35 @@ def test_unlisted_leaves_out_the_schemas_of_a_description(write, catalog):
     assert run(root, catalog, schema="_queria") is not None
     assert run(root, catalog, unlisted=True) is not None
     assert held(catalog, "tables", "schema", "name") == [("sales", "extra"), ("sales", "orders"), ("sales", "recent")]
+
+
+def test_unlisted_covers_a_table_dbt_built_that_says_only_its_sql(write, catalog):
+    nodes = {
+        f"model.p.{name}": {
+            "resource_type": "model",
+            "name": name,
+            "schema": "sales",
+            "alias": name,
+            "original_file_path": f"models/{name}.sql",
+            "config": {"materialized": "table", "enabled": True, "meta": {}},
+            "compiled_code": "select 1 as x",
+            "columns": {},
+            "description": "",
+        }
+        for name in ("extra", "orders")
+    }
+    root = write(
+        {
+            "tabledoc.yml": DATASET + "name: shop\n",
+            "sales/orders.yml": TABLE + "description: One row is one order.\n",
+            "dbt_project.yml": "name: p\n",
+            "target/manifest.json": json.dumps({"nodes": nodes}),
+        }
+    )
+    report = Report()
+    assert run(root, catalog, report, unlisted=True) is not None, report.render()
+    assert held(catalog, "tables", "name", "published", "sql") == [
+        ("extra", False, "select 1 as x"),
+        ("orders", None, "select 1 as x"),
+        ("recent", False, None),
+    ]
