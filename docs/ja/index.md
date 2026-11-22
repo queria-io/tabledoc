@@ -3,15 +3,16 @@ title: tabledoc
 sidebar:
   label: はじめに
   order: 1
-description: YAML と Markdown (または dbt のプロジェクトの yml) で書いたデータセットの説明を検査し、ほかのプログラムのために読みます。
+description: dbt の manifest と人や AI が書いた説明から、データセットのテーブルを人と AI が読める形にします。
 ---
 
-tabledoc は、人が YAML と Markdown (または dbt のプロジェクトの yml) で書くデータセットの説明を検査し、ほかのプログラムのために読むツールです。
+tabledoc は、データセットのテーブルを人と AI が読める形にするツールです。dbt がテーブルについて持っている情報 (`target/manifest.json` の説明・SQL・依存関係) に、人や AI が YAML と Markdown で書いた説明 (名前、列の説明、結合キー、ガイド) を重ねて検査し、Markdown のファイルか DuckLake のカタログのテーブルとして書き出します。
 
 - テーブルごとに YAML を 1 つ書き、隣に Markdown のガイドを置きます。キーは dbt の `models:` の項目と同じです
 - semantic (結合キー・ディメンション・メトリクス) は dbt のセマンティックレイヤーの書き方にそろえています
 - dbt のプロジェクトでは、説明・SQL・依存関係を `target/manifest.json` から取ります
 - Python からは `tabledoc.read` で、検査した説明を読めます。ガイドとそこから参照するファイルはパスと sha256 で並べます
+- `tabledoc export --markdown <フォルダ>` は、テーブルごとに Markdown のファイルを 1 つ (列、semantic、主キー、依存関係、SQL、ガイド) と、それらを一覧にするデータセットのファイルを書き出します。AI アシスタントや人がそのまま読めます
 - `tabledoc load` は説明を DuckLake のカタログに、1 つのスキーマ (既定は `_tabledoc`) の普通のテーブルとして書きます。説明はデータと一緒に配布され、[FDL](https://fdl.queria.io) でデータと一緒にバージョン管理されます。`tabledoc dump` はそこからファイルを書き戻します
 
 ## インストール
@@ -60,6 +61,7 @@ metrics:
 tabledoc validate            # 検査する
 tabledoc load --ducklake work.sqlite   # 検査して、カタログの _tabledoc スキーマに書く
 tabledoc dump --ducklake work.sqlite --out description/   # カタログからファイルを書き戻す
+tabledoc export --markdown ai-docs/   # テーブルごとの Markdown を書き出す
 ```
 
 dbt のプロジェクトでは先に `dbt compile` を実行し、`dbt_project.yml` の隣に `tabledoc.yml` を書きます。

@@ -6,13 +6,14 @@ sidebar:
 description: The files tabledoc reads, how it checks them, and what it returns to a program.
 ---
 
-tabledoc defines how people write the description of a dataset (YAML and Markdown, or a dbt project's yml), checks it, and reads it for other programs. It depends on no particular host; `tabledoc load` writes the description into a DuckLake catalog as ordinary tables of one schema (`_tabledoc` by default), and `tabledoc dump` writes the files back from it. The files the author writes are the source.
+tabledoc defines how people write the description of a dataset (YAML and Markdown, or a dbt project's yml), checks it, and reads it for other programs. It depends on no particular host; `tabledoc load` writes the description into a DuckLake catalog as ordinary tables of one schema (`_tabledoc` by default), `tabledoc dump` writes the files back from it, and `tabledoc export --markdown` writes it as Markdown files for AI assistants and people to read. The files the author writes are the source.
 
 ## Commands
 
 - `tabledoc validate`: check the author's files
 - `tabledoc load`: check them and write the description into a DuckLake catalog ([Writing into a DuckLake catalog](#writing-into-a-ducklake-catalog))
 - `tabledoc dump`: write the files of the description a catalog holds ([Writing the files from a catalog](#writing-the-files-from-a-catalog))
+- `tabledoc export --markdown`: check them and write them as Markdown, one file per table ([Writing Markdown for AI](#writing-markdown-for-ai))
 
 It exits with 1 when there are errors (with `--strict`, warnings too) and 2 when the files or the catalog cannot be read or written at all.
 
@@ -71,7 +72,7 @@ queria:
 | `$schema` | yes | The format and its version |
 | `name` | yes | The dataset's name: `^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
 | `schema` | | The schema `tabledoc load` writes the description into; default `_tabledoc` |
-| `title`, `description`, `topics`, `homepage`, `language`, `issued`, `update_frequency` | | `language` is a BCP 47 tag; `issued` is `YYYY-MM-DD` |
+| `title`, `description`, `topics`, `homepage`, `language`, `issued`, `update_frequency` | | `language` is a BCP 47 tag, the language of the text written without one ([languages](#languages)); `issued` is `YYYY-MM-DD` |
 | `repository` | | The URL of the repository of the dataset's source code, such as `https://github.com/queria-io/dataset-boj`. `tabledoc load` takes Git's `origin` when it is left out |
 | `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` | | Written in a table file, the value is that table's alone |
 | `schemas` | | `name`, `title`, `description`, `guide` (the path of the schema's guide; default `<name>/README.md` when it is there), `docs` (the schema's other documents) |
@@ -128,6 +129,31 @@ Types, nullability and row counts are not written. The data store holds the stru
 - `table: <schema>.<table>` wins over the place. A table file at any other depth has to say it
 - Two files describing the same table is an error
 - dbt does not read a table file inside `models/`: dbt ignores keys outside `models:`
+
+## Languages
+
+Text people read can be written in more than one language. Write the value as a map from a BCP 47 tag to the text, or as the text alone, which is in the dataset's `language`.
+
+```yaml
+language: ja
+title:
+  ja: 日本銀行時系列統計
+  en: Bank of Japan time-series statistics
+topics:
+  ja: [日本銀行, 金利]
+  en: [Bank of Japan, interest rates]
+columns:
+  - name: db
+    title: {ja: データベース, en: Database}
+    description: databases の db と同じ
+```
+
+- Any of tabledoc's keys whose value is text, or a list of text, takes either form: `title`, `description`, `topics`, `homepage`, and the `title`, `url` and `path` of licenses, sources and contributors, say. A list becomes a map from a tag to a list
+- Values that point at something, or come from a fixed set, hold one value: `name`, `table`, `schema`, `repository`, `primary_key`, an entity's `name`, `language`, `$schema`, `issued`, `update_frequency`, `dimension`, `granularity`, `agg`, `expr`, `sql`, `depends_on`, `spdx`, `id`, `roles`, `spatial_coverage`, `temporal_coverage`, and the paths of guides and `docs`. Written in other languages, they would no longer point at the same table, column or file
+- Keys under `queria:` and `annotations:` are the reader's own
+- A tag is checked as BCP 47. A map with no text is an error
+- In a dbt project's yml, `description` is the text alone, in `language`. dbt does not take a map there
+- `tabledoc.read` returns these values as maps always: the text alone becomes `{<language>: text}`, and `{und: text}` without `language`
 
 ## Guides and documents
 
@@ -248,12 +274,15 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 | Table | Primary key | From |
 | --- | --- | --- |
-| `dataset` | `id` (always `dataset`) | `tabledoc.yml`: `title`, `description`, `language`, `homepage`, `repository` (else Git's `origin`, as https), `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage`, `topics`; `title_kana`, `cover` and `ai_context` under `queria:` |
+| `dataset` | `id` (always `dataset`) | `tabledoc.yml`: `language`, `homepage`, `repository` (else Git's `origin`, as https), `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage`; `title_kana`, `cover` and `ai_context` under `queria:` |
 | `schemas` | `schema` | `schemas[]` with a `title` or a `description` |
-| `tables` | `schema`, `name` | each table and view described: `title`, `description`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `topics`, `sql`, `depends_on`, `source_path`; `published` and `ai_context` under `queria:` |
+| `tables` | `schema`, `name` | each table and view described: `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `sql`, `depends_on`, `source_path`; `published` and `ai_context` under `queria:` |
 | `columns` | `schema`, `table`, `name` | each column with a `title`, a `description` or an `entity`: `entity` is the entity's `name` (a code system such as `lg_code`) |
+| `texts` | `schema`, `table`, `column`, `language` | `title`, `description` and `topics` of the dataset, each schema, table and column, one row for each language they are written in. `schema`, `table` and `column` are `''` where they do not apply: the dataset's row has all three `''`, a schema's has `table` and `column` `''`, and a table's has `column` `''` |
 | `files` | `path` | the [files in the dataset](#paths-in-the-dataset): `path`, `sha256`, `bytes`, `media_type` |
 
+- Text in more than one language ([languages](#languages)) goes into `texts`, one row for each language, so a dataset written in one language has one row for each thing described. Adding a language adds rows; the other tables do not change
+- The other tables hold one value for each key. For a key written in more than one language outside `texts` (a license's `title`, say), they hold the value in `language`, and tabledoc warns
 - `topics` (or `keywords`, its earlier name) unless `queria:` has `topics`. `themes` under `queria:` is not written
 - `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
 - `source_path` is the path of the file that defines the table, from the root of `repository` (dbt's `original_file_path`, under the folder of `tabledoc.yml` in the Git working copy), and `sql` is the SQL that made it; both are NULL where they are not known. Whether it is a table or a view is not written: the catalog holds that
@@ -277,7 +306,29 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--name`: the dataset's `name` in `tabledoc.yml`. Default: the last part of the repository's URL
 - A file already in the folder is not replaced, and nothing is written, unless `--force`. A path in the catalog that would leave the folder is an error
 - Each table file is at `<schema>/<table>.yml`, and its guide at `<schema>/<table>/README.md`. The Markdown files of a folder other than `README.md` are listed in that folder's `docs`
+- The rows of `texts` are written as the text alone when there is one language and it is the dataset's `language`, and as a map otherwise
 - What the tables do not hold is not written: primary keys, asset columns, an entity's type (written `foreign`), dimensions, granularity, metrics, keys for other readers, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--unlisted` wrote gets no table file. `sql` and `depends_on` are written only for a table without `source_path` (one dbt does not build)
+
+## Writing Markdown for AI
+
+`tabledoc export --markdown <folder>` checks the description as `validate` does, then writes it as Markdown: one file for the dataset, one for each schema and one for each table. AI assistants and people read the folder as it is, or it is published with the data's documentation.
+
+```bash
+tabledoc export --markdown ai-docs/
+```
+
+| File | Content |
+| --- | --- |
+| `README.md` | The dataset's title, description, licenses, sources and the other keys of `tabledoc.yml`; its schemas and tables, each with a link and the first paragraph of its description; its documents; then its overview (`README.md`) |
+| `<schema>/README.md` | The schema's title and description, its tables and documents, then its guide |
+| `<schema>/<table>/README.md` | The table's title, description, primary key, licenses, sources, `materialized`; its columns (title, description, semantics, `asset`) and metrics as tables; the tables it reads and the tables that read it, as links when they are in the dataset; its SQL; its documents; then its guide |
+
+- The files are at the [paths in the dataset](#paths-in-the-dataset), and every other file of `files` (documents, images) is written at its path too, so the links in the guides keep working
+- A guide comes after a rule (`---`) as written. Its headings are not changed
+- Keys for one reader (`queria:`, `annotations:`) are not written
+- Types, nullability and row counts are not in the description, so they are not written either
+- A file already in the folder is not replaced, and nothing is written, unless `--force`. Files of an earlier export that are no longer written stay in the folder
+- On an error (with `--strict`, a warning) nothing is written
 
 ## The older format
 

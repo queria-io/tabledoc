@@ -6,13 +6,14 @@ sidebar:
 description: tabledoc が読むファイル、その検査、プログラムに返す値を定めます。
 ---
 
-tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) の書き方を定め、検査し、ほかのプログラムのために読むツールです。特定の配信先には依存しません。`tabledoc load` は説明を DuckLake のカタログに、1 つのスキーマ (既定は `_tabledoc`) の普通のテーブルとして書き、`tabledoc dump` はそこからファイルを書き戻します。書き手のファイルが正です。
+tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) の書き方を定め、検査し、ほかのプログラムのために読むツールです。特定の配信先には依存しません。`tabledoc load` は説明を DuckLake のカタログに、1 つのスキーマ (既定は `_tabledoc`) の普通のテーブルとして書き、`tabledoc dump` はそこからファイルを書き戻します。`tabledoc export --markdown` は、AI アシスタントや人が読む Markdown のファイルとして書き出します。書き手のファイルが正です。
 
 ## コマンド
 
 - `tabledoc validate`: 書き手のファイルを検査します
 - `tabledoc load`: 検査してから、説明を DuckLake のカタログに書きます ([DuckLake のカタログに書く](#ducklake-のカタログに書く))
 - `tabledoc dump`: カタログが持つ説明のファイルを書きます ([カタログからファイルを書く](#カタログからファイルを書く))
+- `tabledoc export --markdown`: 検査してから、テーブルごとに 1 つの Markdown として書き出します ([AI のために Markdown を書き出す](#ai-のために-markdown-を書き出す))
 
 エラーがあると終了コード 1 (`--strict` では警告も)、ファイルやカタログを読み書きできないときは 2 で終わります。
 
@@ -71,7 +72,7 @@ queria:
 | `$schema` | 必須 | 書式とバージョン |
 | `name` | 必須 | データセットの名前。`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
 | `schema` | | `tabledoc load` が説明を書くスキーマ。既定は `_tabledoc` |
-| `title`・`description`・`topics`・`homepage`・`language`・`issued`・`update_frequency` | | `language` は BCP 47 のタグ、`issued` は `YYYY-MM-DD` |
+| `title`・`description`・`topics`・`homepage`・`language`・`issued`・`update_frequency` | | `language` は BCP 47 のタグで、言語を付けずに書いた文字列の言語です ([言語](#言語))。`issued` は `YYYY-MM-DD` |
 | `repository` | | データセットのソースコードのリポジトリの URL。例: `https://github.com/queria-io/dataset-boj`。省くと `tabledoc load` は Git の `origin` を使います |
 | `licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` | | テーブルのファイルに書くと、そのテーブルだけの値になります |
 | `schemas` | | `name`・`title`・`description`・`guide` (スキーマのガイドのパス。省くと、あれば `<name>/README.md`)・`docs` (スキーマのほかの文書) |
@@ -128,6 +129,31 @@ columns:
 - `table: <schema>.<table>` を書くと、置き場所よりそちらを優先します。ほかの深さに置くときは必須です
 - 同じテーブルを 2 つのファイルが説明していると、エラーになります
 - テーブルのファイルを dbt の `models/` に置いても、dbt は読みません (`models:` の外のキーを dbt は無視します)
+
+## 言語
+
+人が読む文字列は、複数の言語で書けます。値を BCP 47 のタグから文字列への対応で書くか、文字列だけを書きます。文字列だけのときは、データセットの `language` の言語として読みます。
+
+```yaml
+language: ja
+title:
+  ja: 日本銀行時系列統計
+  en: Bank of Japan time-series statistics
+topics:
+  ja: [日本銀行, 金利]
+  en: [Bank of Japan, interest rates]
+columns:
+  - name: db
+    title: {ja: データベース, en: Database}
+    description: databases の db と同じ
+```
+
+- tabledoc のキーのうち、値が文字列か文字列の一覧のものは、どちらの形でも書けます。たとえば `title`・`description`・`topics`・`homepage` と、ライセンス・出典・作成者の `title`・`url`・`path` です。一覧はタグから一覧への対応にします
+- 何かを指す値と、決まった語彙から選ぶ値は、値を 1 つだけ持ちます。`name`・`table`・`schema`・`repository`・`primary_key`・entity の `name`・`language`・`$schema`・`issued`・`update_frequency`・`dimension`・`granularity`・`agg`・`expr`・`sql`・`depends_on`・`spdx`・`id`・`roles`・`spatial_coverage`・`temporal_coverage` と、ガイドと `docs` のパスです。言語ごとに変えると、同じテーブル・列・ファイルを指せなくなるためです
+- `queria:` と `annotations:` の下のキーは、それぞれの読み手が決めます
+- タグは BCP 47 として検査します。文字列が 1 つも無い対応はエラーです
+- dbt のプロジェクトの yml では、`description` は文字列だけで、`language` の言語として読みます。dbt はそこに対応を受け付けません
+- `tabledoc.read` はこれらの値を常に対応で返します。文字列だけの値は `{<language>: 文字列}`、`language` が無ければ `{und: 文字列}` になります
 
 ## ガイドと文書
 
@@ -248,12 +274,15 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 | テーブル | 主キー | 元の値 |
 | --- | --- | --- |
-| `dataset` | `id` (常に `dataset`) | `tabledoc.yml` の `title`・`description`・`language`・`homepage`・`repository` (無ければ Git の `origin` を https で)・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage`・`topics`、`queria:` の `title_kana`・`cover`・`ai_context` |
+| `dataset` | `id` (常に `dataset`) | `tabledoc.yml` の `language`・`homepage`・`repository` (無ければ Git の `origin` を https で)・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage`、`queria:` の `title_kana`・`cover`・`ai_context` |
 | `schemas` | `schema` | `title` か `description` のある `schemas[]` |
-| `tables` | `schema`・`name` | 説明のあるテーブルとビュー: `title`・`description`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`topics`・`sql`・`depends_on`・`source_path`、`queria:` の `published`・`ai_context` |
+| `tables` | `schema`・`name` | 説明のあるテーブルとビュー: `licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`sql`・`depends_on`・`source_path`、`queria:` の `published`・`ai_context` |
 | `columns` | `schema`・`table`・`name` | `title`・`description`・`entity` のどれかがある列。`entity` は entity の `name` (`lg_code` などのコード体系) です |
+| `texts` | `schema`・`table`・`column`・`language` | データセット・スキーマ・テーブル・列の `title`・`description`・`topics`。書いた言語ごとに 1 行です。対象に当たらない段は `''` にします。データセットの行は 3 つとも `''`、スキーマの行は `table` と `column` が `''`、テーブルの行は `column` が `''` です |
 | `files` | `path` | [データセットの中のファイル](#データセットの中のパス): `path`・`sha256`・`bytes`・`media_type` |
 
+- 複数の言語で書いた文字列 ([言語](#言語)) は、言語ごとに 1 行として `texts` に書きます。1 つの言語で書いたデータセットは、説明する対象ごとに 1 行です。言語を追加すると行が増え、ほかのテーブルは変わりません
+- ほかのテーブルは各キーに値を 1 つだけ持ちます。`texts` に入らないキー (ライセンスの `title` など) を複数の言語で書いたときは、`language` の言語の値を書き、警告を出します
 - `topics` (以前の名前の `keywords`) は、`queria:` に `topics` が無ければ書きます。`queria:` の `themes` は書きません
 - `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
 - `source_path` はそのテーブルを定義しているファイルの、`repository` のルートからのパス (dbt の `original_file_path` に、Git の作業コピーの中での `tabledoc.yml` のフォルダを前に付けたもの)、`sql` はそのテーブルを作った SQL です。分からないときはどちらも NULL です。テーブルかビューかは書きません (カタログが持っています)
@@ -277,7 +306,29 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--name`: `tabledoc.yml` の `name`。既定はリポジトリの URL の最後の部分です
 - フォルダに同じファイルがあると、`--force` を付けない限り何も書きません。カタログのパスがフォルダの外を指すときはエラーです
 - テーブルのファイルは `<schema>/<table>.yml`、ガイドは `<schema>/<table>/README.md` に書きます。フォルダの `README.md` 以外の Markdown は、そのフォルダの `docs` に並べます
+- `texts` の行は、1 つの言語だけでそれがデータセットの `language` なら文字列だけで、それ以外は対応で書きます
 - テーブルに無いものは書きません。主キー、asset の列、entity の種類 (`foreign` と書きます)・dimension・granularity・metrics、ほかの読み手のキーと、dbt の `profiles.yml` から取る SQL が読むほかのデータセットです。`--unlisted` だけが書いたテーブルにはテーブルのファイルを作りません。`sql` と `depends_on` は `source_path` の無いテーブル (dbt で作らないテーブル) にだけ書きます
+
+## AI のために Markdown を書き出す
+
+`tabledoc export --markdown <フォルダ>` は、`validate` と同じく説明を検査してから、Markdown として書き出します。データセットに 1 つ、スキーマごとに 1 つ、テーブルごとに 1 つのファイルを書きます。AI アシスタントや人はこのフォルダをそのまま読めます。データのドキュメントと一緒に公開することもできます。
+
+```bash
+tabledoc export --markdown ai-docs/
+```
+
+| ファイル | 内容 |
+| --- | --- |
+| `README.md` | データセットの名前、説明、ライセンス、出典など `tabledoc.yml` のキー。スキーマとテーブルの一覧 (それぞれへのリンクと、説明の最初の段落)。文書の一覧。最後にデータセットの概要 (`README.md`) |
+| `<schema>/README.md` | スキーマの名前と説明、テーブルと文書の一覧。最後にスキーマのガイド |
+| `<schema>/<table>/README.md` | テーブルの名前、説明、主キー、ライセンス、出典、`materialized`。列 (名前、説明、semantic、`asset`) とメトリクスの表。そのテーブルが読むテーブルと、そのテーブルを読むテーブル (データセットの中のテーブルはリンク)。SQL。文書の一覧。最後にテーブルのガイド |
+
+- ファイルは [データセットの中のパス](#データセットの中のパス) に書きます。`files` のほかのファイル (文書、画像) もそれぞれのパスに書くので、ガイドの中のリンクはそのまま使えます
+- ガイドは区切り線 (`---`) の後に、書かれたとおりに置きます。見出しのレベルは変えません
+- 読み手ごとのキー (`queria:`、`annotations:`) は書きません
+- 型・NULL の可否・行数は説明に含まれないので、書きません
+- フォルダに同じパスのファイルがあると、`--force` を付けない限り何も書きません。前の書き出しにあって今回書かないファイルは、フォルダに残ります
+- エラーがあると (`--strict` では警告も) 何も書きません
 
 ## 以前の形式
 

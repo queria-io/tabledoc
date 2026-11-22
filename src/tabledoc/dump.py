@@ -23,7 +23,7 @@ from typing import Any
 
 import yaml
 
-from . import schemas, tables
+from . import languages, schemas, tables
 from .description import README
 from .files import normalized
 from .load import ALIAS, attached
@@ -153,9 +153,45 @@ def _unlisted_only(table: dict[str, Any], columns: list[Any]) -> bool:
     return said == {"published"} and table["published"] is False and not columns
 
 
+def _with_texts(found: tables.Rows) -> tables.Rows:
+    """``found`` with the rows of `texts` on the rows they describe: as the text alone when it is
+    written in the dataset's `language` only, else as a map from the language to the text."""
+    language = str(((found.get("dataset") or [{}])[0]).get("language") or languages.UNDETERMINED)
+    by_where: dict[tuple[str, str, str], dict[str, dict[str, Any]]] = {}
+    for row in found.get("texts") or []:
+        where = (row.get("schema") or "", row.get("table") or "", row.get("column") or "")
+        for key in tables.TEXTS:
+            if row.get(key) not in (None, "", []):
+                by_where.setdefault(where, {}).setdefault(key, {})[row["language"]] = row[key]
+
+    def text(where: tuple[str, str, str]) -> dict[str, Any]:
+        return {
+            k: v[language] if list(v) == [language] else dict(sorted(v.items()))
+            for k, v in by_where.get(where, {}).items()
+        }
+
+    def keys(rows: list[dict[str, Any]], where: Any) -> list[dict[str, Any]]:
+        return [{**row, **text(where(row))} for row in rows]
+
+    described = {(s, "", "") for s, t, c in by_where if s and not t}
+    schemas_rows = found.get("schemas") or []
+    held = {r["schema"] for r in schemas_rows}
+    return {
+        **found,
+        "dataset": keys(found.get("dataset") or [{}], lambda r: ("", "", "")),
+        "schemas": keys(
+            [*schemas_rows, *({"schema": s} for s, _, _ in sorted(described) if s not in held)],
+            lambda r: (r["schema"], "", ""),
+        ),
+        "tables": keys(found.get("tables") or [], lambda r: (r["schema"], r["name"], "")),
+        "columns": keys(found.get("columns") or [], lambda r: (r["schema"], r["table"], r["name"])),
+    }
+
+
 def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> dict[str, dict[str, Any]]:
     """The YAML files of the description in ``found``, by path. ``held_in``, the schema the
     description is in, is written into tabledoc.yml unless it is `_tabledoc`."""
+    found = _with_texts(found)
     paths = sorted(f["path"] for f in found.get("files") or [])
     described_tables = sorted(found.get("tables") or [], key=lambda t: (t["schema"], t["name"]))
     columns = found.get("columns") or []
@@ -170,7 +206,7 @@ def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> di
         written[f"{schema}/{table_name}.yml"] = {
             "$schema": schemas.TABLE,
             **_fields(table, TABLE_KEYS),
-            **({"topics": list(table["topics"])} if table.get("topics") else {}),
+            **({"topics": table["topics"]} if table.get("topics") else {}),
             **({"sql": table["sql"]} if authored and table.get("sql") else {}),
             **({"depends_on": list(table["depends_on"])} if authored and table.get("depends_on") else {}),
             **({"docs": docs} if docs else {}),
@@ -192,7 +228,7 @@ def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> di
             "name": name,
             **({"schema": held_in} if held_in != tables.SCHEMA else {}),
             **_fields(dataset, DATASET_KEYS),
-            **({"topics": list(dataset["topics"])} if dataset.get("topics") else {}),
+            **({"topics": dataset["topics"]} if dataset.get("topics") else {}),
             **({"schemas": schema_list} if schema_list else {}),
             **({"docs": docs} if docs else {}),
             **_queria(dataset, tables.DATASET_OWN),
