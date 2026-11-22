@@ -120,14 +120,40 @@ def _fields(row: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
     return picked
 
 
-def _readers(attributes: list[dict[str, Any]]) -> dict[str, Any]:
-    """`queria:` and `annotations:` of one thing, from its rows of `_fdl.attributes`."""
+def _keys(attributes: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Reader -> key -> value of one thing, from its rows of `_fdl.attributes`."""
     found: dict[str, dict[str, Any]] = {}
     for row in sorted(attributes, key=lambda r: r["key"]):
         reader, key = fdl.split_key(row["key"])
         found.setdefault(reader, {})[key] = row["value"]
+    return found
+
+
+#: Attributes load makes from keys of its own; dump writes them back there.
+OWN = {QUERIA: ("license_terms", "entity"), fdl.DBT: fdl.DBT_KEYS}
+
+
+def _readers(attributes: list[dict[str, Any]]) -> dict[str, Any]:
+    """`queria:` and `annotations:` of one thing, but the attributes load makes from its own keys."""
+    found = {
+        reader: kept
+        for reader, keys in _keys(attributes).items()
+        if (kept := {k: v for k, v in keys.items() if k not in OWN.get(reader, ())})
+    }
     others = {k: v for k, v in found.items() if k != QUERIA}
     return {**({QUERIA: found[QUERIA]} if QUERIA in found else {}), **({"annotations": others} if others else {})}
+
+
+def _with_terms(fields: dict[str, Any], attributes: list[dict[str, Any]]) -> dict[str, Any]:
+    """``fields`` with each license's terms from Queria's `license_terms`."""
+    terms = _keys(attributes).get(QUERIA, {}).get("license_terms") or {}
+    if not terms or not fields.get("licenses"):
+        return fields
+    licenses = [
+        {**({"id": lic} if isinstance(lic, str) else lic), **terms[i]} if (i := lic if isinstance(lic, str) else lic.get("id")) in terms else lic
+        for lic in fields["licenses"]
+    ]
+    return {**fields, "licenses": licenses}
 
 
 def _documents(paths: list[str], folder: str) -> list[str]:
@@ -140,7 +166,7 @@ def _documents(paths: list[str], folder: str) -> list[str]:
 
 
 def _column(row: dict[str, Any], primary_key: list[str], attributes: list[dict[str, Any]]) -> dict[str, Any]:
-    entity = row.get("entity")
+    entity = _keys(attributes).get(QUERIA, {}).get("entity")
     kind = "primary" if primary_key == [row["name"]] else "foreign"
     return {
         "name": row["name"],
@@ -172,14 +198,21 @@ def documents(found: fdl.Rows, name: str) -> dict[str, dict[str, Any]]:
     for table in tables:
         schema, table_name = table["schema"], table["name"]
         own = [c for c in columns if (c["schema"], c["table"]) == (schema, table_name)]
+        own += [
+            {"schema": schema, "table": table_name, "name": name}
+            for name in dict.fromkeys(
+                a["column"] for a in attributes if (a["schema"], a["table"]) == (schema, table_name) and a["column"]
+            )
+            if name not in {c["name"] for c in own}
+        ]
         if _unlisted_only(table, of(schema, table_name), own):
             continue
         key = list(table.get("primary_key") or [])
         docs = _documents(paths, f"{schema}/{table_name}")
-        authored = not table.get("source_path")
+        authored = not _keys(of(schema, table_name)).get(fdl.DBT, {}).get("source_path")
         written[f"{schema}/{table_name}.yml"] = {
             "$schema": schemas.TABLE,
-            **_fields(table, TABLE_KEYS),
+            **_with_terms(_fields(table, TABLE_KEYS), of(schema, table_name)),
             **({"sql": table["sql"]} if authored and table.get("sql") else {}),
             **({"depends_on": list(table["depends_on"])} if authored and table.get("depends_on") else {}),
             **({"docs": docs} if docs else {}),
@@ -203,7 +236,7 @@ def documents(found: fdl.Rows, name: str) -> dict[str, dict[str, Any]]:
         DATASET_FILE: {
             "$schema": schemas.DATASET,
             "name": name,
-            **_fields(dataset, DATASET_KEYS),
+            **_with_terms(_fields(dataset, DATASET_KEYS), of()),
             **({"schemas": schema_list} if schema_list else {}),
             **({"docs": docs} if docs else {}),
             **_readers(of()),

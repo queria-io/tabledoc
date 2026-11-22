@@ -27,10 +27,12 @@ SCHEMA = "_fdl"
 #: The schema tabledoc 0.3 wrote; load drops it.
 OLD_SCHEMA = "_meta"
 
-_LICENSE = (
-    "STRUCT(id VARCHAR, spdx VARCHAR, url VARCHAR, title VARCHAR, "
-    "commercial_use BOOLEAN, share_alike BOOLEAN, attribution_required BOOLEAN)[]"
-)
+_LICENSE = "STRUCT(id VARCHAR, spdx VARCHAR, url VARCHAR, title VARCHAR)[]"
+#: The terms of a license, written as Queria's `license_terms` by license id.
+LICENSE_TERMS = ("commercial_use", "share_alike", "attribution_required")
+DBT = "dbt"
+#: What dbt fills in that FDL has no column for, written as dbt's attributes.
+DBT_KEYS = ("materialized", "source_path")
 _SOURCE = "STRUCT(title VARCHAR, path VARCHAR)[]"
 _CONTRIBUTOR = "STRUCT(title VARCHAR, path VARCHAR, roles VARCHAR[])[]"
 _TEMPORAL = 'STRUCT(start VARCHAR, "end" VARCHAR)'
@@ -68,8 +70,6 @@ TABLES: dict[str, tuple[dict[str, str], list[str]]] = {
             "profile": "BOOLEAN",
             "sql": "VARCHAR",
             "depends_on": "VARCHAR[]",
-            "materialized": "VARCHAR",
-            "source_path": "VARCHAR",
         },
         ["schema", "name"],
     ),
@@ -80,7 +80,6 @@ TABLES: dict[str, tuple[dict[str, str], list[str]]] = {
             "name": "VARCHAR",
             "title": "VARCHAR",
             "description": "VARCHAR",
-            "entity": "VARCHAR",
             "asset": "BOOLEAN",
         },
         ["schema", "table", "name"],
@@ -112,7 +111,20 @@ def _licenses(value: Any) -> list[dict[str, Any]] | None:
     """Licenses as written: an id alone, or the id with its terms."""
     if not isinstance(value, list):
         return None
-    return [{"id": v} if isinstance(v, str) else v for v in value if isinstance(v, (str, dict))] or None
+    return [
+        {"id": v} if isinstance(v, str) else {k: x for k, x in v.items() if k not in LICENSE_TERMS}
+        for v in value
+        if isinstance(v, (str, dict))
+    ] or None
+
+
+def _license_terms(value: Any) -> dict[str, Any]:
+    """License id -> its terms, for the licenses written with them."""
+    return {
+        v["id"]: terms
+        for v in (value if isinstance(value, list) else [])
+        if isinstance(v, dict) and v.get("id") and (terms := {k: v[k] for k in LICENSE_TERMS if k in v})
+    }
 
 
 def _record(record: dict[str, Any], columns: list[str]) -> dict[str, Any]:
@@ -144,8 +156,17 @@ def readers(record: dict[str, Any]) -> dict[str, Any]:
     """The keys of each reader for ``record``: its `annotations`, with `topics` as Queria's
     `topics` unless `queria:` says them, and without the keys in ``DROPPED``."""
     found = {r: dict(k) for r, k in (record.get("annotations") or {}).items() if isinstance(k, dict)}
-    if record.get("topics"):
-        found.setdefault(QUERIA, {}).setdefault("topics", record["topics"])
+    own = {
+        "topics": record.get("topics"),
+        "license_terms": _license_terms(record.get("licenses")),
+        "entity": _entity(record),
+    }
+    for key, value in own.items():
+        if value:
+            found.setdefault(QUERIA, {}).setdefault(key, value)
+    for key in DBT_KEYS:
+        if record.get(key):
+            found.setdefault(DBT, {})[key] = record[key]
     for reader, keys in DROPPED.items():
         for key in keys:
             found.get(reader, {}).pop(key, None)
@@ -160,6 +181,20 @@ def _attributes(record: dict[str, Any], schema: str = "", table: str = "", colum
         for reader, keys in readers_.items()
         for key, value in keys.items()
     ]
+
+
+def _built(carried: Rows) -> dict[tuple[str, ...], dict[str, Any]]:
+    """What the build filled in for each table, as the catalog held it: `sql` and
+    `depends_on` from `_fdl.tables`, `materialized` and `source_path` from dbt's
+    attributes (or, in `_meta`, from its columns)."""
+    found: dict[tuple[str, ...], dict[str, Any]] = {}
+    for t in carried.get("tables") or []:
+        found[fold(t["schema"], t["name"])] = _pick(t, BUILT_KEYS)
+    for a in carried.get("attributes") or []:
+        reader, key = split_key(a["key"])
+        if reader == DBT and key in DBT_KEYS and a["table"] and not a["column"]:
+            found.setdefault(fold(a["schema"], a["table"]), {})[key] = a["value"]
+    return found
 
 
 def published(table: dict[str, Any]) -> bool:
@@ -182,22 +217,22 @@ def rows(
     """The rows of each `_fdl` table for ``description``.
 
     ``carried`` is the `_fdl` the catalog held: a table without `sql` (nothing
-    was built) keeps `materialized`, `sql`, `depends_on` and `source_path` from
-    it. ``unlisted`` are the catalog's tables with no description: Queria does
+    was built) keeps `sql`, `depends_on` and dbt's `materialized` and
+    `source_path` from it. ``unlisted`` are the catalog's tables with no description: Queria does
     not list them and they get no profile. ``views`` are the catalog's views,
     whose SQL the metadata already holds.
     """
     columns = {name: list(spec[0]) for name, spec in TABLES.items()}
     built = not carried or any("sql" in t for t in description.tables)
-    kept = {} if built else {fold(t["schema"], t["name"]): t for t in carried.get("tables") or []}
+    kept = {} if built else _built(carried or {})
     described = {fold(t["schema"], t["name"]) for t in description.tables}
     viewed = {fold(*v) for v in views or set()}
     no_profile = {"profile": False}
+    tables = [{**_pick(kept.get(fold(t["schema"], t["name"]), {}), BUILT_KEYS), **t} for t in description.tables]
 
     def table(t: dict[str, Any]) -> dict[str, Any]:
-        key = fold(t["schema"], t["name"])
-        record = {**_pick(kept.get(key, {}), BUILT_KEYS), **_record(t, columns["tables"][2:])}
-        if key in viewed:
+        record = _record(t, columns["tables"][2:])
+        if fold(t["schema"], t["name"]) in viewed:
             record.pop("sql", None)
         return {"schema": t["schema"], "name": t["name"], **record, **({} if published(t) else no_profile)}
 
@@ -209,24 +244,24 @@ def rows(
             for s in description.schemas
             if s.get("title") or s.get("description")
         ],
-        "tables": [table(t) for t in description.tables]
+        "tables": [table(t) for t in tables]
         + [{"schema": s, "name": n, **no_profile} for s, n in unlisted_keys],
         "columns": [
             {
                 "schema": t["schema"],
                 "table": t["name"],
                 "name": c["name"],
-                **_pick({**c, "entity": _entity(c)}, ["title", "description", "entity"]),
+                **_pick(c, ["title", "description"]),
                 **({"asset": True} if c.get("asset") is True else {}),
             }
             for t in description.tables
             for c in t.get("columns") or []
-            if c.get("name") and (c.get("title") or c.get("description") or _entity(c) or c.get("asset") is True)
+            if c.get("name") and (c.get("title") or c.get("description") or c.get("asset") is True)
         ],
         "files": [f.entry() for f in description.files],
         "catalogs": [{"name": k, "url": v} for k, v in sorted((description.catalogs or {}).items())],
         "attributes": _attributes(description.dataset)
-        + [a for t in description.tables for a in _attributes(t, t["schema"], t["name"])]
+        + [a for t in tables for a in _attributes(t, t["schema"], t["name"])]
         + [
             a
             for t in description.tables

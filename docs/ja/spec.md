@@ -247,17 +247,18 @@ fdl commit work.sqlite -m "..." --assets build/assets
 | --- | --- |
 | `_fdl.dataset` | `tabledoc.yml` の `title`・`description`・`language`・`homepage`・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` |
 | `_fdl.schemas` | `title` か `description` のある `schemas[]` |
-| `_fdl.tables` | 説明のあるテーブルとビュー: `title`・`description`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`primary_key`・`profile` (`queria:` の `published` が false なら false)・`materialized`・`sql` (ビューには書きません。SQL はメタデータが持ちます)・`depends_on`・`source_path` |
-| `_fdl.columns` | `title`・`description`・`entity` (その `name`)・`asset: true` のどれかがある列 |
+| `_fdl.tables` | 説明のあるテーブルとビュー: `title`・`description`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`primary_key`・`profile` (`queria:` の `published` が false なら false)・`sql` (ビューには書きません。SQL はメタデータが持ちます)・`depends_on` |
+| `_fdl.columns` | `title`・`description`・`asset: true` のどれかがある列 |
 | `_fdl.files` | [データセットの中のファイル](#データセットの中のパス): `path`・`sha256`・`bytes`・`media_type` |
 | `_fdl.catalogs` | SQL が読むほかのデータセット (SQL の中の名前と URL) |
 | `_fdl.attributes` | データセット・テーブル・列の `queria:` と `annotations:` のキー |
 
 - `topics` (以前の名前の `keywords`) は、`queria:` に `topics` が無ければ Queria のキー `topics` として属性 `queria-topics` になります。`queria:` の `themes` は書きません
 - 読み手ごとのキーは、属性 `<読み手>-<キー>` になります。キーの `_` は `-` にします (`queria:` の `title_kana` は `queria-title-kana`)。値は書いた値の JSON です
-- `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
+- `_fdl` に列の無い値は属性に書きます。列の `entity` (その `name`) は `queria-entity`、ライセンスの `commercial_use`・`share_alike`・`attribution_required` はライセンス ID ごとに `queria-license-terms` (`{"<id>": {"commercial_use": true}}`、データセットかテーブル)、dbt の `materialized`・`source_path` は `dbt-materialized`・`dbt-source-path` (テーブルかビュー) です
+- `licenses` は `{id, spdx, url, title}` のリストです。文字列で書いたライセンスは `{id}` になります
 - ファイルの中身はカタログに入れません。`_fdl.files.sha256` は asset の列で、`fdl commit --assets` が中身ごとにファイルをアップロードします
-- `_fdl` のテーブルは毎回 1 つのトランザクションで作り直します。tabledoc 0.3 が書いた `_meta` スキーマはその中で削除します。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `materialized`・`sql`・`depends_on`・`source_path` をカタログの `_fdl` (無ければ `_meta`) から引き継ぎます
+- `_fdl` のテーブルは毎回 1 つのトランザクションで作り直します。tabledoc 0.3 が書いた `_meta` スキーマはその中で削除します。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql`・`depends_on`・`dbt-materialized`・`dbt-source-path` をカタログの `_fdl` (無ければ `_meta`) から引き継ぎます
 - コメント (`COMMENT ON`) は書きません
 
 ## カタログからファイルを書く
@@ -273,7 +274,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--name`: `tabledoc.yml` の `name`。既定はリポジトリの URL の最後の部分です
 - フォルダに同じファイルがあると、`--force` を付けない限り何も書きません
 - テーブルのファイルは `<schema>/<table>.yml`、ガイドは `<schema>/<table>/README.md` に書きます。フォルダの `README.md` 以外の Markdown は、そのフォルダの `docs` に並べます
-- `_fdl` に無いものは書きません。entity の種類 (単独の主キーの列は `primary`、ほかは `foreign` と書きます)・dimension・granularity・metrics と、dbt の `profiles.yml` から取る SQL が読むほかのデータセットです。`--unlisted` だけが書いたテーブルにはテーブルのファイルを作りません。`sql` と `depends_on` は `source_path` の無いテーブル (dbt で作らないテーブル) にだけ書きます
+- `_fdl` に無いものは書きません。entity の種類 (単独の主キーの列は `primary`、ほかは `foreign` と書きます)・dimension・granularity・metrics と、dbt の `profiles.yml` から取る SQL が読むほかのデータセットです。`--unlisted` だけが書いたテーブルにはテーブルのファイルを作りません。`sql` と `depends_on` は `dbt-source-path` の属性が無いテーブル (dbt で作らないテーブル) にだけ書きます
 
 ## 以前の形式
 

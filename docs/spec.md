@@ -247,17 +247,18 @@ fdl commit work.sqlite -m "..." --assets build/assets
 | --- | --- |
 | `_fdl.dataset` | `tabledoc.yml`: `title`, `description`, `language`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` |
 | `_fdl.schemas` | `schemas[]` with a `title` or a `description` |
-| `_fdl.tables` | each table and view described: `title`, `description`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `primary_key`, `profile` (false when `published` under `queria:` is false), `materialized`, `sql` (not for a view: the metadata holds its SQL), `depends_on`, `source_path` |
-| `_fdl.columns` | each column with a `title`, a `description`, an `entity` (its `name`) or `asset: true` |
+| `_fdl.tables` | each table and view described: `title`, `description`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `primary_key`, `profile` (false when `published` under `queria:` is false), `sql` (not for a view: the metadata holds its SQL), `depends_on` |
+| `_fdl.columns` | each column with a `title`, a `description` or `asset: true` |
 | `_fdl.files` | the [files in the dataset](#paths-in-the-dataset): `path`, `sha256`, `bytes`, `media_type` |
 | `_fdl.catalogs` | the other datasets the SQL reads, by the name it reads them under |
 | `_fdl.attributes` | the keys under `queria:` and `annotations:` of the dataset, the tables and the columns |
 
 - `topics` (or `keywords`, its earlier name) becomes Queria's `topics`, the attribute `queria-topics`, unless `queria:` has `topics`. `themes` under `queria:` is not written
 - A key for one reader becomes the attribute `<reader>-<key>`, with `_` in the key written `-`: `title_kana` under `queria:` is `queria-title-kana`. The value is the JSON of what was written
-- `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
+- What `_fdl` has no column for is written as an attribute: a column's `entity` (its `name`) as `queria-entity`; the `commercial_use`, `share_alike` and `attribution_required` of the licenses as `queria-license-terms`, by license id (`{"<id>": {"commercial_use": true}}`), on the dataset or the table; dbt's `materialized` and `source_path` as `dbt-materialized` and `dbt-source-path` on the table or view
+- `licenses` is a list of `{id, spdx, url, title}`; a license written as a string is `{id}`
 - The files are not in the catalog. `_fdl.files.sha256` is an asset column: `fdl commit --assets` uploads each file by its content
-- The `_fdl` tables are dropped and written again each time, in one transaction. The `_meta` schema tabledoc 0.3 wrote is dropped in it. Without a dbt build (no `sql` in the description), each table keeps the `materialized`, `sql`, `depends_on` and `source_path` the catalog's `_fdl` (or `_meta`) holds
+- The `_fdl` tables are dropped and written again each time, in one transaction. The `_meta` schema tabledoc 0.3 wrote is dropped in it. Without a dbt build (no `sql` in the description), each table keeps the `sql`, `depends_on`, `dbt-materialized` and `dbt-source-path` the catalog's `_fdl` (or `_meta`) holds
 - tabledoc writes no comments (`COMMENT ON`)
 
 ## Writing the files from a catalog
@@ -273,7 +274,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--name`: the dataset's `name` in `tabledoc.yml`. Default: the last part of the repository's URL
 - A file already in the folder is not replaced, and nothing is written, unless `--force`
 - Each table file is at `<schema>/<table>.yml`, and its guide at `<schema>/<table>/README.md`. The Markdown files of a folder other than `README.md` are listed in that folder's `docs`
-- What `_fdl` does not hold is not written: an entity's type (`primary` for a column that alone is the primary key, else `foreign`), dimensions, granularity, metrics, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--unlisted` wrote gets no table file. `sql` and `depends_on` are written only for a table without a `source_path` (one dbt does not build)
+- What `_fdl` does not hold is not written: an entity's type (`primary` for a column that alone is the primary key, else `foreign`), dimensions, granularity, metrics, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--unlisted` wrote gets no table file. `sql` and `depends_on` are written only for a table without the attribute `dbt-source-path` (one dbt does not build)
 
 ## The older format
 

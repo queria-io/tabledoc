@@ -27,7 +27,7 @@ def loaded(write, tmp_path):
     root = write(
         {
             "src/tabledoc.yml": DATASET
-            + "name: shop\ntitle: Shop\ndescription: |-\n  Two\n  lines\nlicenses: [CC-BY-4.0]\nissued: 2026-10-30\n"
+            + "name: shop\ntitle: Shop\ndescription: |-\n  Two\n  lines\nlicenses: [CC-BY-4.0, {id: own, commercial_use: false}]\nissued: 2026-10-30\n"
             + "schemas: [{name: sales, title: Sales}]\ndocs: [docs/method.md]\n"
             + "topics: [trade]\nqueria: {title_kana: ショップ}\n",
             "src/README.md": "Overview. ![chart](docs/chart.png)\n",
@@ -76,7 +76,7 @@ def test_dump_writes_what_loads_to_the_same_fdl(loaded, tmp_path):
         "title: Shop\n"
         "description: |-\n  Two\n  lines\n"
         "issued: '2026-10-30'\n"
-        "licenses:\n- CC-BY-4.0\n"
+        "licenses:\n- CC-BY-4.0\n- id: own\n  commercial_use: false\n"
         "schemas:\n- name: sales\n  title: Sales\n"
         "docs:\n- method.md\n"
         "queria:\n  title_kana: ショップ\n  topics:\n  - trade\n"

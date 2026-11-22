@@ -60,9 +60,9 @@ def test_writes_fdl_and_the_folder_for_fdl_commit(write, catalog, tmp_path):
         ("sales", "orders", ["id"], None),
         ("sales", "recent", None, None),
     ]
-    assert query(path, data, f"SELECT name, entity, asset FROM {ALIAS}._fdl.columns ORDER BY name") == [
-        ("file", None, True),
-        ("id", "order", None),
+    assert query(path, data, f"SELECT name, asset FROM {ALIAS}._fdl.columns ORDER BY name") == [
+        ("file", True),
+        ("id", None),
     ]
     assert query(path, data, f"SELECT path, media_type FROM {ALIAS}._fdl.files ORDER BY path") == [
         ("README.md", "text/markdown"),
@@ -70,6 +70,7 @@ def test_writes_fdl_and_the_folder_for_fdl_commit(write, catalog, tmp_path):
     ]
     assert query(path, data, f'SELECT schema, "table", key, value FROM {ALIAS}._fdl.attributes ORDER BY ALL') == [
         ("sales", "extra", "queria-published", "false"),
+        ("sales", "orders", "queria-entity", '"order"'),
     ]
     # load writes no comments: _fdl is where the description is.
     comments = f"SELECT comment FROM duckdb_tables() WHERE database_name = '{ALIAS}' AND table_name = 'orders'"
@@ -87,7 +88,8 @@ def test_topics_and_keywords_are_queria_topics(write, catalog):
     report = Report()
     assert load(Options(root, with_source=False), Target(str(path), data), report) is not None, report.render()
     # queria: themes is no longer written.
-    assert query(path, data, f'SELECT "table", key, value FROM {ALIAS}._fdl.attributes ORDER BY ALL') == [
+    topics = f"SELECT \"table\", key, value FROM {ALIAS}._fdl.attributes WHERE key = 'queria-topics' ORDER BY ALL"
+    assert query(path, data, topics) == [
         ("", "queria-topics", '["retail"]'),
         ("recent", "queria-topics", '["latest"]'),
     ]
@@ -266,3 +268,33 @@ def test_data_path_follows_fdl_clones_note(tmp_path):
     note.write_text(json.dumps({"data": str(tmp_path / "d")}))
     assert data_path(str(working), None) == (tmp_path / "d").resolve().as_posix() + "/"
     assert data_path(str(working), "given/") == "given/"
+
+
+def test_what_fdl_has_no_column_for_goes_to_attributes(write, catalog):
+    path, data = catalog
+    root = project(write)
+    (root / "tabledoc.yml").write_text(
+        DATASET + "name: shop\nlicenses: [{id: x, url: https://x.example, commercial_use: true, share_alike: false}]\n"
+    )
+    (root / "sales" / "orders.yml").write_text(TABLE + "title: Orders\nsql: select 1\n")
+    report = Report()
+    assert load(Options(root, with_source=False), Target(str(path), data), report) is not None, report.render()
+    assert query(path, data, f"SELECT licenses FROM {ALIAS}._fdl.dataset") == [
+        ([{"id": "x", "spdx": None, "url": "https://x.example", "title": None}],)
+    ]
+    terms = f"SELECT value FROM {ALIAS}._fdl.attributes WHERE key = 'queria-license-terms'"
+    assert [json.loads(v) for (v,) in query(path, data, terms)] == [{"x": {"commercial_use": True, "share_alike": False}}]
+
+
+def test_dbt_keys_are_kept_without_a_build(write, catalog):
+    path, data = catalog
+    root = project(write)
+    load(Options(root, with_source=False), Target(str(path), data), Report())
+    with attached(str(path), data) as con:
+        con.execute(
+            f"INSERT INTO {ALIAS}._fdl.attributes VALUES ('sales', 'orders', '', 'dbt-materialized', '\"table\"'), "
+            "('sales', 'orders', '', 'dbt-source-path', '\"models/orders.sql\"')"
+        )
+    load(Options(root, with_source=False), Target(str(path), data), Report())
+    dbt = f"SELECT key, value FROM {ALIAS}._fdl.attributes WHERE key LIKE 'dbt-%' ORDER BY key"
+    assert query(path, data, dbt) == [("dbt-materialized", '"table"'), ("dbt-source-path", '"models/orders.sql"')]
