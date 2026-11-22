@@ -272,13 +272,15 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 | Table | Primary key | From |
 | --- | --- | --- |
-| `dataset` | `id` (always `dataset`) | `tabledoc.yml`: `title`, `description`, `language`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage`, `topics`; `title_kana`, `cover` and `ai_context` under `queria:` |
+| `dataset` | `id` (always `dataset`) | `tabledoc.yml`: `language`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage`; `title_kana`, `cover` and `ai_context` under `queria:` |
 | `schemas` | `schema` | `schemas[]` with a `title` or a `description` |
-| `tables` | `schema`, `name` | each table and view described: `title`, `description`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `topics`, `sql`, `depends_on`, dbt's `materialized` and `source_path`; `published` and `ai_context` under `queria:` |
+| `tables` | `schema`, `name` | each table and view described: `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `sql`, `depends_on`, dbt's `materialized` and `source_path`; `published` and `ai_context` under `queria:` |
 | `columns` | `schema`, `table`, `name` | each column with a `title`, a `description` or an `entity`: `entity` is the entity's `name` (a code system such as `lg_code`) |
+| `texts` | `schema`, `table`, `column`, `language` | `title`, `description` and `topics` of the dataset, each schema, table and column, one row for each language they are written in. `schema`, `table` and `column` are `''` where they do not apply: the dataset's row has all three `''`, a schema's has `table` and `column` `''`, and a table's has `column` `''` |
 | `files` | `path` | the [files in the dataset](#paths-in-the-dataset): `path`, `sha256`, `bytes`, `media_type` |
 
-- The values that [languages](#languages) apply to are written as `MAP(VARCHAR, VARCHAR)` (a list as `MAP(VARCHAR, VARCHAR[])`), keyed by language as `tabledoc.read` returns them. `language` is written as it is
+- Text in more than one language ([languages](#languages)) goes into `texts`, one row for each language, so a dataset written in one language has one row for each thing described. Adding a language adds rows; the other tables do not change
+- The other tables hold one value for each key. For a key written in more than one language outside `texts` (a license's `title`, say), they hold the value in `language`, and tabledoc warns
 - `topics` (or `keywords`, its earlier name) unless `queria:` has `topics`. `themes` under `queria:` is not written
 - `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
 - A view's row has no `sql` or `depends_on`: the metadata holds the view's SQL
@@ -301,6 +303,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--name`: the dataset's `name` in `tabledoc.yml`. Default: the last part of the repository's URL
 - A file already in the folder is not replaced, and nothing is written, unless `--force`. A path in the catalog that would leave the folder is an error
 - Each table file is at `<schema>/<table>.yml`, and its guide at `<schema>/<table>/README.md`. The Markdown files of a folder other than `README.md` are listed in that folder's `docs`
+- The rows of `texts` are written as the text alone when there is one language and it is the dataset's `language`, and as a map otherwise
 - What the tables do not hold is not written: primary keys, asset columns, an entity's type (written `foreign`), dimensions, granularity, metrics, keys for other readers, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--unlisted` wrote gets no table file. `sql` and `depends_on` are written only for a table without `source_path` (one dbt does not build)
 
 ## The older format

@@ -272,13 +272,15 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 | テーブル | 主キー | 元の値 |
 | --- | --- | --- |
-| `dataset` | `id` (常に `dataset`) | `tabledoc.yml` の `title`・`description`・`language`・`homepage`・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage`・`topics`、`queria:` の `title_kana`・`cover`・`ai_context` |
+| `dataset` | `id` (常に `dataset`) | `tabledoc.yml` の `language`・`homepage`・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage`、`queria:` の `title_kana`・`cover`・`ai_context` |
 | `schemas` | `schema` | `title` か `description` のある `schemas[]` |
-| `tables` | `schema`・`name` | 説明のあるテーブルとビュー: `title`・`description`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`topics`・`sql`・`depends_on`・dbt の `materialized` と `source_path`、`queria:` の `published`・`ai_context` |
+| `tables` | `schema`・`name` | 説明のあるテーブルとビュー: `licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`sql`・`depends_on`・dbt の `materialized` と `source_path`、`queria:` の `published`・`ai_context` |
 | `columns` | `schema`・`table`・`name` | `title`・`description`・`entity` のどれかがある列。`entity` は entity の `name` (`lg_code` などのコード体系) です |
+| `texts` | `schema`・`table`・`column`・`language` | データセット・スキーマ・テーブル・列の `title`・`description`・`topics`。書いた言語ごとに 1 行です。対象に当たらない段は `''` にします。データセットの行は 3 つとも `''`、スキーマの行は `table` と `column` が `''`、テーブルの行は `column` が `''` です |
 | `files` | `path` | [データセットの中のファイル](#データセットの中のパス): `path`・`sha256`・`bytes`・`media_type` |
 
-- [言語](#言語)の対象の値は `MAP(VARCHAR, VARCHAR)` (一覧は `MAP(VARCHAR, VARCHAR[])`) として、`tabledoc.read` が返す言語ごとの対応のまま書きます。`language` はそのまま書きます
+- 複数の言語で書いた文字列 ([言語](#言語)) は、言語ごとに 1 行として `texts` に書きます。1 つの言語で書いたデータセットは、説明する対象ごとに 1 行です。言語を追加すると行が増え、ほかのテーブルは変わりません
+- ほかのテーブルは各キーに値を 1 つだけ持ちます。`texts` に入らないキー (ライセンスの `title` など) を複数の言語で書いたときは、`language` の言語の値を書き、警告を出します
 - `topics` (以前の名前の `keywords`) は、`queria:` に `topics` が無ければ書きます。`queria:` の `themes` は書きません
 - `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
 - ビューの行には `sql` と `depends_on` を書きません。ビューの SQL はメタデータが持ちます
@@ -301,6 +303,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--name`: `tabledoc.yml` の `name`。既定はリポジトリの URL の最後の部分です
 - フォルダに同じファイルがあると、`--force` を付けない限り何も書きません。カタログのパスがフォルダの外を指すときはエラーです
 - テーブルのファイルは `<schema>/<table>.yml`、ガイドは `<schema>/<table>/README.md` に書きます。フォルダの `README.md` 以外の Markdown は、そのフォルダの `docs` に並べます
+- `texts` の行は、1 つの言語だけでそれがデータセットの `language` なら文字列だけで、それ以外は対応で書きます
 - テーブルに無いものは書きません。主キー、asset の列、entity の種類 (`foreign` と書きます)・dimension・granularity・metrics、ほかの読み手のキーと、dbt の `profiles.yml` から取る SQL が読むほかのデータセットです。`--unlisted` だけが書いたテーブルにはテーブルのファイルを作りません。`sql` と `depends_on` は `source_path` の無いテーブル (dbt で作らないテーブル) にだけ書きます
 
 ## 以前の形式
