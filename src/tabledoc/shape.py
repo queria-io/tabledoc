@@ -11,14 +11,14 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
-QUERIA = "queria"
-
 DATASET_KEYS = (
     "name",
     "schema",
     "title",
+    "title_reading",
     "description",
     "topics",
+    "synonyms",
     "homepage",
     "repository",
     "language",
@@ -29,12 +29,16 @@ DATASET_KEYS = (
     "contributors",
     "temporal_coverage",
     "spatial_coverage",
+    "image",
 )
-SCHEMA_KEYS = ("name", "title", "description")
+SCHEMA_KEYS = ("name", "title", "title_reading", "description", "topics", "synonyms")
 TABLE_KEYS = (
     "title",
+    "title_reading",
     "description",
     "topics",
+    "synonyms",
+    "listed",
     "primary_key",
     "licenses",
     "sources",
@@ -47,7 +51,7 @@ TABLE_KEYS = (
 )
 #: What dbt fills in from the build, not what the author writes.
 BUILT_KEYS = ("materialized", "sql", "depends_on", "source_path")
-COLUMN_KEYS = ("name", "title", "description", "asset")
+COLUMN_KEYS = ("name", "title", "title_reading", "description", "topics", "synonyms", "asset")
 METRIC_KEYS = ("name", "agg", "expr", "description")
 
 
@@ -74,15 +78,9 @@ def pick(record: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
 
 
 def annotations(record: dict[str, Any]) -> dict[str, Any]:
-    """`annotations`, with what is written under `queria:` as annotations.queria."""
+    """`annotations`: keys for other readers, by the reader's name."""
     written = record.get("annotations")
-    others = written if isinstance(written, dict) else {}
-    own = record.get(QUERIA)
-    merged = {
-        **others,
-        **({QUERIA: {**(others.get(QUERIA) or {}), **own}} if isinstance(own, dict) and own else {}),
-    }
-    return {"annotations": plain(merged)} if merged else {}
+    return {"annotations": plain(written)} if isinstance(written, dict) and written else {}
 
 
 def typed(value: Any) -> dict[str, Any] | None:

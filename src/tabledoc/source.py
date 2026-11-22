@@ -114,7 +114,7 @@ def read_dataset(root: Path, report: Report) -> Dataset:
     schemas.check(record, expected, path, report)
     if path is current:
         return Dataset(record={k: v for k, v in record.items() if k != "$schema"}, path=path, dependencies={})
-    report.info("legacy-format", f"read as {DATASET_FILE}; rename it and move Queria's keys under queria:", path)
+    report.info("legacy-format", f"read as {DATASET_FILE}; rename it", path)
     converted = legacy.dataset({k: v for k, v in record.items() if k != "$schema"})
     dependencies = converted.pop("catalogs", None)
     return Dataset(record=converted, path=path, dependencies=dependencies if isinstance(dependencies, dict) else {})

@@ -5,8 +5,8 @@ beside it), `tabledoc load` runs `fdl declare` for what the description says:
 
 - each described table's `primary_key` (a view has none)
 - each described table's asset columns, when its columns say `asset` (a view has none)
-- no profile for a table Queria does not list (`published` false), and a profile
-  again for a described one it lists
+- no profile for a table whose `listed` is false, and a profile again for a
+  described one that is listed
 - the other datasets the SQL reads (dbt's profiles.yml), as dependencies
 - the description's own tables: their primary keys, `files.sha256` as an asset
   column, and no profile
@@ -41,13 +41,13 @@ def working(catalog: str) -> Path | None:
 def wanted(
     description: Description,
     schema: str,
-    unpublished: set[str] | frozenset[str] = frozenset(),
+    unlisted: set[str] | frozenset[str] = frozenset(),
     views: set[str] | frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     """What the description declares, in the shape of `fdl declare list --json`, and
-    `profiled`: the described tables Queria lists, which get a profile.
+    `profiled`: the described tables that are listed, which get a profile.
 
-    ``unpublished`` are the tables and views (`schema.name`) whose `published` is false;
+    ``unlisted`` are the tables and views (`schema.name`) whose `listed` is false;
     ``views`` are the catalog's views, which take no primary key and no asset column.
     """
     primary_keys: dict[str, list[str]] = {}
@@ -55,7 +55,7 @@ def wanted(
     profiled: list[str] = []
     for table in description.tables:
         name = f"{table['schema']}.{table['name']}"
-        if name not in unpublished:
+        if name not in unlisted:
             profiled.append(name)
         if name in views:
             continue
@@ -67,7 +67,7 @@ def wanted(
     for own, (_, key) in tables.TABLES.items():
         primary_keys[f"{schema}.{own}"] = list(key)
     assets.update({f"{schema}.{own}": list(cols) for own, cols in tables.ASSETS.items()})
-    unprofiled = sorted({*unpublished, *(f"{schema}.{own}" for own in tables.TABLES)})
+    unprofiled = sorted({*unlisted, *(f"{schema}.{own}" for own in tables.TABLES)})
     return {
         "primary_keys": primary_keys,
         "assets": assets,
@@ -111,7 +111,7 @@ def declare(
     schema: str,
     run: Run = _run,
     *,
-    unpublished: set[str] | frozenset[str] = frozenset(),
+    unlisted: set[str] | frozenset[str] = frozenset(),
     views: set[str] | frozenset[str] = frozenset(),
 ) -> list[list[str]]:
     """Run `fdl declare` for what differs, when ``catalog`` is fdl's working metadata.
@@ -128,7 +128,7 @@ def declare(
         raise SpecError(f"fdl declare list printed what is not JSON: {exc}") from exc
     if not isinstance(have, dict):
         raise SpecError("fdl declare list printed JSON that is not an object")
-    todo = commands(have, wanted(description, schema, unpublished, views))
+    todo = commands(have, wanted(description, schema, unlisted, views))
     for args in todo:
         run(["declare", args[0], str(path), *args[1:]])
     return todo

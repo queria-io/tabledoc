@@ -27,12 +27,14 @@ def loaded(write, lake, tmp_path):
             "src/tabledoc.yml": DATASET
             + "name: shop\ntitle: Shop\ndescription: |-\n  Two\n  lines\nlicenses: [CC-BY-4.0, {id: own, commercial_use: false}]\nissued: 2026-10-30\n"
             + "schemas: [{name: sales, title: Sales}]\ndocuments: [docs/method.md]\n"
-            + "topics: [trade]\nqueria: {title_kana: ショップ}\n",
+            + "topics: [trade]\ntitle_reading: ショップ\nimage: docs/chart.png\nspatial_coverage: [JP]\n"
+            + "sources: [{id: site, title: Site}]\ncontributors: [{id: me, title: Me, roles: [publisher]}]\n",
             "src/README.md": "Overview. ![chart](docs/chart.png)\n",
             "src/docs/method.md": "Method. [back](../README.md)\n",
             "src/docs/chart.png": b"PNG",
             "src/sales/orders.tabledoc.yml": TABLE
-            + "title: Orders\nprimary_key: [id]\nqueria: {published: false}\n"
+            + "title: Orders\nprimary_key: [id]\nlisted: false\nlicenses: [own, CC0-1.0]\nsources: [site]\n"
+            + "temporal_coverage: {start: 2020, end: '2024'}\nmetrics: [{name: n, agg: count, expr: id}]\n"
             + "columns:\n  - {name: id, description: The order, entity: {type: primary, name: order}}\n"
             + "  - {name: file, asset: true, annotations: {other: {wide: true}}}\n",
             "src/sales/orders.md": "Guide.\n",
@@ -69,14 +71,21 @@ def test_dump_writes_what_loads_to_the_same_tables(loaded, tmp_path):
         "$schema: https://tabledoc.queria.io/schemas/dataset/v1.json\n"
         "name: shop\n"
         "title: Shop\n"
+        "title_reading: ショップ\n"
         "description: |-\n  Two\n  lines\n"
+        "topics:\n- trade\n"
         "issued: '2026-10-30'\n"
         "licenses:\n- CC-BY-4.0\n- id: own\n  commercial_use: false\n"
-        "topics:\n- trade\n"
+        "sources:\n- id: site\n  title: Site\n"
+        "spatial_coverage:\n- JP\n"
+        "contributors:\n- id: me\n  title: Me\n  roles:\n  - publisher\n"
+        "image: docs/chart.png\n"
         "schemas:\n- name: sales\n  title: Sales\n"
         "documents:\n- method.md\n"
-        "queria:\n  title_kana: ショップ\n"
     )
+    table = (out / "sales" / "orders.tabledoc.yml").read_text()
+    assert "listed: false\nlicenses:\n- own\n- CC0-1.0\nsources:\n- site\n" in table
+    assert "temporal_coverage:\n  start: '2020'\n  end: '2024'\n" in table
     assert (out / "method.md").read_text() == "Method. [back](README.md)\n"
     assert "sales/extra" not in written
     before = rows(catalog)
@@ -126,10 +135,10 @@ def test_dump_writes_a_schema_other_than_tabledoc(write, lake, tmp_path):
     catalog = lake("CREATE SCHEMA lake.sales; CREATE TABLE lake.sales.orders AS SELECT 1 AS id")
     root = write({"src/tabledoc.yml": DATASET + "name: shop\ntitle: Shop\n", "src/sales/orders.tabledoc.yml": TABLE + "title: O\n"}) / "src"
     report = Report()
-    assert load(Options(root, with_source=False), Target(*catalog, schema="_queria"), report) is not None, report.render()
+    assert load(Options(root, with_source=False), Target(*catalog, schema="docs"), report) is not None, report.render()
     out = tmp_path / "dumped"
-    dump(Source(catalog[0], None, "shop", "_queria"), out)
-    assert "schema: _queria\n" in (out / "tabledoc.yml").read_text()
+    dump(Source(catalog[0], None, "shop", "docs"), out)
+    assert "schema: docs\n" in (out / "tabledoc.yml").read_text()
 
 
 def test_dump_refuses_a_path_outside_the_folder(loaded, tmp_path):

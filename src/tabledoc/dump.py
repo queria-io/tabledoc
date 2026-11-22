@@ -5,9 +5,9 @@
     every file of the files table at its path: README.md and the other documents of each folder
 
 Loading the files dump wrote gives the same tables again, but for what they do
-not keep: an entity's type (written `foreign`), dimensions, granularity, metrics, `dependencies`
+not keep: an entity's type (written `foreign`), a dimension's name, `dependencies`
 (from dbt's profiles.yml), primary keys and asset columns (declared to FDL),
-and keys for readers other than Queria.
+and `annotations`.
 """
 
 from __future__ import annotations
@@ -28,24 +28,10 @@ from .description import README
 from .files import normalized
 from .load import ALIAS, attached
 from .report import SpecError
-from .shape import QUERIA
 from .source import DATASET_FILE, TABLE_SUFFIX
 
-DATASET_KEYS = (
-    "title",
-    "description",
-    "language",
-    "homepage",
-    "repository",
-    "issued",
-    "update_frequency",
-    "licenses",
-    "sources",
-    "contributors",
-    "temporal_coverage",
-    "spatial_coverage",
-)
-TABLE_KEYS = ("title", "description", "licenses", "sources", "temporal_coverage", "spatial_coverage")
+#: The keys of tabledoc.yml the `dataset` table holds, in the order they are written.
+DATASET_KEYS = ("language", "homepage", "repository", "issued", "update_frequency")
 
 
 @dataclass(frozen=True)
@@ -116,20 +102,6 @@ def _plain(value: Any) -> Any:
     return value
 
 
-def _fields(row: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
-    picked = {k: _plain(row[k]) for k in keys if row.get(k) not in (None, "", [])}
-    licenses = picked.get("licenses")
-    if licenses:
-        picked["licenses"] = [lic["id"] if set(lic) == {"id"} else lic for lic in licenses]
-    return picked
-
-
-def _queria(row: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
-    """`queria:` of one row: its columns that are Queria's own, but `topics`, written at the top."""
-    own = {k: _plain(row[k]) for k in keys if k != "topics" and row.get(k) is not None}
-    return {QUERIA: own} if own else {}
-
-
 def _documents(paths: list[str], folder: str) -> list[str]:
     """The Markdown files directly in ``folder``, README.md first: that folder's documents.
     The root's README.md is the dataset's without being listed."""
@@ -141,99 +113,163 @@ def _documents(paths: list[str], folder: str) -> list[str]:
     return sorted(found, key=lambda p: posixpath.basename(p) != README)
 
 
-def _column(row: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "name": row["name"],
-        **_fields(row, ("title", "description")),
-        **({"entity": {"type": "foreign", "name": row["entity"]}} if row.get("entity") else {}),
-    }
+Where = tuple[str, str, str]
 
 
-def _unlisted_only(table: dict[str, Any], columns: list[Any]) -> bool:
-    """A row `load --unlisted` writes for a table with no description, and nothing else."""
-    said = {k for k, v in table.items() if v is not None and k not in ("schema", "name")}
-    return said == {"published"} and table["published"] is False and not columns
+def _at(row: dict[str, Any]) -> Where:
+    return (row.get("schema_name") or "", row.get("table_name") or "", row.get("column_name") or "")
 
 
-def _with_texts(found: tables.Rows) -> tables.Rows:
-    """``found`` with the rows of `texts` on the rows they describe: as the text alone when it is
+def _texts(found: tables.Rows, language: str) -> dict[Where, dict[str, Any]]:
+    """`descriptions`, `topics` and `synonyms` by what they describe: as the text alone when it is
     written in the dataset's `language` only, else as a map from the language to the text."""
-    language = str(((found.get("dataset") or [{}])[0]).get("language") or languages.UNDETERMINED)
-    by_where: dict[tuple[str, str, str], dict[str, dict[str, Any]]] = {}
-    for row in found.get("texts") or []:
-        where = (row.get("schema") or "", row.get("table") or "", row.get("column") or "")
+    by_where: dict[Where, dict[str, dict[str, Any]]] = {}
+    for row in found.get("descriptions") or []:
         for key in tables.TEXTS:
-            if row.get(key) not in (None, "", []):
-                by_where.setdefault(where, {}).setdefault(key, {})[row["language"]] = row[key]
-
-    def text(where: tuple[str, str, str]) -> dict[str, Any]:
-        return {
-            k: next(iter(v.values())) if [t.lower() for t in v] == [language.lower()] else dict(sorted(v.items()))
-            for k, v in by_where.get(where, {}).items()
-        }
-
-    def keys(rows: list[dict[str, Any]], where: Any) -> list[dict[str, Any]]:
-        return [{**row, **text(where(row))} for row in rows]
-
-    described = {(s, "", "") for s, t, c in by_where if s and not t}
-    schemas_rows = found.get("schemas") or []
-    held = {r["schema"] for r in schemas_rows}
+            if row.get(key) not in (None, ""):
+                by_where.setdefault(_at(row), {}).setdefault(key, {})[row["language"]] = row[key]
+    for table, key, column in (("topics", "topics", "topic"), ("synonyms", "synonyms", "synonym")):
+        for row in found.get(table) or []:
+            words = by_where.setdefault(_at(row), {}).setdefault(key, {})
+            words.setdefault(row["language"], []).append(row[column])
     return {
-        **found,
-        "dataset": keys(found.get("dataset") or [{}], lambda r: ("", "", "")),
-        "schemas": keys(
-            [*schemas_rows, *({"schema": s} for s, _, _ in sorted(described) if s not in held)],
-            lambda r: (r["schema"], "", ""),
-        ),
-        "tables": keys(found.get("tables") or [], lambda r: (r["schema"], r["name"], "")),
-        "columns": keys(found.get("columns") or [], lambda r: (r["schema"], r["table"], r["name"])),
+        where: {
+            k: next(iter(v.values())) if [t.lower() for t in v] == [language.lower()] else dict(sorted(v.items()))
+            for k in ("title", "title_reading", "description", "topics", "synonyms")
+            if (v := keys.get(k))
+        }
+        for where, keys in by_where.items()
     }
+
+
+def _ordered(found: tables.Rows, table: str, column: str) -> dict[tuple[str, str], list[Any]]:
+    """The values of ``column`` of ``table`` by (schema, table), in the order of `position`."""
+    rows = sorted(found.get(table) or [], key=lambda r: (r["schema_name"], r["table_name"], r.get("position", 0)))
+    grouped: dict[tuple[str, str], list[Any]] = {}
+    for r in rows:
+        grouped.setdefault((r["schema_name"], r["table_name"]), []).append(r[column])
+    return grouped
+
+
+class _Entries:
+    """Licenses or sources as the files write them: in full where an id is first used, by
+    its id alone after that. A license that has only its id is written as the id."""
+
+    def __init__(self, rows: list[dict[str, Any]], bare: bool) -> None:
+        self.by_id = {r["id"]: _plain(r) for r in rows}
+        self.bare = bare
+        self.written: set[str] = set()
+
+    def __call__(self, ids: list[str]) -> list[Any]:
+        out: list[Any] = []
+        for i in ids:
+            entry = self.by_id.get(i, {"id": i})
+            if i in self.written or (self.bare and set(entry) == {"id"}):
+                out.append(i)
+            else:
+                out.append(entry)
+            self.written.add(i)
+        return out
+
+
+def _on(at: tuple[str, str], found: tables.Rows, licenses: _Entries, sources: _Entries) -> dict[str, Any]:
+    """`licenses`, `sources` and `spatial_coverage` of the dataset (``at`` is ('', '')) or of a table."""
+    lic = _ordered(found, "table_licenses", "license_id").get(at)
+    src = _ordered(found, "table_sources", "source_id").get(at)
+    areas = _ordered(found, "table_areas", "area").get(at)
+    return {
+        **({"licenses": licenses(lic)} if lic else {}),
+        **({"sources": sources(src)} if src else {}),
+        **({"spatial_coverage": areas} if areas else {}),
+    }
+
+
+def _temporal(start: Any, end: Any) -> dict[str, Any]:
+    coverage = {k: v for k, v in (("start", start), ("end", end)) if v is not None}
+    return {"temporal_coverage": coverage} if coverage else {}
+
+
+def _column(row: dict[str, Any], text: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": row["column_name"],
+        **text,
+        **({"entity": {"type": "foreign", "name": row["entity"]}} if row.get("entity") else {}),
+        **({"dimension": row["dimension"]} if row.get("dimension") else {}),
+        **({"granularity": row["granularity"]} if row.get("granularity") else {}),
+    }
+
+
+def _metric(row: dict[str, Any]) -> dict[str, Any]:
+    return {"name": row["metric_name"], **{k: row[k] for k in ("agg", "expr", "description") if row.get(k)}}
 
 
 def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> dict[str, dict[str, Any]]:
     """The YAML files of the description in ``found``, by path. ``held_in``, the schema the
     description is in, is written into tabledoc.yml unless it is `_tabledoc`."""
-    found = _with_texts(found)
+    values = {r["key"]: r["value"] for r in found.get("dataset") or []}
+    language = str(values.get("language") or languages.UNDETERMINED)
+    texts = _texts(found, language)
+    licenses = _Entries(found.get("licenses") or [], bare=True)
+    sources = _Entries(found.get("sources") or [], bare=False)
     paths = sorted(f["path"] for f in found.get("files") or [])
-    described_tables = sorted(found.get("tables") or [], key=lambda t: (t["schema"], t["name"]))
     columns = found.get("columns") or []
+    metrics = found.get("metrics") or []
+    depends = _ordered(found, "table_dependencies", "depends_on")
+    roles: dict[str, list[str]] = {}
+    for r in sorted(found.get("contributor_roles") or [], key=lambda r: (r["contributor_id"], r["role"])):
+        roles.setdefault(r["contributor_id"], []).append(r["role"])
+    contributors = [
+        {**_plain({k: c.get(k) for k in ("id", "title", "path")}), **({"roles": roles[c["id"]]} if c["id"] in roles else {})}
+        for c in sorted(found.get("contributors") or [], key=lambda c: c.get("position", 0))
+    ]
+    dataset = {
+        **texts.get(("", "", ""), {}),
+        **{k: values[k] for k in DATASET_KEYS if k in values},
+        **_on(("", ""), found, licenses, sources),
+        **({"contributors": contributors} if contributors else {}),
+        **_temporal(values.get("temporal_start"), values.get("temporal_end")),
+        **({"image": values["image"]} if values.get("image") else {}),
+    }
     written: dict[str, dict[str, Any]] = {}
+    described_tables = sorted(found.get("tables") or [], key=lambda t: (t["schema_name"], t["table_name"]))
     for table in described_tables:
-        schema, table_name = table["schema"], table["name"]
-        own = [c for c in columns if (c["schema"], c["table"]) == (schema, table_name)]
-        if _unlisted_only(table, own):
-            continue
-        docs = _documents(paths, f"{schema}/{table_name}")
+        schema, table_name = table["schema_name"], table["table_name"]
+        own = [c for c in columns if (c["schema_name"], c["table_name"]) == (schema, table_name)]
+        own_metrics = [m for m in metrics if (m["schema_name"], m["table_name"]) == (schema, table_name)]
         authored = not table.get("source_path")
+        record = {
+            **texts.get((schema, table_name, ""), {}),
+            **({"listed": False} if table.get("listed") is False else {}),
+            **_on((schema, table_name), found, licenses, sources),
+            **_temporal(table.get("temporal_start"), table.get("temporal_end")),
+            **({"sql": table["sql"]} if authored and table.get("sql") else {}),
+            **({"depends_on": depends[(schema, table_name)]} if authored and (schema, table_name) in depends else {}),
+        }
+        docs = _documents(paths, f"{schema}/{table_name}")
+        if set(record) == {"listed"} and not (own or own_metrics or docs):
+            continue  # a row `load --unlisted` wrote for a table with no description
         written[f"{schema}/{table_name}{TABLE_SUFFIX}"] = {
             "$schema": schemas.TABLE,
-            **_fields(table, TABLE_KEYS),
-            **({"topics": table["topics"]} if table.get("topics") else {}),
-            **({"sql": table["sql"]} if authored and table.get("sql") else {}),
-            **({"depends_on": list(table["depends_on"])} if authored and table.get("depends_on") else {}),
+            **record,
             **({"documents": docs} if docs else {}),
-            **({"columns": [_column(c) for c in own]} if own else {}),
-            **_queria(table, tables.TABLE_OWN),
+            **({"columns": [_column(c, texts.get(_at(c), {})) for c in own]} if own else {}),
+            **({"metrics": [_metric(m) for m in own_metrics]} if own_metrics else {}),
         }
-    described = {s["schema"]: s for s in found.get("schemas") or []}
-    names = sorted(set(described) | {t["schema"] for t in described_tables})
+    names = sorted({r["schema_name"] for r in found.get("schemas") or []} | {t["schema_name"] for t in described_tables})
     schema_list = [
-        {"name": s, **_fields(described.get(s, {}), ("title", "description")), **({"documents": d} if d else {})}
+        {"name": s, **texts.get((s, "", ""), {}), **({"documents": d} if d else {})}
         for s in names
-        if (d := _documents(paths, s)) or s in described
+        if (d := _documents(paths, s)) or (s, "", "") in texts
     ]
-    dataset = (found.get("dataset") or [{}])[0]
     docs = _documents(paths, "")
     return {
         DATASET_FILE: {
             "$schema": schemas.DATASET,
             "name": name,
             **({"schema": held_in} if held_in != tables.SCHEMA else {}),
-            **_fields(dataset, DATASET_KEYS),
-            **({"topics": dataset["topics"]} if dataset.get("topics") else {}),
+            **dataset,
             **({"schemas": schema_list} if schema_list else {}),
             **({"documents": docs} if docs else {}),
-            **_queria(dataset, tables.DATASET_OWN),
         },
         **written,
     }

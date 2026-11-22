@@ -29,13 +29,13 @@ def test_tables_by_place_with_guides_and_linked_files(write):
             "tabledoc.yml": DATASET
             + "name: shop\ntitle: Shop\nlanguage: en\nissued: 2026-10-30\n"
             + "schemas: [{name: sales, documents: [docs/sales/README.md]}]\ndocuments: [docs/./method.md]\n"
-            + "queria: {cover: x}\nannotations: {other: {a: 1}}\n",
+            + "image: docs/chart.png\nsynonyms: [store]\nannotations: {other: {a: 1}}\n",
             "README.md": "See ![chart](docs/chart.png) and [site](https://example.com).\n",
             "docs/sales/README.md": "# Sales\n",
             "docs/method.md": "[back](../README.md)\n",
             "docs/chart.png": b"\x89PNG",
             "sales/orders.tabledoc.yml": TABLE
-            + "title: Orders\nprimary_key: [id]\nqueria: {published: false}\n"
+            + "title: Orders\ntitle_reading: オーダーズ\nlisted: false\nprimary_key: [id]\n"
             + "columns:\n  - {name: id, entity: primary}\n  - {name: shop, entity: {type: foreign, name: shop_id}}\n"
             + "  - {name: day, dimension: time, granularity: day}\n"
             + "metrics: [{name: total, agg: sum, expr: amount}]\n",
@@ -51,9 +51,11 @@ def test_tables_by_place_with_guides_and_linked_files(write):
         "name": "shop",
         "title": {"en": "Shop"},
         "language": "en",
+        "synonyms": {"en": ["store"]},
         "issued": "2026-10-30",
+        "image": "docs/chart.png",
         "documents": ["README.md", "method.md"],
-        "annotations": {"other": {"a": 1}, "queria": {"cover": "x"}},
+        "annotations": {"other": {"a": 1}},
     }
     assert document["schemas"] == [{"name": "sales", "documents": ["sales/README.md"]}]
     assert [(t["schema"], t["name"]) for t in document["tables"]] == [
@@ -66,6 +68,8 @@ def test_tables_by_place_with_guides_and_linked_files(write):
         "schema": "sales",
         "name": "orders",
         "title": {"en": "Orders"},
+        "title_reading": {"en": "オーダーズ"},
+        "listed": False,
         "primary_key": ["id"],
         "documents": ["sales/orders/README.md"],
         "columns": [
@@ -74,7 +78,6 @@ def test_tables_by_place_with_guides_and_linked_files(write):
             {"name": "day", "dimension": {"type": "time"}, "granularity": "day"},
         ],
         "metrics": [{"name": "total", "agg": "sum", "expr": "amount"}],
-        "annotations": {"queria": {"published": False}},
     }
     # Each document goes into the folder of what it is for; what they link to stays where it is.
     paths = [f["path"] for f in document["files"]]
@@ -99,7 +102,7 @@ def test_the_older_format(write):
     root = write(
         {
             "queria.yml": "$schema: https://queria.io/schemas/dataset/v1.json\n"
-            + "name: old\ntitle: Old\nlanguage: ja\nthemes: [economy]\ncover: x\n"
+            + "name: old\ntitle: Old\ntitle_kana: オールド\nlanguage: ja\nthemes: [economy]\ncover: cover.png\n"
             + "catalogs: {other: https://data.example/datasets/o/other/}\n",
             "models/a.md": "---\n$schema: https://queria.io/schemas/table/v1.json\ntable: s.a\n"
             + "primary_key: [id]\npublished: false\nfields:\n"
@@ -110,12 +113,15 @@ def test_the_older_format(write):
             + "  - {name: count, semantic: {role: measure}}\n"
             + "sql: select * from other.x.y join s.b using (id)\n---\n\nThe guide.\n",
             "models/b.md": "---\n$schema: https://queria.io/schemas/table/v1.json\ntable: s.b\n---\n",
+            "cover.png": b"PNG",
         }
     )
     document, report = run(root)
     assert not report.failed, report.render()
     assert "metric-without-agg" in codes(report)
-    assert document["dataset"]["annotations"] == {"queria": {"themes": ["economy"], "cover": "x"}}
+    assert document["dataset"]["title_reading"] == {"ja": "オールド"}
+    assert document["dataset"]["image"] == "cover.png"
+    assert "annotations" not in document["dataset"]
     assert "catalogs" not in document["dataset"]
     assert read(Options(root, with_source=False), Report()).dependencies == {
         "other": {"url": "https://data.example/datasets/o/other/"}
@@ -132,9 +138,9 @@ def test_the_older_format(write):
         {"name": "value", "agg": "sum", "expr": "value"},
         {"name": "count", "expr": "count"},
     ]
-    assert a["depends_on"] == ["https://data.example/datasets/o/other/#x.y", "s.b"]
+    assert a["depends_on"] == ["other.x.y", "s.b"]
     assert a["documents"] == ["s/a/README.md"]
-    assert a["annotations"] == {"queria": {"published": False}}
+    assert a["listed"] is False
     sent = next(f for f in document["files"] if f["path"] == "s/a/README.md")
     assert sent["sha256"] == hashlib.sha256(b"The guide.\n").hexdigest()
     assert "documents" not in document["tables"][1]
@@ -229,7 +235,7 @@ def test_dbt_models(write):
         orders=model(
             "orders",
             description="One row per order",
-            meta={"title": "Orders", "primary_key": ["id"], "queria": {"themes": ["x"]}},
+            meta={"title": "Orders", "primary_key": ["id"], "listed": False},
             columns={
                 "id": {"name": "id", "description": "", "meta": {}, "config": {"meta": {"title": "ID"}},
                        "entity": {"type": "primary", "name": "order", "description": "", "label": None, "config": {}},
@@ -269,6 +275,7 @@ def test_dbt_models(write):
         "name": "orders",
         "title": {"und": "Orders"},
         "description": {"und": "One row per order"},
+        "listed": False,
         "primary_key": ["id"],
         "materialized": "table",
         "sql": "select 1 as id from s.base",
@@ -280,7 +287,6 @@ def test_dbt_models(write):
             {"name": "day", "description": {"und": "Day"}, "dimension": {"type": "time"}, "granularity": "day"},
         ],
         "metrics": [{"name": "total", "agg": "sum", "expr": "amount", "description": {"und": "Sum"}}],
-        "annotations": {"queria": {"themes": ["x"]}},
     }
 
 
@@ -416,7 +422,7 @@ def test_text_in_more_than_one_language(write):
         {
             "tabledoc.yml": DATASET
             + "name: shop\nlanguage: ja\ntitle: {ja: 店, en: Shop}\ndescription: 店の注文\n"
-            + "topics: {ja: [小売], en: [retail]}\nsources: [{title: {ja: 出典, en: Source}, path: https://x.example}]\n",
+            + "topics: {ja: [小売], en: [retail]}\nsources: [{id: s, title: {ja: 出典, en: Source}, path: https://x.example}]\n",
             "sales/orders.tabledoc.yml": TABLE + "columns: [{name: id, title: {en: Order ID}}]\n",
         }
     )
@@ -426,7 +432,7 @@ def test_text_in_more_than_one_language(write):
     assert dataset["title"] == {"ja": "店", "en": "Shop"}
     assert dataset["description"] == {"ja": "店の注文"}
     assert dataset["topics"] == {"ja": ["小売"], "en": ["retail"]}
-    assert dataset["sources"] == [{"title": {"ja": "出典", "en": "Source"}, "path": {"ja": "https://x.example"}}]
+    assert dataset["sources"] == [{"id": "s", "title": {"ja": "出典", "en": "Source"}, "path": {"ja": "https://x.example"}}]
     assert document["tables"][0]["columns"] == [{"name": "id", "title": {"en": "Order ID"}}]
 
 

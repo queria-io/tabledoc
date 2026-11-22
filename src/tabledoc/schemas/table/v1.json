@@ -10,9 +10,12 @@
     "$schema": { "const": "https://tabledoc.queria.io/schemas/table/v1.json" },
     "name": { "type": "string", "minLength": 1, "description": "The table's name: the file's name, <name>.tabledoc.yml." },
     "title": { "$ref": "../dataset/v1.json#/$defs/text" },
+    "title_reading": { "$ref": "../dataset/v1.json#/$defs/text" },
     "description": { "$ref": "../dataset/v1.json#/$defs/text" },
     "topics": { "$ref": "../dataset/v1.json#/$defs/texts" },
     "keywords": { "$ref": "../dataset/v1.json#/$defs/texts", "description": "The earlier name of topics, read as topics." },
+    "synonyms": { "$ref": "../dataset/v1.json#/$defs/texts" },
+    "listed": { "type": "boolean", "description": "false keeps the table out of lists and search; default true." },
     "primary_key": { "$ref": "#/$defs/columnNames" },
     "licenses": { "$ref": "../dataset/v1.json#/$defs/licenses" },
     "sources": { "$ref": "../dataset/v1.json#/$defs/sources" },
@@ -23,7 +26,6 @@
     "documents": { "$ref": "../dataset/v1.json#/$defs/paths", "description": "Paths of the table's documents, relative to the root. They go into the table's folder by file name; README.md is its guide. <name>.md beside the table file is its guide without being listed." },
     "columns": { "type": "array", "items": { "$ref": "#/$defs/column" } },
     "metrics": { "type": "array", "items": { "$ref": "#/$defs/metric" } },
-    "queria": { "type": "object", "description": "Keys only Queria reads. Queria checks them." },
     "annotations": { "$ref": "../dataset/v1.json#/$defs/annotations" }
   },
   "$defs": {
@@ -62,7 +64,10 @@
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "title": { "$ref": "../dataset/v1.json#/$defs/text" },
+        "title_reading": { "$ref": "../dataset/v1.json#/$defs/text" },
         "description": { "$ref": "../dataset/v1.json#/$defs/text" },
+        "topics": { "$ref": "../dataset/v1.json#/$defs/texts" },
+        "synonyms": { "$ref": "../dataset/v1.json#/$defs/texts" },
         "asset": { "type": "boolean", "description": "The value is the path of a file that belongs to the row." },
         "entity": { "$ref": "#/$defs/entity" },
         "dimension": { "$ref": "#/$defs/dimension" },
