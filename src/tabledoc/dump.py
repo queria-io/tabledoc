@@ -5,8 +5,7 @@
     every file of the files table at its path: README.md and the other documents of each folder
 
 Loading the files dump wrote gives the same tables again, but for what they do
-not keep: an entity's type (written `primary` for a column that alone is the
-primary key, else `foreign`), dimensions, granularity, metrics, `catalogs`
+not keep: an entity's type (written `foreign`), dimensions, granularity, metrics, `catalogs`
 (from dbt's profiles.yml), primary keys and asset columns (declared to FDL),
 and keys for readers other than Queria.
 """
@@ -26,7 +25,8 @@ import yaml
 
 from . import schemas, tables
 from .description import README
-from .load import ALIAS, attached, data_path
+from .files import normalized
+from .load import ALIAS, attached
 from .report import SpecError
 from .shape import QUERIA
 from .source import DATASET_FILE
@@ -152,8 +152,9 @@ def _unlisted_only(table: dict[str, Any], columns: list[Any]) -> bool:
     return said == {"published"} and table["published"] is False and not columns
 
 
-def documents(found: tables.Rows, name: str) -> dict[str, dict[str, Any]]:
-    """The YAML files of the description in ``found``, by path."""
+def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> dict[str, dict[str, Any]]:
+    """The YAML files of the description in ``found``, by path. ``held_in``, the schema the
+    description is in, is written into tabledoc.yml unless it is `_tabledoc`."""
     paths = sorted(f["path"] for f in found.get("files") or [])
     described_tables = sorted(found.get("tables") or [], key=lambda t: (t["schema"], t["name"]))
     columns = found.get("columns") or []
@@ -188,6 +189,7 @@ def documents(found: tables.Rows, name: str) -> dict[str, dict[str, Any]]:
         DATASET_FILE: {
             "$schema": schemas.DATASET,
             "name": name,
+            **({"schema": held_in} if held_in != tables.SCHEMA else {}),
             **_fields(dataset, DATASET_KEYS),
             **({"topics": list(dataset["topics"])} if dataset.get("topics") else {}),
             **({"schemas": schema_list} if schema_list else {}),
@@ -224,14 +226,20 @@ def dump(source: Source, out: Path, *, force: bool = False) -> list[str]:
     import duckdb
 
     try:
-        with attached(source.catalog, data_path(source.catalog, None)) as con:
+        with attached(source.catalog, None, read_only=True) as con:
             found = tables.read(con, ALIAS, source.schema)
     except duckdb.Error as exc:
         raise SpecError(f"cannot read {source.schema} in {source.catalog}: {exc}") from exc
     if not found:
         raise SpecError(f"{source.catalog} has no {source.schema} schema")
-    texts = {path: render(record).encode("utf-8") for path, record in documents(found, dataset_name(source)).items()}
+    texts = {
+        path: render(record).encode("utf-8")
+        for path, record in documents(found, dataset_name(source), source.schema).items()
+    }
     entries = sorted(found.get("files") or [], key=lambda f: f["path"])
+    for path in [*texts, *(f["path"] for f in entries)]:
+        if normalized(path) != path:
+            raise SpecError(f"{source.catalog} names the file {path}, which is not a path under {out}")
     clash = sorted(p for p in [*texts, *(f["path"] for f in entries)] if (out / p).exists())
     if clash and not force:
         raise SpecError(f"{', '.join(clash)} already in {out}; give --force to replace them")

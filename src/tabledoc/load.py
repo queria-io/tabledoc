@@ -23,10 +23,7 @@ from .report import Finding, Level, Report, SpecError
 
 #: Marks a folder load wrote, which the next load may replace.
 MARK = ".tabledoc-load"
-
-
 ALIAS = "lake"
-#: Marks a folder load wrote, which the next load may replace.
 
 
 @dataclass(frozen=True)
@@ -75,8 +72,8 @@ def _string(value: str) -> str:
 
 
 @contextmanager
-def attached(catalog: str, data: str | None) -> Iterator[Any]:
-    """A DuckDB connection with ``catalog`` attached, writable, as ``ALIAS``.
+def attached(catalog: str, data: str | None, *, read_only: bool = False) -> Iterator[Any]:
+    """A DuckDB connection with ``catalog`` attached as ``ALIAS``: writable, unless ``read_only``.
 
     Every row goes to a data file (`DATA_INLINING_ROW_LIMIT 0`), as fdl commit
     requires. Files over HTTP are read with httpfs and DuckDB's own secrets.
@@ -84,7 +81,7 @@ def attached(catalog: str, data: str | None) -> Iterator[Any]:
     import duckdb
 
     target = catalog if catalog.startswith("ducklake:") else f"ducklake:{catalog}"
-    options = ["DATA_INLINING_ROW_LIMIT 0"]
+    options = ["READ_ONLY"] if read_only else ["DATA_INLINING_ROW_LIMIT 0"]
     if catalog.endswith(".sqlite"):
         options.append("META_TYPE 'sqlite'")
     if data:
@@ -216,6 +213,14 @@ def _warned(report: Report, but: str = "") -> bool:
     return any(f.code != but for f in report.of(Level.WARNING))
 
 
+def _keeps_dbt_sql(description: Description, carried: tables.Rows) -> bool:
+    """Whether the load keeps the SQL of every table dbt built, as the catalog holds it: there
+    is such a table, the description has no `sql` (no build), and it describes each of them."""
+    built = {tables.fold(t["schema"], t["name"]) for t in carried.get("tables") or [] if t.get("source_path")}
+    described = {tables.fold(t["schema"], t["name"]) for t in description.tables}
+    return bool(built) and built <= described and not any("sql" in t for t in description.tables)
+
+
 def _carried_over(report: Report) -> None:
     """Without dbt's manifest, the catalog's SQL of what dbt built is kept: worth knowing only."""
     report.findings = [
@@ -256,7 +261,7 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
             description = _spelled(description, columns)
             # Without a dbt build, the SQL and dependencies stay as the catalog has them.
             carried = tables.read(con, ALIAS, schema)
-            if tables.built_by_dbt(carried):
+            if _keeps_dbt_sql(description, carried):
                 _carried_over(report)
             if strict and _warned(report):
                 return None

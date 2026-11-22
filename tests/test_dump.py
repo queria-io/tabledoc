@@ -120,3 +120,29 @@ def test_dump_reads_the_repository_from_fdl_clones_note(loaded, tmp_path, monkey
     assert "name: repo\n" in (out / "tabledoc.yml").read_text()
     assert main(["dump", "--out", str(tmp_path / ".fdl" / "x")]) == 2
     assert ".fdl" in capsys.readouterr().err
+
+
+def test_dump_writes_a_schema_other_than_tabledoc(write, lake, tmp_path):
+    catalog = lake("CREATE SCHEMA lake.sales; CREATE TABLE lake.sales.orders AS SELECT 1 AS id")
+    root = write({"src/tabledoc.yml": DATASET + "name: shop\ntitle: Shop\n", "src/sales/orders.yml": TABLE + "title: O\n"}) / "src"
+    report = Report()
+    assert load(Options(root, with_source=False), Target(*catalog, schema="_queria"), report) is not None, report.render()
+    out = tmp_path / "dumped"
+    dump(Source(catalog[0], None, "shop", "_queria"), out)
+    assert "schema: _queria\n" in (out / "tabledoc.yml").read_text()
+
+
+def test_dump_refuses_a_path_outside_the_folder(loaded, tmp_path):
+    catalog, files = loaded
+    with attached(*catalog) as con:
+        con.execute("UPDATE lake._tabledoc.files SET path = '../escaped.md' WHERE path = 'method.md'")
+    with pytest.raises(SpecError, match="escaped"):
+        dump(Source(catalog[0], files.as_posix(), "shop"), tmp_path / "dumped")
+    assert not (tmp_path / "escaped.md").exists()
+
+
+def test_dump_does_not_make_a_catalog(tmp_path):
+    missing = tmp_path / "typo.sqlite"
+    with pytest.raises(SpecError):
+        dump(Source(str(missing)), tmp_path / "dumped")
+    assert not missing.exists()

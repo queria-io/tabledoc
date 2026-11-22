@@ -325,3 +325,16 @@ def test_two_files_at_one_path_is_an_error(write):
     )
     _, report = run(root)
     assert codes(report) == ["file-clash"]
+
+
+def test_one_file_for_two_paths_is_an_error(write):
+    root = write(
+        {
+            "tabledoc.yml": DATASET + "name: d\n",
+            "s/a.yml": TABLE + "title: A\ndocs: [docs/method.md]\n",
+            "s/b.yml": TABLE + "title: B\ndocs: [docs/method.md]\n",
+            "docs/method.md": "Method.\n",
+        }
+    )
+    _, report = run(root)
+    assert codes(report) == ["file-named-twice"]
