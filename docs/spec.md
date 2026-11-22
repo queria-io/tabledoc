@@ -24,12 +24,13 @@ Paths are relative to the folder that holds `tabledoc.yml` (the root).
 ```
 tabledoc.yml              the dataset (the name is fixed)
 README.md                 the dataset's overview (optional)
-<schema>/<table>.yml      a table
-<schema>/<table>.md       the table's guide (optional; or <schema>/<table>/README.md)
-<schema>/README.md        the schema's guide (optional)
+<schema>/<table>.yml      a table (the place is fixed)
+<schema>/<table>.md       the table's guide (optional)
 ```
 
-In a dbt project, tables are described in dbt's yml and each guide is a `.md` with the same name next to the model's `.sql` ([dbt projects](#dbt-projects)).
+Only the place decides which table a table file describes. Every other document is listed by path under `documents` ([guides and documents](#guides-and-documents)), so it can be kept anywhere under the root.
+
+In a dbt project, tables are described in dbt's yml first; a table file at the same place adds only what dbt has no key for ([dbt projects](#dbt-projects)).
 
 Folders whose name starts with `.`, and `target/`, `dbt_packages/`, `node_modules/` and `.venv/`, are not read.
 
@@ -61,7 +62,7 @@ spatial_coverage: [JP]
 schemas:
   - name: timeseries
     title: Time series
-docs:
+documents:
   - docs/methodology.md
 queria:
   title_kana: ニチギンジケイレツトウケイ
@@ -75,8 +76,8 @@ queria:
 | `title`, `description`, `topics`, `homepage`, `language`, `issued`, `update_frequency` | | `language` is a BCP 47 tag, the language of the text written without one ([languages](#languages)); `issued` is `YYYY-MM-DD` |
 | `repository` | | The URL of the repository of the dataset's source code, such as `https://github.com/queria-io/dataset-boj`. `tabledoc load` takes Git's `origin` when it is left out |
 | `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` | | Written in a table file, the value is that table's alone |
-| `schemas` | | `name`, `title`, `description`, `guide` (the path of the schema's guide; default `<name>/README.md` when it is there), `docs` (the schema's other documents) |
-| `docs` | | Paths of the dataset's other documents |
+| `schemas` | | `name`, `title`, `description`, `documents` (the schema's documents) |
+| `documents` | | Paths of the dataset's documents |
 | `queria` | | Keys only Queria reads ([keys for one reader](#keys-for-one-reader)) |
 | `annotations` | | Keys for other readers, by the reader's name |
 
@@ -108,13 +109,12 @@ columns:
 
 | Key | Meaning |
 | --- | --- |
-| `name` | The table's name. Defaults to the file name |
-| `table` | `<schema>.<table>`. Wins over the file's place ([which table](#which-table)) |
+| `name` | The table's name. The same as the file name when written ([which table](#which-table)) |
 | `title`, `description`, `topics` | `topics` as a repository's topics on GitHub. `keywords`, the earlier name, is read as `topics`. Queria reads them, so they are written as `topics` under `queria:` |
 | `primary_key` | The columns that identify a row |
 | `licenses`, `sources`, `temporal_coverage`, `spatial_coverage` | Only when they differ from the dataset's |
 | `sql`, `depends_on` | For a table dbt does not build: the SQL it is made from and the tables it reads |
-| `docs` | Paths of the table's other documents |
+| `documents` | Paths of the table's documents |
 | `columns` | `name`, `title`, `description`, `asset`, and the semantic keys `entity`, `dimension`, `granularity` |
 | `metrics` | How the table is aggregated ([semantics](#semantics)) |
 | `queria`, `annotations` | Keys for one reader |
@@ -125,10 +125,9 @@ Types, nullability and row counts are not written. The data store holds the stru
 
 ## Which table
 
-- By default the place decides: a table file at `<schema>/<table>.yml` describes `<schema>.<table>`. A file directly under the root is in the `main` schema
-- `table: <schema>.<table>` wins over the place. A table file at any other depth has to say it
-- Two files describing the same table is an error
-- dbt does not read a table file inside `models/`: dbt ignores keys outside `models:`
+- The place decides: a table file at `<schema>/<table>.yml` describes `<schema>.<table>`. A file directly under the root is in the `main` schema
+- A table file at any other depth, or a `name` other than the file name, is an error
+- In a dbt project, a schema folder with the same name as one of dbt's paths in `dbt_project.yml` (`model-paths`, `seed-paths`, `macro-paths` and so on) is an error, so dbt never reads a table file
 
 ## Languages
 
@@ -149,7 +148,7 @@ columns:
 ```
 
 - Any of tabledoc's keys whose value is text, or a list of text, takes either form: `title`, `description`, `topics`, `homepage`, and the `title`, `url` and `path` of licenses, sources and contributors, say. A list becomes a map from a tag to a list
-- Values that point at something, or come from a fixed set, hold one value: `name`, `table`, `schema`, `repository`, `primary_key`, an entity's `name`, `language`, `$schema`, `issued`, `update_frequency`, `dimension`, `granularity`, `agg`, `expr`, `sql`, `depends_on`, `spdx`, `id`, `roles`, `spatial_coverage`, `temporal_coverage`, and the paths of guides and `docs`. Written in other languages, they would no longer point at the same table, column or file
+- Values that point at something, or come from a fixed set, hold one value: `name`, `table`, `schema`, `repository`, `primary_key`, an entity's `name`, `language`, `$schema`, `issued`, `update_frequency`, `dimension`, `granularity`, `agg`, `expr`, `sql`, `depends_on`, `spdx`, `id`, `roles`, `spatial_coverage`, `temporal_coverage`, and the paths in `documents`. Written in other languages, they would no longer point at the same table, column or file
 - Keys under `queria:` and `annotations:` are the reader's own
 - A tag is checked as BCP 47. A map with no text is an error
 - In a dbt project's yml, `description` is the text alone, in `language`. dbt does not take a map there
@@ -157,39 +156,40 @@ columns:
 
 ## Guides and documents
 
-- A table's guide is the `.md` with the same name in the same folder as its table file (`series.md` for `series.yml`), or `README.md` in the folder of that name (`series/README.md`). It has no front matter
-- The dataset's overview is `README.md` at the root. A schema's guide is `schemas[].guide`, else `<schema>/README.md`
-- Other documents are listed in `docs`: the dataset's in `tabledoc.yml`, a schema's in `schemas[].docs`, a table's in its table file. Paths are relative to the root
+- Documents are listed by path in `documents`: the dataset's in `tabledoc.yml`, a schema's in `schemas[].documents`, a table's in its table file. Paths are relative to the root, and the file can be anywhere under it
+- A document named `README.md` describes the thing it is listed under; it is the thing's guide. The others keep their names
+- Two documents are listed without being written: `README.md` at the root is the dataset's, and the `.md` with the same name next to a table file (`series.md` for `series.yml`) is that table's guide. In a dbt project, the `.md` with the same name next to a model's `.sql` is the table's guide too
+- Two guides for one thing is an error (a table's `series.md` and a `README.md` in its `documents`, say)
+- Documents have no front matter
 - The files a Markdown document links to with a relative path (images, PDFs, other documents) are sent too. A link that leaves the root is an error; a link to a missing file is a warning; a link to a folder is left alone
-- Build and maintenance notes belong in `CONTRIBUTING.md`, not in `docs`
+- Build and maintenance notes belong in `CONTRIBUTING.md`, not in `documents`
 
 ### Paths in the dataset
 
-In the dataset, each folder is one thing described: the root is the dataset, `<schema>/` a schema, `<schema>/<table>/` a table. The folder's `README.md` describes it, and its other Markdown files are its documents. tabledoc places the files there, wherever the author keeps them:
+In the dataset, each folder is one thing described: the root is the dataset, `<schema>/` a schema, `<schema>/<table>/` a table. The folder's `README.md` describes it, and its other files are its documents. tabledoc places the files there, wherever the author keeps them:
 
 | Written | Path in the dataset |
 | --- | --- |
-| `README.md` | `README.md` |
-| an entry of `docs` | `<file name>` |
-| a schema's guide | `<schema>/README.md` |
-| an entry of `schemas[].docs` | `<schema>/<file name>` |
-| a table's guide | `<schema>/<table>/README.md` |
-| an entry of a table's `docs` | `<schema>/<table>/<file name>` |
+| an entry of the dataset's `documents` | `<file name>` |
+| an entry of `schemas[].documents` | `<schema>/<file name>` |
+| an entry of a table's `documents` | `<schema>/<table>/<file name>` |
+| a table's guide (next to its table file or model) | `<schema>/<table>/README.md` |
 | a file a document links to | its path under the root |
 
 - In a Markdown document, each relative link to a file that was placed elsewhere is rewritten to point at its new path. The `sha256` and `bytes` are those of the rewritten document
-- Two files at the same path in the dataset is an error, and so is one file named for two paths in the dataset (the same document in two tables' `docs`, say)
+- Two files at the same path in the dataset is an error, and so is one file named for two paths in the dataset (the same document in two tables' `documents`, say)
 
 ## dbt projects
 
 When the root has `dbt_project.yml`, tabledoc reads `target/manifest.json` (`--manifest` changes it). Run `dbt compile` (or a build) first; without a manifest, tabledoc warns and reads only the table files. `load` gives this as info instead when the catalog has a table dbt built (one with a `source_path`), the description has no `sql`, and it describes each such table, since it keeps their SQL.
 
 - The tables are the enabled models materialized as `table`, `view` or `incremental`, under the model's `schema` and `alias`. Ephemeral and disabled models, seeds, snapshots and tests make no table, so they are not listed. A model with no description is listed with what dbt fills in only (`materialized`, `sql`, `depends_on`, `source_path`)
-- The description comes from the model's yml. `description` and the columns' `description` as they are; keys dbt does not have (`title`, `primary_key`, `sources`, a column's `title`, `asset` and so on) and `queria` under `config.meta`
-- Semantics come from the columns' `entity`, `dimension` and `granularity`, and from the semantic layer's simple `metrics`
+- What dbt has a key for is read from dbt: the model's and the columns' `description`, the primary key from `constraints` (`type: primary_key`, on the model or on one column), and semantics from the columns' `entity`, `dimension` and `granularity` and the semantic layer's simple `metrics`
+- What dbt has no key for (`title`, `topics`, `sources`, `licenses`, `documents`, a column's `title` and `asset`, `queria` and so on) is added in either of two places: `config.meta` of the model and of each column in dbt's yml, or a table file at `<schema>/<table>.yml`, where the model's `schema` and `alias` decide the place. A team that keeps dbt's yml to dbt's keys writes the table file; a team that already uses `config.meta` keeps it
+- dbt's own keys, `config.meta` and the table file are read together, key by key (and column by column, key by key). A key written in two of them is an error: an empty `description` in dbt counts as not written, and `primary_key` in `config.meta` or a table file beside dbt's `constraints` is an error too
+- A program that changes the description writes each key where it is now, and a key that is not written yet into the table file, so it never rewrites dbt's yml
 - `materialized` is the model's materialization, `source_path` its `original_file_path`, and `sql` its `compiled_code`. `depends_on` is read from it by DuckDB's parser. A table of another dataset is written `<repository URL>#<schema>.<table>`, where the URL comes from the DuckLake ATTACHes in `profiles.yml` (`--profiles`, else `DBT_PROFILES_DIR`, else the root)
-- A guide is the `.md` with the same name next to the model's `.sql`, or `README.md` in the folder of that name (dbt ignores `.md` files without a docs block). Other documents are `docs` under `config.meta`
-- A table is described in one place. When both a table file and dbt's yml describe it, that is an error. When dbt's yml says nothing about it, the table file is read, and `sql` comes from dbt
+- A guide is the `.md` with the same name next to the model's `.sql` (dbt ignores `.md` files without a docs block), or one of the table's `documents` named `README.md`
 
 ```yaml
 models:
@@ -198,7 +198,9 @@ models:
     config:
       meta:
         title: Series
-        primary_key: [db, series_code]
+    constraints:
+      - type: primary_key
+        columns: [db, series_code]
     columns:
       - name: db
         description: The same as db in databases
@@ -240,9 +242,9 @@ report = tabledoc.Report()
 d = tabledoc.read(tabledoc.Options(root), report)  # root: the folder of tabledoc.yml
 if report.failed:
     print(report.render())
-d.dataset   # {"name": "boj", "title": …, "guide": "README.md", "docs": ["methodology.md"], "annotations": {…}}
+d.dataset   # {"name": "boj", "title": …, "documents": ["README.md", "methodology.md"], "annotations": {…}}
 d.schemas   # [{"name": "timeseries", "title": "Time series"}]
-d.tables    # [{"schema": "timeseries", "name": "series", "sql": …, "depends_on": […], "guide": …, "columns": […]}]
+d.tables    # [{"schema": "timeseries", "name": "series", "sql": …, "depends_on": […], "documents": ["timeseries/series/README.md"], "columns": […]}]
 d.files     # [File(path="README.md", sha256="…", bytes=1234, media_type="text/markdown", local="README.md"), …]
 d.source    # {"repository": "https://github.com/…", "commit": "…", "path": "", "dirty": False}
 d.dependencies  # {"other": {"url": "https://…"}}: the other datasets the SQL reads, by the name it reads them under, as `dependencies` of FDL's tables.json
@@ -250,7 +252,7 @@ d.content(d.files[0])  # the bytes of that file
 ```
 
 - `source` is the Git working copy: `repository` is the `origin` remote as an https URL (without credentials or `.git`), `commit` is HEAD, `path` goes from the repository's root to the folder of `tabledoc.yml`, and `dirty` says whether there were changes not committed. It is None outside Git, or with `Options(with_source=False)`
-- Documents are referred to by their [paths in the dataset](#paths-in-the-dataset). `files` lists every file whose content is meant to go with the description (guides, README, `docs`, and what they link to) with that path, its sha256, size and media type, and `local`, its path under the root. `guide`, `docs`, `schemas[].guide` and `schemas[].docs` are paths in `files`. `content` gives what goes into the dataset for a file: its bytes, a Markdown document with its links rewritten, and for an older-format Markdown table file, the text without its front matter
+- Documents are referred to by their [paths in the dataset](#paths-in-the-dataset). `files` lists every file whose content is meant to go with the description (the documents and what they link to) with that path, its sha256, size and media type, and `local`, its path under the root. Each `documents`, `schemas[].documents` included, lists paths in `files`; the one whose name is `README.md` is the guide. `content` gives what goes into the dataset for a file: its bytes, a Markdown document with its links rewritten, and for an older-format Markdown table file, the text without its front matter
 - Semantics always come out as `{type, name}` (`dimension: categorical` is `{"type": "categorical"}`)
 - Tables are sorted by `schema`, then `name`, and keys come in a fixed order. The same files give the same records
 - The structure (types, nullability, row counts, whether a table is a view) is not in it
@@ -305,7 +307,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--files`: where the files of the `files` table are, as `<files>/<sha256>`: a folder or an http(s) URL. Default: `assets/` of the repository `fdl clone` noted beside the catalog. Each file is checked against its sha256
 - `--name`: the dataset's `name` in `tabledoc.yml`. Default: the last part of the repository's URL
 - A file already in the folder is not replaced, and nothing is written, unless `--force`. A path in the catalog that would leave the folder is an error
-- Each table file is at `<schema>/<table>.yml`, and its guide at `<schema>/<table>/README.md`. The Markdown files of a folder other than `README.md` are listed in that folder's `docs`
+- Each table file is at `<schema>/<table>.yml` and its guide next to it at `<schema>/<table>.md`. The other files of a folder are kept at their paths in the dataset and listed in the `documents` of what the folder describes
 - The rows of `texts` are written as the text alone when there is one language and it is the dataset's `language`, and as a map otherwise
 - What the tables do not hold is not written: primary keys, asset columns, an entity's type (written `foreign`), dimensions, granularity, metrics, keys for other readers, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--unlisted` wrote gets no table file. `sql` and `depends_on` are written only for a table without `source_path` (one dbt does not build)
 
@@ -339,6 +341,7 @@ So that every dataset need not be rewritten at once, tabledoc also reads the for
 - Without `tabledoc.yml`, `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) is read as `tabledoc.yml`. Its top-level `title_kana`, `themes`, `cover` and `ai_context` are read as if under `queria:`. `catalogs` is used for `depends_on` and returned as `dependencies`
 - Markdown whose front matter has `$schema: https://queria.io/schemas/table/v1.json` is read as a table file (the front matter) and its guide (the text below). `table:` says which table, `fields` is `columns`, and `published`, `themes` and `ai_context` are read as if under `queria:`. The guide is that Markdown's path, and what is sent is the text without the front matter
 - A field's `semantic: {role, name, agg}` is read as: `role: entity` → `entity: {type: foreign, name}`, or `type: primary` when the column alone is the `primary_key`; `role: dimension` → `dimension: categorical`; `role: measure` → a metric `{name: <column>, agg, expr: <column>}` on the table (without `agg`, a warning)
+- `docs` (and `schemas[].docs`) is read as `documents`, and a schema's `guide` as one of its `documents`
 - `tabledoc.yml` and `queria.yml` in the same folder is an error
 
 ## $schema and versions
