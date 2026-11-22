@@ -27,6 +27,7 @@ MATERIALIZED = ("table", "view", "incremental")
 #: The keys of a table file a model writes under config.meta.
 TABLE_META = (
     "title",
+    "topics",
     "keywords",
     "primary_key",
     "licenses",

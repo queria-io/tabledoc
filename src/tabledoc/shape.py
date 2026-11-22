@@ -17,7 +17,7 @@ DATASET_KEYS = (
     "name",
     "title",
     "description",
-    "keywords",
+    "topics",
     "homepage",
     "language",
     "issued",
@@ -32,7 +32,7 @@ SCHEMA_KEYS = ("name", "title", "description", "guide")
 TABLE_KEYS = (
     "title",
     "description",
-    "keywords",
+    "topics",
     "primary_key",
     "licenses",
     "sources",
@@ -65,6 +65,9 @@ def plain(value: Any) -> Any:
 
 
 def pick(record: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    """``keys`` of ``record``. `keywords`, the earlier name, is read as `topics` when `topics` is not written."""
+    if "topics" in keys and "topics" not in record and present(record.get("keywords")):
+        record = {**record, "topics": record["keywords"]}
     return {k: plain(record[k]) for k in keys if k in record and present(record[k])}
 
 

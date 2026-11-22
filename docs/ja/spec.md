@@ -42,7 +42,7 @@ name: boj
 title: 日本銀行 時系列統計
 description: 日本銀行の時系列統計データ検索サイトの全ての統計です。
 language: ja
-keywords: [日本銀行, 金利, 物価]
+topics: [日本銀行, 金利, 物価]
 homepage: https://github.com/queria-io/dataset-boj
 update_frequency: irregular
 licenses:
@@ -70,7 +70,7 @@ queria:
 | --- | --- | --- |
 | `$schema` | 必須 | 書式とバージョン |
 | `name` | 必須 | データセットの名前。`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
-| `title`・`description`・`keywords`・`homepage`・`language`・`issued`・`update_frequency` | | `language` は BCP 47 のタグ、`issued` は `YYYY-MM-DD` |
+| `title`・`description`・`topics`・`homepage`・`language`・`issued`・`update_frequency` | | `language` は BCP 47 のタグ、`issued` は `YYYY-MM-DD` |
 | `licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` | | テーブルのファイルに書くと、そのテーブルだけの値になります |
 | `schemas` | | `name`・`title`・`description`・`guide` (スキーマのガイドのパス。省くと、あれば `<name>/README.md`)・`docs` (スキーマのほかの文書) |
 | `docs` | | データセットのほかの文書のパス |
@@ -107,7 +107,7 @@ columns:
 | --- | --- |
 | `name` | テーブル名。省くとファイル名 |
 | `table` | `<schema>.<table>`。置き場所より優先します ([テーブルとの対応](#テーブルとの対応)) |
-| `title`・`description`・`keywords` | |
+| `title`・`description`・`topics` | `topics` は GitHub のリポジトリのトピックと同じものです。以前の名前の `keywords` も `topics` として読みます |
 | `primary_key` | 1 行を識別する列の並び |
 | `licenses`・`sources`・`temporal_coverage`・`spatial_coverage` | データセットと違うときだけ書きます |
 | `sql`・`depends_on` | dbt で作らないテーブルの、元の SQL と元のテーブル |
@@ -245,9 +245,9 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 | テーブル | 元の値 |
 | --- | --- |
-| `_fdl.dataset` | `tabledoc.yml` の `title`・`description`・`language`・`keywords`・`homepage`・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` |
+| `_fdl.dataset` | `tabledoc.yml` の `title`・`description`・`language`・`topics`・`homepage`・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` |
 | `_fdl.schemas` | `title` か `description` のある `schemas[]` |
-| `_fdl.tables` | 説明のあるテーブルとビュー: `title`・`description`・`keywords`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`primary_key`・`profile` (`queria:` の `published` が false なら false)・`materialized`・`sql` (ビューには書きません。SQL はメタデータが持ちます)・`depends_on`・`source_path` |
+| `_fdl.tables` | 説明のあるテーブルとビュー: `title`・`description`・`topics`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`primary_key`・`profile` (`queria:` の `published` が false なら false)・`materialized`・`sql` (ビューには書きません。SQL はメタデータが持ちます)・`depends_on`・`source_path` |
 | `_fdl.columns` | `title`・`description`・`entity` (その `name`)・`asset: true` のどれかがある列 |
 | `_fdl.files` | [データセットの中のファイル](#データセットの中のパス): `path`・`sha256`・`bytes`・`media_type` |
 | `_fdl.catalogs` | SQL が読むほかのデータセット (SQL の中の名前と URL) |

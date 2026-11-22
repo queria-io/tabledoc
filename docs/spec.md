@@ -42,7 +42,7 @@ name: boj
 title: Bank of Japan time-series statistics
 description: Every statistic on the Bank of Japan's time-series data search site.
 language: en
-keywords: [Bank of Japan, interest rates, prices]
+topics: [Bank of Japan, interest rates, prices]
 homepage: https://github.com/queria-io/dataset-boj
 update_frequency: irregular
 licenses:
@@ -70,7 +70,7 @@ queria:
 | --- | --- | --- |
 | `$schema` | yes | The format and its version |
 | `name` | yes | The dataset's name: `^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
-| `title`, `description`, `keywords`, `homepage`, `language`, `issued`, `update_frequency` | | `language` is a BCP 47 tag; `issued` is `YYYY-MM-DD` |
+| `title`, `description`, `topics`, `homepage`, `language`, `issued`, `update_frequency` | | `language` is a BCP 47 tag; `issued` is `YYYY-MM-DD` |
 | `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` | | Written in a table file, the value is that table's alone |
 | `schemas` | | `name`, `title`, `description`, `guide` (the path of the schema's guide; default `<name>/README.md` when it is there), `docs` (the schema's other documents) |
 | `docs` | | Paths of the dataset's other documents |
@@ -107,7 +107,7 @@ columns:
 | --- | --- |
 | `name` | The table's name. Defaults to the file name |
 | `table` | `<schema>.<table>`. Wins over the file's place ([which table](#which-table)) |
-| `title`, `description`, `keywords` | |
+| `title`, `description`, `topics` | `topics` as a repository's topics on GitHub. `keywords`, the earlier name, is read as `topics` |
 | `primary_key` | The columns that identify a row |
 | `licenses`, `sources`, `temporal_coverage`, `spatial_coverage` | Only when they differ from the dataset's |
 | `sql`, `depends_on` | For a table dbt does not build: the SQL it is made from and the tables it reads |
@@ -245,9 +245,9 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 | Table | From |
 | --- | --- |
-| `_fdl.dataset` | `tabledoc.yml`: `title`, `description`, `language`, `keywords`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` |
+| `_fdl.dataset` | `tabledoc.yml`: `title`, `description`, `language`, `topics`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` |
 | `_fdl.schemas` | `schemas[]` with a `title` or a `description` |
-| `_fdl.tables` | each table and view described: `title`, `description`, `keywords`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `primary_key`, `profile` (false when `published` under `queria:` is false), `materialized`, `sql` (not for a view: the metadata holds its SQL), `depends_on`, `source_path` |
+| `_fdl.tables` | each table and view described: `title`, `description`, `topics`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `primary_key`, `profile` (false when `published` under `queria:` is false), `materialized`, `sql` (not for a view: the metadata holds its SQL), `depends_on`, `source_path` |
 | `_fdl.columns` | each column with a `title`, a `description`, an `entity` (its `name`) or `asset: true` |
 | `_fdl.files` | the [files in the dataset](#paths-in-the-dataset): `path`, `sha256`, `bytes`, `media_type` |
 | `_fdl.catalogs` | the other datasets the SQL reads, by the name it reads them under |

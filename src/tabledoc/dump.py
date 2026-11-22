@@ -34,7 +34,7 @@ DATASET_KEYS = (
     "title",
     "description",
     "language",
-    "keywords",
+    "topics",
     "homepage",
     "issued",
     "update_frequency",
@@ -44,7 +44,7 @@ DATASET_KEYS = (
     "temporal_coverage",
     "spatial_coverage",
 )
-TABLE_KEYS = ("title", "description", "keywords", "primary_key", "licenses", "sources", "temporal_coverage", "spatial_coverage")
+TABLE_KEYS = ("title", "description", "topics", "primary_key", "licenses", "sources", "temporal_coverage", "spatial_coverage")
 
 
 @dataclass(frozen=True)

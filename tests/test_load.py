@@ -80,6 +80,17 @@ def test_writes_fdl_and_the_folder_for_fdl_commit(write, catalog, tmp_path):
     assert not (out / "dataset.json").exists()
 
 
+def test_topics_and_keywords_go_to_topics(write, catalog):
+    path, data = catalog
+    root = project(write)
+    (root / "tabledoc.yml").write_text(DATASET + "name: shop\ntopics: [retail]\n")
+    (root / "sales" / "recent.yml").write_text(TABLE + "description: x\nkeywords: [latest]\n")
+    report = Report()
+    assert load(Options(root, with_source=False), Target(str(path), data), report) is not None, report.render()
+    assert query(path, data, f"SELECT topics FROM {ALIAS}._fdl.dataset") == [(["retail"],)]
+    assert query(path, data, f"SELECT topics FROM {ALIAS}._fdl.tables WHERE name = 'recent'") == [(["latest"],)]
+
+
 def test_a_table_not_published_gets_no_profile(write, catalog):
     path, data = catalog
     root = project(write)
