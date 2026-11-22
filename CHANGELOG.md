@@ -1,6 +1,15 @@
 # CHANGELOG
 
 
+## v0.4.0 (2026-11-22)
+
+### Features
+
+- Return the other datasets the SQL reads as dependencies, in the shape of FDL's tables.json
+  ([#12](https://github.com/queria-io/tabledoc/pull/12),
+  [`980df25`](https://github.com/queria-io/tabledoc/commit/980df258de9e8e1a1b044ba49d8813fe9561900e))
+
+
 ## v0.3.1 (2026-11-22)
 
 ### Bug Fixes
