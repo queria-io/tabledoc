@@ -9,8 +9,8 @@ from tabledoc.cli import main
 from tabledoc.load import ALIAS, Target, attached, data_path, load
 from tabledoc.report import Report, SpecError
 
-DATASET = "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\n"
-TABLE = "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"
+DATASET = "$schema: https://tabledoc.queria.io/schemas/dataset/v1.json\n"
+TABLE = "$schema: https://tabledoc.queria.io/schemas/table/v1.json\n"
 
 
 @pytest.fixture

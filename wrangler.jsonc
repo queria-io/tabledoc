@@ -1,0 +1,11 @@
+// An assets-only Worker (no main): the docs site built by Blume, and the JSON Schemas under /schemas/.
+// A schema keeps its URL for good: change one by adding v2, never by editing v1's meaning.
+{
+  "account_id": "57c6a116efc637fc3f21d0affea15508",
+  "name": "tabledoc",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  }
+}

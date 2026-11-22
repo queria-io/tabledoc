@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://queria-io.github.io/tabledoc/schemas/dataset/v1.json",
+  "$id": "https://tabledoc.queria.io/schemas/dataset/v1.json",
   "title": "tabledoc dataset (tabledoc.yml)",
   "description": "The description of one dataset, in tabledoc.yml at the root. Tables are described in their own files; see table/v1.json.",
   "type": "object",
   "required": ["$schema", "name"],
   "additionalProperties": false,
   "properties": {
-    "$schema": { "const": "https://queria-io.github.io/tabledoc/schemas/dataset/v1.json" },
+    "$schema": { "const": "https://tabledoc.queria.io/schemas/dataset/v1.json" },
     "name": { "$ref": "#/$defs/name" },
     "title": { "$ref": "#/$defs/text", "minLength": 1 },
     "description": { "$ref": "#/$defs/text" },

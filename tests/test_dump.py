@@ -10,8 +10,8 @@ from tabledoc.dump import Source, dump
 from tabledoc.load import ALIAS, Target, attached, load
 from tabledoc.report import Report, SpecError
 
-DATASET = "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\n"
-TABLE = "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"
+DATASET = "$schema: https://tabledoc.queria.io/schemas/dataset/v1.json\n"
+TABLE = "$schema: https://tabledoc.queria.io/schemas/table/v1.json\n"
 
 
 @pytest.fixture
@@ -66,7 +66,7 @@ def test_dump_writes_what_loads_to_the_same_tables(loaded, tmp_path):
         "tabledoc.yml",
     ]
     assert (out / "tabledoc.yml").read_text() == (
-        "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\n"
+        "$schema: https://tabledoc.queria.io/schemas/dataset/v1.json\n"
         "name: shop\n"
         "title: Shop\n"
         "description: |-\n  Two\n  lines\n"

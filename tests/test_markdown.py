@@ -5,8 +5,8 @@ from tabledoc.cli import main
 from tabledoc.markdown import render
 from tabledoc.report import Report
 
-DATASET = "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\n"
-TABLE = "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"
+DATASET = "$schema: https://tabledoc.queria.io/schemas/dataset/v1.json\n"
+TABLE = "$schema: https://tabledoc.queria.io/schemas/table/v1.json\n"
 
 FILES = {
     "tabledoc.yml": DATASET

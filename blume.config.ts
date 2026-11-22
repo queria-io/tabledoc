@@ -2,7 +2,7 @@ import { defineConfig } from "blume";
 
 export default defineConfig({
   title: "tabledoc",
-  description: "Checks the description of a dataset and reads it for other programs",
+  description: "Makes the tables of a dataset readable by people and AI",
   logo: "/icon.svg",
   theme: {
     accent: "#7846be",

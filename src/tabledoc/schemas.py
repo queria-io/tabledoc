@@ -11,7 +11,7 @@ from .report import Report
 from .shape import plain
 
 FOLDER = Path(__file__).parent / "schemas"
-BASE = "https://queria-io.github.io/tabledoc/schemas/"
+BASE = "https://tabledoc.queria.io/schemas/"
 DATASET = BASE + "dataset/v1.json"
 TABLE = BASE + "table/v1.json"
 

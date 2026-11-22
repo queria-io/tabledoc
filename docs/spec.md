@@ -38,7 +38,7 @@ Folders whose name starts with `.`, and `target/`, `dbt_packages/`, `node_module
 The description of one dataset.
 
 ```yaml
-$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json
+$schema: https://tabledoc.queria.io/schemas/dataset/v1.json
 name: boj
 title: Bank of Japan time-series statistics
 description: Every statistic on the Bank of Japan's time-series data search site.
@@ -82,10 +82,10 @@ queria:
 
 ## Table files
 
-The description of one table. A table file is a YAML file whose `$schema` is `https://queria-io.github.io/tabledoc/schemas/table/v1.json`; YAML files without it (dbt's `schema.yml`, say) are not read. The keys follow one entry of dbt's `models:`; keys dbt does not have (`title`, `primary_key`, `sources` and so on) sit at the same level.
+The description of one table. A table file is a YAML file whose `$schema` is `https://tabledoc.queria.io/schemas/table/v1.json`; YAML files without it (dbt's `schema.yml`, say) are not read. The keys follow one entry of dbt's `models:`; keys dbt does not have (`title`, `primary_key`, `sources` and so on) sit at the same level.
 
 ```yaml
-$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
 name: series
 title: Series
 description: |-
@@ -343,6 +343,6 @@ So that every dataset need not be rewritten at once, tabledoc also reads the for
 
 ## $schema and versions
 
-- tabledoc ships its JSON Schemas and serves them at `https://queria-io.github.io/tabledoc/schemas/<kind>/v<n>.json`. The kinds are `dataset` and `table`
+- tabledoc ships its JSON Schemas and serves them at `https://tabledoc.queria.io/schemas/<kind>/v<n>.json`. The kinds are `dataset` and `table`
 - Adding keys keeps the version. Changing what a key means, or removing one, makes `v2`, and tabledoc reads both for a while
 - A file with a `$schema` this tabledoc does not know is refused, with a request to upgrade tabledoc

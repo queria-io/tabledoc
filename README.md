@@ -30,7 +30,7 @@ sales/orders.md           its guide
 
 ```yaml
 # tabledoc.yml
-$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json
+$schema: https://tabledoc.queria.io/schemas/dataset/v1.json
 name: shop
 title: Shop sales
 language: en
@@ -39,7 +39,7 @@ licenses: [CC-BY-4.0]
 
 ```yaml
 # sales/orders.yml
-$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
 title: Orders
 description: One row is one order.
 primary_key: [order_id]
@@ -66,7 +66,7 @@ In a dbt project, run `dbt compile` first, and write `tabledoc.yml` next to `dbt
 
 ## Specification
 
-The documentation and the specification are at [tabledoc.queria.io](https://tabledoc.queria.io) (source: [docs/spec.md](docs/spec.md)). The JSON Schemas are in [src/tabledoc/schemas](src/tabledoc/schemas) and served at `https://queria-io.github.io/tabledoc/schemas/`.
+The documentation and the specification are at [tabledoc.queria.io](https://tabledoc.queria.io) (source: [docs/spec.md](docs/spec.md)). The JSON Schemas are in [src/tabledoc/schemas](src/tabledoc/schemas) and served at `https://tabledoc.queria.io/schemas/`.
 
 ## License
 

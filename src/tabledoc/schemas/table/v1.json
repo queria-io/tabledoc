@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://queria-io.github.io/tabledoc/schemas/table/v1.json",
+  "$id": "https://tabledoc.queria.io/schemas/table/v1.json",
   "title": "tabledoc table (<schema>/<table>.yml)",
   "description": "The description of one table. The keys follow one entry of dbt's `models:`; keys dbt does not have sit at the same level. Types, nullability and row counts are not written here.",
   "type": "object",
   "required": ["$schema"],
   "additionalProperties": false,
   "properties": {
-    "$schema": { "const": "https://queria-io.github.io/tabledoc/schemas/table/v1.json" },
+    "$schema": { "const": "https://tabledoc.queria.io/schemas/table/v1.json" },
     "name": { "type": "string", "minLength": 1, "description": "The table's name. Defaults to the file name." },
     "table": { "type": "string", "pattern": "^[^.\\s]+\\.[^.\\s]+$", "description": "<schema>.<table>. Wins over the file's place." },
     "title": { "$ref": "../dataset/v1.json#/$defs/text" },
