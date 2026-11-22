@@ -86,6 +86,9 @@ def _yaml(path: Path) -> Any:
 
 
 def _unknown(schema: Any, path: Path) -> SpecError:
+    if isinstance(schema, str) and schema.startswith(schemas.MOVED_BASE):
+        moved = schemas.BASE + schema[len(schemas.MOVED_BASE) :]
+        return SpecError(f"{path}: $schema {schema} has moved; write {moved}")
     return SpecError(f"{path}: $schema {schema} is not one this tabledoc knows; upgrade tabledoc")
 
 
@@ -147,6 +150,8 @@ def read_table_files(root: Path, report: Report) -> list[Table]:
         except yaml.YAMLError:
             continue
         schema = record.get("$schema") if isinstance(record, dict) else None
+        if isinstance(schema, str) and schema.startswith(schemas.MOVED_BASE):
+            raise _unknown(schema, path)
         if not isinstance(schema, str) or not schema.startswith(schemas.BASE):
             continue
         if schema != schemas.TABLE:

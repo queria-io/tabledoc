@@ -1,7 +1,0 @@
-# Editors and validators fetch the JSON Schemas from other origins.
-/schemas/*
-  Access-Control-Allow-Origin: *
-  Content-Type: application/schema+json; charset=utf-8
-
-/*.md
-  Content-Type: text/markdown; charset=utf-8

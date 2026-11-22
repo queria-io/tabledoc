@@ -14,6 +14,8 @@ FOLDER = Path(__file__).parent / "schemas"
 BASE = "https://tabledoc.queria.io/schemas/"
 DATASET = BASE + "dataset/v1.json"
 TABLE = BASE + "table/v1.json"
+#: Where the schemas were named before 0.5.0 (never served). A file naming one is refused with the new URL.
+MOVED_BASE = "https://queria-io.github.io/tabledoc/schemas/"
 
 #: The formats before tabledoc, still read (see legacy.py).
 LEGACY_BASE = "https://queria.io/schemas/"
