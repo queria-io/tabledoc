@@ -33,13 +33,13 @@ def parser() -> argparse.ArgumentParser:
     w.add_argument(
         "--data-path", default=None, help="where new data files go (default: FDL_DATA_PATH, else fdl clone's note)"
     )
-    w.add_argument("--schema", default=None, help="the schema to write into (default: tabledoc.yml's schema, else _queria)")
+    w.add_argument("--schema", default=None, help="the schema to write into (default: tabledoc.yml's schema, else _tabledoc)")
     w.add_argument("--out", type=Path, default=None, help="also write the files for fdl commit --assets here")
     w.add_argument("--assets", type=Path, default=None, help="files of the asset columns, linked into --out")
     w.add_argument("--unlisted", action="store_true", help="write the tables with no description as not published")
     d = commands.add_parser("dump", help="write the files of the description a DuckLake catalog holds")
     d.add_argument("--ducklake", default=None, help="the DuckLake catalog, such as fdl's working metadata (default: FDL_WORKING)")
-    d.add_argument("--schema", default="_queria", help="the schema the description is in (default: _queria)")
+    d.add_argument("--schema", default="_tabledoc", help="the schema the description is in (default: _tabledoc)")
     d.add_argument("--out", type=Path, default=Path.cwd(), help="the folder to write into (default: here)")
     d.add_argument("--files", default=None, help="where the files are, as <files>/<sha256> (default: the repository's assets)")
     d.add_argument("--name", default=None, help="the dataset's name (default: the repository's)")

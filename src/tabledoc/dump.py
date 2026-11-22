@@ -1,4 +1,4 @@
-"""tabledoc dump: the description a DuckLake catalog holds (`_queria` unless told otherwise) back to the files an author writes.
+"""tabledoc dump: the description a DuckLake catalog holds (`_tabledoc` unless told otherwise) back to the files an author writes.
 
     tabledoc.yml                  the dataset, the schemas, and the root's other documents
     <schema>/<table>.yml          each table described
@@ -24,7 +24,7 @@ from typing import Any
 
 import yaml
 
-from . import queria, schemas
+from . import schemas, tables
 from .description import README
 from .load import ALIAS, attached, data_path
 from .report import SpecError
@@ -56,7 +56,7 @@ class Source:
     #: The dataset's name in tabledoc.yml.
     name: str | None = None
     #: The schema the description is in.
-    schema: str = queria.SCHEMA
+    schema: str = tables.SCHEMA
 
 
 def _note(catalog: str) -> dict[str, Any]:
@@ -152,13 +152,13 @@ def _unlisted_only(table: dict[str, Any], columns: list[Any]) -> bool:
     return said == {"published"} and table["published"] is False and not columns
 
 
-def documents(found: queria.Rows, name: str) -> dict[str, dict[str, Any]]:
+def documents(found: tables.Rows, name: str) -> dict[str, dict[str, Any]]:
     """The YAML files of the description in ``found``, by path."""
     paths = sorted(f["path"] for f in found.get("files") or [])
-    tables = sorted(found.get("tables") or [], key=lambda t: (t["schema"], t["name"]))
+    described_tables = sorted(found.get("tables") or [], key=lambda t: (t["schema"], t["name"]))
     columns = found.get("columns") or []
     written: dict[str, dict[str, Any]] = {}
-    for table in tables:
+    for table in described_tables:
         schema, table_name = table["schema"], table["name"]
         own = [c for c in columns if (c["schema"], c["table"]) == (schema, table_name)]
         if _unlisted_only(table, own):
@@ -173,10 +173,10 @@ def documents(found: queria.Rows, name: str) -> dict[str, dict[str, Any]]:
             **({"depends_on": list(table["depends_on"])} if authored and table.get("depends_on") else {}),
             **({"docs": docs} if docs else {}),
             **({"columns": [_column(c) for c in own]} if own else {}),
-            **_queria(table, queria.TABLE_OWN),
+            **_queria(table, tables.TABLE_OWN),
         }
     described = {s["schema"]: s for s in found.get("schemas") or []}
-    names = sorted(set(described) | {t["schema"] for t in tables})
+    names = sorted(set(described) | {t["schema"] for t in described_tables})
     schema_list = [
         {"name": s, **_fields(described.get(s, {}), ("title", "description")), **({"docs": d} if d else {})}
         for s in names
@@ -192,7 +192,7 @@ def documents(found: queria.Rows, name: str) -> dict[str, dict[str, Any]]:
             **({"topics": list(dataset["topics"])} if dataset.get("topics") else {}),
             **({"schemas": schema_list} if schema_list else {}),
             **({"docs": docs} if docs else {}),
-            **_queria(dataset, queria.DATASET_OWN),
+            **_queria(dataset, tables.DATASET_OWN),
         },
         **written,
     }
@@ -225,7 +225,7 @@ def dump(source: Source, out: Path, *, force: bool = False) -> list[str]:
 
     try:
         with attached(source.catalog, data_path(source.catalog, None)) as con:
-            found = queria.read(con, ALIAS, source.schema)
+            found = tables.read(con, ALIAS, source.schema)
     except duckdb.Error as exc:
         raise SpecError(f"cannot read {source.schema} in {source.catalog}: {exc}") from exc
     if not found:

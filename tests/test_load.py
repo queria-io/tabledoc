@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from tabledoc import Options, queria
+from tabledoc import Options, tables
 from tabledoc.cli import main
 from tabledoc.load import ALIAS, Target, attached, data_path, load
 from tabledoc.report import Report, SpecError
@@ -40,10 +40,10 @@ def project(write):
     )
 
 
-def held(catalog, table, *columns, schema=queria.SCHEMA):
+def held(catalog, table, *columns, schema=tables.SCHEMA):
     """The rows of ``<schema>.<table>``, as tuples of ``columns``, sorted."""
     with attached(*catalog) as con:
-        found = queria.read(con, ALIAS, schema).get(table) or []
+        found = tables.read(con, ALIAS, schema).get(table) or []
     return sorted(tuple(r.get(c) for c in columns) for r in found)
 
 
@@ -129,7 +129,7 @@ def test_a_second_load_changes_only_what_differs(write, catalog):
 def test_keeps_the_sql_without_a_build(write, catalog):
     root = project(write)
     run(root, catalog)
-    sql(catalog, "UPDATE lake._queria.tables SET sql = 'select 1', depends_on = ['sales.extra'], "
+    sql(catalog, "UPDATE lake._tabledoc.tables SET sql = 'select 1', depends_on = ['sales.extra'], "
         "source_path = 'models/orders.sql' WHERE name = 'orders'")
     run(root, catalog)
     assert held(catalog, "tables", "name", "sql", "depends_on", "source_path") == [
@@ -142,7 +142,7 @@ def test_a_missing_manifest_is_info_when_dbt_built_before(write, catalog):
     root = project(write)
     write({"dbt_project.yml": "name: p\n"})
     run(root, catalog)
-    sql(catalog, "UPDATE lake._queria.tables SET source_path = 'm.sql' WHERE name = 'orders'")
+    sql(catalog, "UPDATE lake._tabledoc.tables SET source_path = 'm.sql' WHERE name = 'orders'")
     report = Report()
     assert load(Options(root, with_source=False), Target(*catalog), report, strict=True)
     assert [(f.level.value, f.code) for f in report.findings] == [("info", "manifest-missing")]
@@ -177,7 +177,7 @@ def test_a_table_not_in_the_catalog_writes_nothing(write, catalog):
     report = Report()
     assert run(root, catalog, report) is None
     assert [f.code for f in report.findings] == ["table-missing"]
-    assert sql(catalog, "SELECT count(*) FROM duckdb_schemas() WHERE schema_name = '_queria'") == [(0,)]
+    assert sql(catalog, "SELECT count(*) FROM duckdb_schemas() WHERE schema_name = '_tabledoc'") == [(0,)]
 
 
 def test_a_column_not_in_the_catalog_is_an_error(write, catalog):
@@ -219,7 +219,7 @@ def test_a_value_the_table_cannot_hold_is_an_error(write, catalog):
     report = Report()
     assert run(root, catalog, report) is None
     assert [f.message for f in report.findings if f.code == "value-type"] == [
-        "_queria.dataset: issued cannot be written as DATE",
+        "_tabledoc.dataset: issued cannot be written as DATE",
     ]
 
 

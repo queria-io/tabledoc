@@ -6,7 +6,7 @@ sidebar:
 description: tabledoc が読むファイル、その検査、プログラムに返す値を定めます。
 ---
 
-tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) の書き方を定め、検査し、ほかのプログラムのために読むツールです。特定の配信先には依存しません。`tabledoc load` は説明を DuckLake のカタログに、1 つのスキーマ (既定は `_queria`) の普通のテーブルとして書き、`tabledoc dump` はそこからファイルを書き戻します。書き手のファイルが正です。
+tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) の書き方を定め、検査し、ほかのプログラムのために読むツールです。特定の配信先には依存しません。`tabledoc load` は説明を DuckLake のカタログに、1 つのスキーマ (既定は `_tabledoc`) の普通のテーブルとして書き、`tabledoc dump` はそこからファイルを書き戻します。書き手のファイルが正です。
 
 ## コマンド
 
@@ -70,7 +70,7 @@ queria:
 | --- | --- | --- |
 | `$schema` | 必須 | 書式とバージョン |
 | `name` | 必須 | データセットの名前。`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
-| `schema` | | `tabledoc load` が説明を書くスキーマ。既定は `_queria` |
+| `schema` | | `tabledoc load` が説明を書くスキーマ。既定は `_tabledoc` |
 | `title`・`description`・`topics`・`homepage`・`language`・`issued`・`update_frequency` | | `language` は BCP 47 のタグ、`issued` は `YYYY-MM-DD` |
 | `licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` | | テーブルのファイルに書くと、そのテーブルだけの値になります |
 | `schemas` | | `name`・`title`・`description`・`guide` (スキーマのガイドのパス。省くと、あれば `<name>/README.md`)・`docs` (スキーマのほかの文書) |
@@ -230,7 +230,7 @@ d.content(d.files[0])  # そのファイルの中身
 
 ## DuckLake のカタログに書く
 
-`tabledoc load` は `validate` と同じ検査をしてから、説明を [DuckLake](https://ducklake.select) のカタログの 1 つのスキーマに、普通のテーブルとして書きます。スキーマは `tabledoc.yml` の `schema` か `--schema` で指定し、指定が無ければ `_queria` です。テーブルはデータと一緒にバージョン管理され、カタログを読むプログラムは説明も SQL で読めます。fdl では、カタログは `fdl clone` が作る作業用メタデータで、`fdl commit` でバージョンにします。
+`tabledoc load` は `validate` と同じ検査をしてから、説明を [DuckLake](https://ducklake.select) のカタログの 1 つのスキーマに、普通のテーブルとして書きます。スキーマは `tabledoc.yml` の `schema` か `--schema` で指定し、指定が無ければ `_tabledoc` です。テーブルはデータと一緒にバージョン管理され、カタログを読むプログラムは説明も SQL で読めます。fdl では、カタログは `fdl clone` が作る作業用メタデータで、`fdl commit` でバージョンにします。
 
 ```bash
 tabledoc load --ducklake work.sqlite --out build/assets
@@ -238,7 +238,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 ```
 
 - `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ `fdl clone` がカタログの横に記録したフォルダ)
-- `--schema`: 書くスキーマ (既定は `tabledoc.yml` の `schema`、無ければ `_queria`)
+- `--schema`: 書くスキーマ (既定は `tabledoc.yml` の `schema`、無ければ `_tabledoc`)。Queria は `_queria` を読みます。Queria で公開するデータセットでは `--schema _queria` (か `schema: _queria`) を指定します
 - `--out`: `fdl commit --assets` に渡すフォルダも書きます。`files` テーブルの各ファイルを `files/<path>` に置きます。`--assets <フォルダ>` を付けると、その下のファイル (ビルドが作った asset の列のファイル) を `data/` にリンクします。フォルダは空か前の `load` が書いたもので、fdl だけが書く `.fdl/` の外でなければなりません
 - `--unlisted`: 説明の無いテーブルとビューにも `tables` の行を作り、`published` を false にします
 - 説明や主キーにあってカタログに無いテーブルと列、`varchar` でない `asset` の列はエラーです。名前は DuckDB と同じく大文字と小文字を区別せずに照合し、カタログの表記で書きます
@@ -270,7 +270,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 tabledoc dump --ducklake work.sqlite --out description/
 ```
 
-- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--schema`: 説明のあるスキーマ (既定は `_queria`)。`--out`: 書くフォルダ (既定は今のフォルダ)。`.fdl/` の外でなければなりません
+- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--schema`: 説明のあるスキーマ (既定は `_tabledoc`)。`--out`: 書くフォルダ (既定は今のフォルダ)。`.fdl/` の外でなければなりません
 - `--files`: `files` テーブルのファイルの置き場所。`<files>/<sha256>` で読みます。フォルダか http(s) の URL です。既定は、`fdl clone` がカタログの横に記録したリポジトリの `assets/` です。各ファイルは sha256 で照合します
 - `--name`: `tabledoc.yml` の `name`。既定はリポジトリの URL の最後の部分です
 - フォルダに同じファイルがあると、`--force` を付けない限り何も書きません

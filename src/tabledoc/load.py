@@ -1,8 +1,8 @@
 """tabledoc load: write a description into a DuckLake catalog, and the files `fdl commit` uploads.
 
 The catalog is the one the build wrote (with fdl, the working metadata `fdl clone`
-made). The description's rows (`queria.rows`) go into the tables of a schema
-of it (`_queria` unless told otherwise), and the folder ``out`` gets the files
+made). The description's rows (`tables.rows`) go into the tables of a schema
+of it (`_tabledoc` unless told otherwise), and the folder ``out`` gets the files
 of its `files` table (for `fdl commit --assets`).
 """
 
@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from . import queria
+from . import tables
 from .description import MANIFEST_MISSING, Description, Options, read
 from .report import Finding, Level, Report, SpecError
 
@@ -41,7 +41,7 @@ class Target:
     assets: Path | None = None
     #: Write the catalog's tables that have no description, as not published.
     unlisted: bool = False
-    #: The schema to write into; default tabledoc.yml's `schema`, else `_queria`.
+    #: The schema to write into; default tabledoc.yml's `schema`, else `_tabledoc`.
     schema: str | None = None
 
 
@@ -156,16 +156,16 @@ def write_files(description: Description, out: Path, linked: Path | None) -> Non
             target.symlink_to(source)
 
 
-def _missing(columns: dict[queria.Key, dict[str, str]], description: Description, report: Report) -> None:
+def _missing(columns: dict[tables.Key, dict[str, str]], description: Description, report: Report) -> None:
     """Each described table and column, and each primary key column, has to be in the
     catalog, and an asset column has to be varchar.
 
     Names match without regard to case, as DuckDB's identifiers do.
     """
-    held = {queria.fold(*key): {n.lower(): t for n, t in found.items()} for key, found in columns.items()}
-    viewed = {queria.fold(*key) for key, found in columns.items() if not found}
+    held = {tables.fold(*key): {n.lower(): t for n, t in found.items()} for key, found in columns.items()}
+    viewed = {tables.fold(*key) for key, found in columns.items() if not found}
     for table in description.tables:
-        key = queria.fold(table["schema"], table["name"])
+        key = tables.fold(table["schema"], table["name"])
         where = f"{table['schema']}.{table['name']}"
         if key not in held:
             report.error("table-missing", f"{where} is described but is not in the catalog", description.root)
@@ -182,14 +182,14 @@ def _missing(columns: dict[queria.Key, dict[str, str]], description: Description
                 report.error("asset-type", f"{where}.{name} holds assets, so it has to be varchar", description.root)
 
 
-def _spelled(description: Description, columns: dict[queria.Key, dict[str, str]]) -> Description:
+def _spelled(description: Description, columns: dict[tables.Key, dict[str, str]]) -> Description:
     """``description`` with its schemas, tables, columns and primary keys named as the
     catalog spells them."""
-    names = {queria.fold(*key): key for key in columns}
+    names = {tables.fold(*key): key for key in columns}
     schemas = {key[0].lower(): key[0] for key in columns}
 
     def table(t: dict[str, Any]) -> dict[str, Any]:
-        key = names.get(queria.fold(t["schema"], t["name"]))
+        key = names.get(tables.fold(t["schema"], t["name"]))
         if key is None:
             return t
         held = {n.lower(): n for n in columns[key]}
@@ -227,8 +227,8 @@ def _carried_over(report: Report) -> None:
 
 
 def schema_of(target: Target, description: Description) -> str:
-    """``target.schema``, else tabledoc.yml's `schema`, else `_queria`."""
-    return target.schema or description.dataset.get("schema") or queria.SCHEMA
+    """``target.schema``, else tabledoc.yml's `schema`, else `_tabledoc`."""
+    return target.schema or description.dataset.get("schema") or tables.SCHEMA
 
 
 def load(options: Options, target: Target, report: Report, *, strict: bool = False) -> Description | None:
@@ -238,7 +238,7 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
     """
     description = read(options, report)
     if not report.failed:
-        for where, column, kind in queria.unfit(queria.rows(description)):
+        for where, column, kind in tables.unfit(tables.rows(description)):
             report.error("value-type", f"{where}: {column} cannot be written as {kind}", description.root)
     if report.failed or (strict and _warned(report, but=MANIFEST_MISSING)):
         return None
@@ -249,19 +249,19 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
 
     try:
         with attached(target.catalog, data_path(target.catalog, target.data_path)) as con:
-            tables, views, columns = queria.relations(con, ALIAS, schema)
+            in_catalog, views, columns = tables.relations(con, ALIAS, schema)
             _missing(columns, description, report)
             if report.failed:
                 return None
             description = _spelled(description, columns)
             # Without a dbt build, the SQL and dependencies stay as the catalog has them.
-            carried = queria.read(con, ALIAS, schema)
-            if queria.built_by_dbt(carried):
+            carried = tables.read(con, ALIAS, schema)
+            if tables.built_by_dbt(carried):
                 _carried_over(report)
             if strict and _warned(report):
                 return None
-            unlisted = tables | views if target.unlisted else None
-            queria.write(con, ALIAS, queria.rows(description, carried, unlisted, views), schema)
+            unlisted = in_catalog | views if target.unlisted else None
+            tables.write(con, ALIAS, tables.rows(description, carried, unlisted, views), schema)
     except duckdb.Error as exc:
         raise SpecError(f"cannot write {schema} in {target.catalog}: {exc}") from exc
     if target.out is not None:

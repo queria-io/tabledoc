@@ -1,13 +1,13 @@
-"""A description as the rows of the `_queria` schema, the tables Queria reads.
+"""A description as the rows of the tables of one schema: `_tabledoc` by default, `_queria` for Queria.
 
-    _queria.dataset   one row, id 'dataset': its title, description, licenses...  key: id
-    _queria.schemas   one row per schema described          key: schema
-    _queria.tables    one row per table or view             key: schema, name
-    _queria.columns   one row per column described          key: schema, table, name
-    _queria.files     the documents and what they link to   key: path
+    dataset   one row, id 'dataset': its title, description, licenses...  key: id
+    schemas   one row per schema described          key: schema
+    tables    one row per table or view             key: schema, name
+    columns   one row per column described          key: schema, table, name
+    files     the documents and what they link to   key: path
 
 They are ordinary tables of the catalog, versioned with the data. FDL does not
-know what they mean; `_queria.files.sha256` is declared to it as an asset column.
+know what they mean; `files.sha256` is declared to it as an asset column.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from typing import Any
 from .description import Description
 from .shape import BUILT_KEYS, QUERIA
 
-SCHEMA = "_queria"
+SCHEMA = "_tabledoc"
 
 _LICENSE = (
     "STRUCT(id VARCHAR, spdx VARCHAR, url VARCHAR, title VARCHAR, "
@@ -93,9 +93,9 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
     ),
 }
 
-#: The `id` of the one row of `_queria.dataset`.
+#: The `id` of the one row of `_tabledoc.dataset`.
 DATASET_ID = "dataset"
-#: Asset columns of `_queria` itself, declared to FDL.
+#: Asset columns of `_tabledoc` itself, declared to FDL.
 ASSETS = {("files",): ("sha256",)}
 #: What `queria:` may say, as columns: of the dataset, and of a table.
 DATASET_OWN = ("title_kana", "topics", "cover", "ai_context")
@@ -160,9 +160,9 @@ def rows(
     unlisted: set[Key] | None = None,
     views: set[Key] | None = None,
 ) -> Rows:
-    """The rows of each `_queria` table for ``description``.
+    """The rows of each `_tabledoc` table for ``description``.
 
-    ``carried`` is the `_queria` the catalog held: without a dbt build (no `sql`
+    ``carried`` is the `_tabledoc` the catalog held: without a dbt build (no `sql`
     in the description), each table keeps `sql`, `depends_on`, `materialized`
     and `source_path` from it. ``unlisted`` are the catalog's tables and views
     with no description: they are written as not published. ``views`` are the

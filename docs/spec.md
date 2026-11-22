@@ -6,7 +6,7 @@ sidebar:
 description: The files tabledoc reads, how it checks them, and what it returns to a program.
 ---
 
-tabledoc defines how people write the description of a dataset (YAML and Markdown, or a dbt project's yml), checks it, and reads it for other programs. It depends on no particular host; `tabledoc load` writes the description into a DuckLake catalog as ordinary tables of one schema (`_queria` by default), and `tabledoc dump` writes the files back from it. The files the author writes are the source.
+tabledoc defines how people write the description of a dataset (YAML and Markdown, or a dbt project's yml), checks it, and reads it for other programs. It depends on no particular host; `tabledoc load` writes the description into a DuckLake catalog as ordinary tables of one schema (`_tabledoc` by default), and `tabledoc dump` writes the files back from it. The files the author writes are the source.
 
 ## Commands
 
@@ -70,7 +70,7 @@ queria:
 | --- | --- | --- |
 | `$schema` | yes | The format and its version |
 | `name` | yes | The dataset's name: `^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
-| `schema` | | The schema `tabledoc load` writes the description into; default `_queria` |
+| `schema` | | The schema `tabledoc load` writes the description into; default `_tabledoc` |
 | `title`, `description`, `topics`, `homepage`, `language`, `issued`, `update_frequency` | | `language` is a BCP 47 tag; `issued` is `YYYY-MM-DD` |
 | `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` | | Written in a table file, the value is that table's alone |
 | `schemas` | | `name`, `title`, `description`, `guide` (the path of the schema's guide; default `<name>/README.md` when it is there), `docs` (the schema's other documents) |
@@ -230,7 +230,7 @@ d.content(d.files[0])  # the bytes of that file
 
 ## Writing into a DuckLake catalog
 
-`tabledoc load` checks the description as `validate` does, then writes it into a [DuckLake](https://ducklake.select) catalog as ordinary tables of one schema: `_queria` unless `schema` in `tabledoc.yml` or `--schema` names another. They are versioned with the data, and any program that reads the catalog reads the description with SQL. With fdl, the catalog is the working metadata `fdl clone` makes, and `fdl commit` makes a version of it.
+`tabledoc load` checks the description as `validate` does, then writes it into a [DuckLake](https://ducklake.select) catalog as ordinary tables of one schema: `_tabledoc` unless `schema` in `tabledoc.yml` or `--schema` names another. They are versioned with the data, and any program that reads the catalog reads the description with SQL. With fdl, the catalog is the working metadata `fdl clone` makes, and `fdl commit` makes a version of it.
 
 ```bash
 tabledoc load --ducklake work.sqlite --out build/assets
@@ -238,7 +238,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 ```
 
 - `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where new data files go (default: `FDL_DATA_PATH`, else the folder `fdl clone` noted beside the catalog)
-- `--schema`: the schema to write into (default: `schema` in `tabledoc.yml`, else `_queria`)
+- `--schema`: the schema to write into (default: `schema` in `tabledoc.yml`, else `_tabledoc`). Queria reads `_queria`: give `--schema _queria` (or `schema: _queria`) for a dataset published on Queria
 - `--out`: also write the folder `fdl commit --assets` takes: each file of the `files` table under `files/<path>`. With `--assets <folder>`, the files below it (those of the build's asset columns) are linked under `data/`. The folder has to be empty or written by an earlier `load`, and outside `.fdl/`, which only fdl writes
 - `--unlisted`: the catalog's tables and views that have no description get a row in `tables` with `published` false
 - A described table or column, or a primary key column, that is not in the catalog is an error, and so is an `asset` column that is not `varchar`. Names match without regard to case, as in DuckDB, and are written as the catalog spells them
@@ -270,7 +270,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 tabledoc dump --ducklake work.sqlite --out description/
 ```
 
-- `--ducklake`: the catalog (default: `FDL_WORKING`). `--schema`: the schema the description is in (default: `_queria`). `--out`: the folder (default: here), outside `.fdl/`
+- `--ducklake`: the catalog (default: `FDL_WORKING`). `--schema`: the schema the description is in (default: `_tabledoc`). `--out`: the folder (default: here), outside `.fdl/`
 - `--files`: where the files of the `files` table are, as `<files>/<sha256>`: a folder or an http(s) URL. Default: `assets/` of the repository `fdl clone` noted beside the catalog. Each file is checked against its sha256
 - `--name`: the dataset's `name` in `tabledoc.yml`. Default: the last part of the repository's URL
 - A file already in the folder is not replaced, and nothing is written, unless `--force`

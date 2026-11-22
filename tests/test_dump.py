@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from tabledoc import Options, queria
+from tabledoc import Options, tables
 from tabledoc.cli import main
 from tabledoc.dump import Source, dump
 from tabledoc.load import ALIAS, Target, attached, load
@@ -50,7 +50,7 @@ def loaded(write, lake, tmp_path):
 
 def rows(catalog):
     with attached(*catalog) as con:
-        return {table: sorted(map(repr, found)) for table, found in queria.read(con, ALIAS).items()}
+        return {table: sorted(map(repr, found)) for table, found in tables.read(con, ALIAS).items()}
 
 
 def test_dump_writes_what_loads_to_the_same_tables(loaded, tmp_path):
