@@ -329,6 +329,7 @@ tabledoc export --markdown ai-docs/
 - Keys for one reader (`queria:`, `annotations:`) are not written
 - Types, nullability and row counts are not in the description, so they are not written either
 - A file already in the folder is not replaced, and nothing is written, unless `--force`. Files of an earlier export that are no longer written stay in the folder
+- The folder also gets a `.tabledoc-export` file. tabledoc does not read the files under a folder that holds one, so the folder can be inside the root
 - On an error (with `--strict`, a warning) nothing is written
 
 ## The older format

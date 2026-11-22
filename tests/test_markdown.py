@@ -78,3 +78,33 @@ def test_export_refuses_to_replace_files_unless_forced(write, tmp_path):
     assert (out / "sales" / "orders" / "README.md").is_file()
     assert main(["export", "--root", str(root), "--markdown", str(out)]) == 2
     assert main(["export", "--root", str(root), "--markdown", str(out), "--force"]) == 0
+
+
+def test_export_inside_the_root_is_not_read_again(write):
+    root = write({**FILES, "sales/orders.md": "See [the table file](orders.yml).\n"})
+    out = root / "ai-docs"
+    assert main(["export", "--root", str(root), "--markdown", str(out)]) == 0
+    assert (out / "sales" / "orders.yml").is_file()
+    assert (out / ".tabledoc-export").is_file()
+    assert main(["validate", "--root", str(root)]) == 0
+
+
+def test_export_into_a_file_is_refused(write, tmp_path):
+    root = write(FILES)
+    out = tmp_path / "md"
+    out.write_text("", encoding="utf-8")
+    assert main(["export", "--root", str(root), "--markdown", str(out)]) == 2
+
+
+def test_links_with_spaces_and_the_repository(write):
+    files = {
+        **FILES,
+        "tabledoc.yml": FILES["tabledoc.yml"] + "repository: https://example.com/repo\ndocs: ['docs/Data dictionary.md']\n",
+        "docs/Data dictionary.md": "# Dictionary\n",
+    }
+    report = Report()
+    d = read(Options(write(files), with_source=False), report)
+    assert not report.failed, report.render()
+    readme = render(d)["README.md"].decode()
+    assert "- Repository: https://example.com/repo\n" in readme
+    assert "- [Data dictionary.md](<Data dictionary.md>)\n" in readme

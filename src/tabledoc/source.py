@@ -24,6 +24,8 @@ from .report import Report, SpecError
 DATASET_FILE = "tabledoc.yml"
 #: Folders never read: build output, dependencies, and hidden folders.
 IGNORED_DIRS = frozenset({"target", "dbt_packages", "node_modules", ".venv"})
+#: The file `tabledoc export --markdown` leaves in its folder; a folder holding it is not read either.
+EXPORT_MARK = ".tabledoc-export"
 DEFAULT_SCHEMA = "main"
 
 Key = tuple[str, str]
@@ -59,13 +61,18 @@ def rel(root: Path, path: Path) -> str:
 
 
 def walk(root: Path, suffixes: tuple[str, ...]) -> Iterator[Path]:
-    """Files under ``root`` ending in one of ``suffixes``, outside the folders never read."""
+    """Files under ``root`` ending in one of ``suffixes``, outside the folders never read
+    and the folders `tabledoc export --markdown` wrote."""
     stack = [root]
     while stack:
         current = stack.pop()
         for entry in sorted(current.iterdir()):
             if entry.is_dir():
-                if entry.name not in IGNORED_DIRS and not entry.name.startswith("."):
+                if (
+                    entry.name not in IGNORED_DIRS
+                    and not entry.name.startswith(".")
+                    and not (entry / EXPORT_MARK).is_file()
+                ):
                     stack.append(entry)
             elif entry.name.endswith(suffixes):
                 yield entry
