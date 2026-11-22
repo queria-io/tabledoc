@@ -45,6 +45,22 @@ def _renamed(record: dict[str, Any], level: str) -> dict[str, Any]:
     }
 
 
+def _ids(record: dict[str, Any]) -> dict[str, Any]:
+    """``record`` with an `id` on each source and contributor, which the older format did not
+    have: its `path`, else its `title`."""
+
+    def with_id(entry: Any) -> Any:
+        if not isinstance(entry, dict) or "id" in entry:
+            return entry
+        named = entry.get("path") or entry.get("title")
+        return {"id": str(named), **entry} if isinstance(named, str) else entry
+
+    return {
+        **record,
+        **{k: [with_id(e) for e in record[k]] for k in ("sources", "contributors") if isinstance(record.get(k), list)},
+    }
+
+
 def _documents(record: dict[str, Any], guide: bool = False) -> dict[str, Any]:
     """``record`` with `docs` (and a schema's `guide`) as `documents`."""
     listed = [record[k] for k in (("guide",) if guide else ()) if record.get(k)]
@@ -55,7 +71,7 @@ def _documents(record: dict[str, Any], guide: bool = False) -> dict[str, Any]:
 
 def dataset(record: dict[str, Any]) -> dict[str, Any]:
     """queria.yml as tabledoc.yml. `catalogs` stays; the caller takes it out as `dependencies`."""
-    converted = _documents(_renamed(record, "dataset"))
+    converted = _documents(_ids(_renamed(record, "dataset")))
     written = converted.get("schemas")
     if isinstance(written, list):
         converted["schemas"] = [_documents(s, guide=True) if isinstance(s, dict) else s for s in written]
@@ -83,7 +99,7 @@ def _semantic(field: dict[str, Any], primary_key: list[str]) -> tuple[dict[str, 
 
 def table(record: dict[str, Any]) -> dict[str, Any]:
     """A table front matter as a table file. `fields` is `columns`, `semantic` is read as dbt's."""
-    own = _documents(_renamed(record, "table"))
+    own = _documents(_ids(_renamed(record, "table")))
     fields = own.pop("fields", None)
     primary_key = own.get("primary_key") if isinstance(own.get("primary_key"), list) else []
     converted = [

@@ -103,6 +103,7 @@ def test_the_older_format(write):
         {
             "queria.yml": "$schema: https://queria.io/schemas/dataset/v1.json\n"
             + "name: old\ntitle: Old\ntitle_kana: オールド\nlanguage: ja\nthemes: [economy]\ncover: cover.png\n"
+            + "sources: [{title: Site, path: https://site.example}]\n"
             + "catalogs: {other: https://data.example/datasets/o/other/}\n",
             "models/a.md": "---\n$schema: https://queria.io/schemas/table/v1.json\ntable: s.a\n"
             + "primary_key: [id]\npublished: false\nfields:\n"
@@ -122,6 +123,9 @@ def test_the_older_format(write):
     assert document["dataset"]["title_reading"] == {"ja": "オールド"}
     assert document["dataset"]["image"] == "cover.png"
     assert "annotations" not in document["dataset"]
+    assert document["dataset"]["sources"] == [
+        {"id": "https://site.example", "title": {"ja": "Site"}, "path": {"ja": "https://site.example"}}
+    ]
     assert "catalogs" not in document["dataset"]
     assert read(Options(root, with_source=False), Report()).dependencies == {
         "other": {"url": "https://data.example/datasets/o/other/"}

@@ -11,7 +11,7 @@ tabledoc makes a dataset's tables readable by people and AI. It takes what dbt a
 - In a dbt project, descriptions, SQL and lineage come from `target/manifest.json`
 - From Python, `tabledoc.read` returns the checked description, with the guides and the files they link to by path and sha256
 - `tabledoc export --markdown <folder>` writes one Markdown file per table (columns, semantics, primary key, lineage, SQL and the guide) and one for the dataset that lists them, for AI assistants and people to read
-- `tabledoc load` writes the description into a DuckLake catalog as ordinary tables of one schema (`_tabledoc` by default), so it travels with the data and is versioned with it by [FDL](https://fdl.queria.io). `tabledoc dump` writes the files back from it
+- The same description has a second form: the tables of the schema `_tabledoc`, in third normal form, which any SQL database can hold next to the data. `tabledoc load` writes them into a DuckLake catalog, where they are versioned with the data (by [FDL](https://fdl.queria.io), say), and `tabledoc dump` writes the files back from them
 
 ## Install
 
