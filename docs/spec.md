@@ -146,8 +146,9 @@ columns:
     description: databases の db と同じ
 ```
 
-- These keys take either form: `title`, `description` and `topics` of the dataset, a schema, a table and a column; `title` of `licenses`, `sources` and `contributors`; `description` of `metrics`. `topics` maps a tag to a list
-- Other keys hold one value (`title_kana`, `homepage`, names, paths)
+- Any of tabledoc's keys whose value is text, or a list of text, takes either form: `title`, `description`, `topics`, `homepage`, and the `title`, `url` and `path` of licenses, sources and contributors, say. A list becomes a map from a tag to a list
+- Values that point at something, or come from a fixed set, hold one value: `name`, `table`, `schema`, `primary_key`, an entity's `name`, `language`, `$schema`, `issued`, `update_frequency`, `dimension`, `granularity`, `agg`, `expr`, `sql`, `depends_on`, `spdx`, `id`, `roles`, `spatial_coverage`, `temporal_coverage`, and the paths of guides and `docs`. Written in other languages, they would no longer point at the same table, column or file
+- Keys under `queria:` and `annotations:` are the reader's own
 - A tag is checked as BCP 47. A map with no text is an error
 - In a dbt project's yml, `description` is the text alone, in `language`. dbt does not take a map there
 - `tabledoc.read` returns these values as maps always: the text alone becomes `{<language>: text}`, and `{und: text}` without `language`
@@ -277,7 +278,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 | `columns` | `schema`, `table`, `name` | each column with a `title`, a `description` or an `entity`: `entity` is the entity's `name` (a code system such as `lg_code`) |
 | `files` | `path` | the [files in the dataset](#paths-in-the-dataset): `path`, `sha256`, `bytes`, `media_type` |
 
-- The keys of [languages](#languages) are written as `MAP(VARCHAR, VARCHAR)` (`topics` as `MAP(VARCHAR, VARCHAR[])`), keyed by language as `tabledoc.read` returns them. `language` is written as it is
+- The values that [languages](#languages) apply to are written as `MAP(VARCHAR, VARCHAR)` (a list as `MAP(VARCHAR, VARCHAR[])`), keyed by language as `tabledoc.read` returns them. `language` is written as it is
 - `topics` (or `keywords`, its earlier name) unless `queria:` has `topics`. `themes` under `queria:` is not written
 - `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
 - A view's row has no `sql` or `depends_on`: the metadata holds the view's SQL

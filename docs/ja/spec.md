@@ -146,8 +146,9 @@ columns:
     description: databases の db と同じ
 ```
 
-- どちらの形でも書けるキーは、データセット・スキーマ・テーブル・列の `title`・`description`・`topics`、`licenses`・`sources`・`contributors` の `title`、`metrics` の `description` です。`topics` はタグから一覧への対応にします
-- ほかのキーは値を 1 つだけ持ちます (`title_kana`・`homepage`・名前・パスなど)
+- tabledoc のキーのうち、値が文字列か文字列の一覧のものは、どちらの形でも書けます。たとえば `title`・`description`・`topics`・`homepage` と、ライセンス・出典・作成者の `title`・`url`・`path` です。一覧はタグから一覧への対応にします
+- 何かを指す値と、決まった語彙から選ぶ値は、値を 1 つだけ持ちます。`name`・`table`・`schema`・`primary_key`・entity の `name`・`language`・`$schema`・`issued`・`update_frequency`・`dimension`・`granularity`・`agg`・`expr`・`sql`・`depends_on`・`spdx`・`id`・`roles`・`spatial_coverage`・`temporal_coverage` と、ガイドと `docs` のパスです。言語ごとに変えると、同じテーブル・列・ファイルを指せなくなるためです
+- `queria:` と `annotations:` の下のキーは、それぞれの読み手が決めます
 - タグは BCP 47 として検査します。文字列が 1 つも無い対応はエラーです
 - dbt のプロジェクトの yml では、`description` は文字列だけで、`language` の言語として読みます。dbt はそこに対応を受け付けません
 - `tabledoc.read` はこれらの値を常に対応で返します。文字列だけの値は `{<language>: 文字列}`、`language` が無ければ `{und: 文字列}` になります
@@ -277,7 +278,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 | `columns` | `schema`・`table`・`name` | `title`・`description`・`entity` のどれかがある列。`entity` は entity の `name` (`lg_code` などのコード体系) です |
 | `files` | `path` | [データセットの中のファイル](#データセットの中のパス): `path`・`sha256`・`bytes`・`media_type` |
 
-- [言語](#言語)のキーは `MAP(VARCHAR, VARCHAR)` (`topics` は `MAP(VARCHAR, VARCHAR[])`) として、`tabledoc.read` が返す言語ごとの対応のまま書きます。`language` はそのまま書きます
+- [言語](#言語)の対象の値は `MAP(VARCHAR, VARCHAR)` (一覧は `MAP(VARCHAR, VARCHAR[])`) として、`tabledoc.read` が返す言語ごとの対応のまま書きます。`language` はそのまま書きます
 - `topics` (以前の名前の `keywords`) は、`queria:` に `topics` が無ければ書きます。`queria:` の `themes` は書きません
 - `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
 - ビューの行には `sql` と `depends_on` を書きません。ビューの SQL はメタデータが持ちます
