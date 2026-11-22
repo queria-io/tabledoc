@@ -61,7 +61,7 @@ def test_a_view_gets_no_key_and_a_table_not_listed_no_profile(write):
     want = wanted(described(write), "_queria", unpublished={"sales.extra"}, views={"sales.orders"})
     assert "sales.orders" not in want["primary_keys"]
     assert "sales.orders" not in want["assets"]
-    assert want["unprofiled"] == ["_queria.columns", "_queria.dataset", "_queria.files", "_queria.schemas", "_queria.tables", "sales.extra"]
+    assert want["unprofiled"] == ["_queria.columns", "_queria.dataset", "_queria.files", "_queria.schemas", "_queria.tables", "_queria.texts", "sales.extra"]
     assert want["profiled"] == ["sales.orders"]
     have = {**want, "unprofiled": ["sales.orders"]}
     done = commands(have, want)

@@ -146,3 +146,22 @@ def test_dump_does_not_make_a_catalog(tmp_path):
     with pytest.raises(SpecError):
         dump(Source(str(missing)), tmp_path / "dumped")
     assert not missing.exists()
+
+
+def test_text_in_more_than_one_language_comes_back_as_a_map(write, lake, tmp_path):
+    catalog = lake("CREATE SCHEMA lake.sales; CREATE TABLE lake.sales.orders AS SELECT 1 AS id")
+    root = write(
+        {
+            "src/tabledoc.yml": DATASET + "name: shop\nlanguage: ja\ntitle: {ja: 店, en: Shop}\ndescription: 店の注文\n",
+            "src/sales/orders.yml": TABLE + "columns: [{name: id, title: {en: Order ID}}]\n",
+        }
+    ) / "src"
+    report = Report()
+    assert load(Options(root, with_source=False), Target(*catalog), report) is not None, report.render()
+    out = tmp_path / "dumped"
+    dump(Source(catalog[0], None, "shop"), out)
+    dataset = (out / "tabledoc.yml").read_text()
+    assert "title:\n  en: Shop\n  ja: 店\ndescription: 店の注文\n" in dataset
+    assert "title:\n    en: Order ID\n" in (out / "sales" / "orders.yml").read_text()
+    again = Report()
+    assert load(Options(out, with_source=False), Target(*catalog), again) is not None, again.render()
