@@ -72,6 +72,7 @@ queria:
 | `name` | yes | The dataset's name: `^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
 | `schema` | | The schema `tabledoc load` writes the description into; default `_tabledoc` |
 | `title`, `description`, `topics`, `homepage`, `language`, `issued`, `update_frequency` | | `language` is a BCP 47 tag, the language of the text written without one ([languages](#languages)); `issued` is `YYYY-MM-DD` |
+| `repository` | | The URL of the repository of the dataset's source code, such as `https://github.com/queria-io/dataset-boj`. `tabledoc load` takes Git's `origin` when it is left out |
 | `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` | | Written in a table file, the value is that table's alone |
 | `schemas` | | `name`, `title`, `description`, `guide` (the path of the schema's guide; default `<name>/README.md` when it is there), `docs` (the schema's other documents) |
 | `docs` | | Paths of the dataset's other documents |
@@ -147,7 +148,7 @@ columns:
 ```
 
 - Any of tabledoc's keys whose value is text, or a list of text, takes either form: `title`, `description`, `topics`, `homepage`, and the `title`, `url` and `path` of licenses, sources and contributors, say. A list becomes a map from a tag to a list
-- Values that point at something, or come from a fixed set, hold one value: `name`, `table`, `schema`, `primary_key`, an entity's `name`, `language`, `$schema`, `issued`, `update_frequency`, `dimension`, `granularity`, `agg`, `expr`, `sql`, `depends_on`, `spdx`, `id`, `roles`, `spatial_coverage`, `temporal_coverage`, and the paths of guides and `docs`. Written in other languages, they would no longer point at the same table, column or file
+- Values that point at something, or come from a fixed set, hold one value: `name`, `table`, `schema`, `repository`, `primary_key`, an entity's `name`, `language`, `$schema`, `issued`, `update_frequency`, `dimension`, `granularity`, `agg`, `expr`, `sql`, `depends_on`, `spdx`, `id`, `roles`, `spatial_coverage`, `temporal_coverage`, and the paths of guides and `docs`. Written in other languages, they would no longer point at the same table, column or file
 - Keys under `queria:` and `annotations:` are the reader's own
 - A tag is checked as BCP 47. A map with no text is an error
 - In a dbt project's yml, `description` is the text alone, in `language`. dbt does not take a map there
@@ -262,19 +263,19 @@ tabledoc load --ducklake work.sqlite --out build/assets
 fdl commit work.sqlite -m "..." --assets build/assets
 ```
 
-- `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where new data files go (default: `FDL_DATA_PATH`, else the folder `fdl clone` noted beside the catalog)
+- `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where new data files go (default: `FDL_DATA_PATH`, else the folder `fdl clone` noted beside the catalog). Data files over HTTP are read with DuckDB's secrets; when the catalog is fdl's working metadata and `FDL_TOKEN` is set, the token is sent to the remote `fdl clone` noted, so a private dataset's files can be read
 - `--schema`: the schema to write into (default: `schema` in `tabledoc.yml`, else `_tabledoc`). Queria reads `_queria`: give `--schema _queria` (or `schema: _queria`) for a dataset published on Queria
 - `--out`: also write the folder `fdl commit --assets` takes: each file of the `files` table under `files/<path>`. With `--assets <folder>`, the files below it (those of the build's asset columns) are linked under `data/`. The folder has to be empty or written by an earlier `load`, and outside `.fdl/`, which only fdl writes
-- `--unlisted`: the catalog's tables and views that have no description get a row in `tables` with `published` false. The tables of the schema written into, and of each schema that holds the tables `dataset`, `schemas`, `tables`, `columns` and `files` (one an earlier load wrote into), get none
+- `--unlisted`: the catalog's tables and views that have no description get a row in `tables` with `published` false, and so does a table dbt built that the author described nowhere (only its SQL is known). The tables of the schema written into, and of each schema that holds the tables `dataset`, `schemas`, `tables`, `columns` and `files` (one an earlier load wrote into), get none
 - A described table or column, or a primary key column, that is not in the catalog is an error, and so is an `asset` column that is not `varchar`. Names match without regard to case, as in DuckDB, and are written as the catalog spells them
 - A value its column cannot hold (`issued` other than `YYYY-MM-DD`, say) is an error
 - On an error (with `--strict`, a warning) nothing is written
 
 | Table | Primary key | From |
 | --- | --- | --- |
-| `dataset` | `id` (always `dataset`) | `tabledoc.yml`: `language`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage`; `title_kana`, `cover` and `ai_context` under `queria:` |
+| `dataset` | `id` (always `dataset`) | `tabledoc.yml`: `language`, `homepage`, `repository` (else Git's `origin`, as https), `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage`; `title_kana`, `cover` and `ai_context` under `queria:` |
 | `schemas` | `schema` | `schemas[]` with a `title` or a `description` |
-| `tables` | `schema`, `name` | each table and view described: `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `sql`, `depends_on`, dbt's `materialized` and `source_path`; `published` and `ai_context` under `queria:` |
+| `tables` | `schema`, `name` | each table and view described: `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `sql`, `depends_on`, `source_path`; `published` and `ai_context` under `queria:` |
 | `columns` | `schema`, `table`, `name` | each column with a `title`, a `description` or an `entity`: `entity` is the entity's `name` (a code system such as `lg_code`) |
 | `texts` | `schema`, `table`, `column`, `language` | `title`, `description` and `topics` of the dataset, each schema, table and column, one row for each language they are written in. `schema`, `table` and `column` are `''` where they do not apply: the dataset's row has all three `''`, a schema's has `table` and `column` `''`, and a table's has `column` `''` |
 | `files` | `path` | the [files in the dataset](#paths-in-the-dataset): `path`, `sha256`, `bytes`, `media_type` |
@@ -283,11 +284,12 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - The other tables hold one value for each key. For a key written in more than one language outside `texts` (a license's `title`, say), they hold the value in `language`, and tabledoc warns
 - `topics` (or `keywords`, its earlier name) unless `queria:` has `topics`. `themes` under `queria:` is not written
 - `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
+- `source_path` is the path of the file that defines the table, from the root of `repository` (dbt's `original_file_path`, under the folder of `tabledoc.yml` in the Git working copy), and `sql` is the SQL that made it; both are NULL where they are not known. Whether it is a table or a view is not written: the catalog holds that
 - A view's row has no `sql` or `depends_on`: the metadata holds the view's SQL
 - Keys under `annotations:` for readers other than Queria are not written
 - The files are not in the catalog. `files.sha256` holds the sha256 of each, and `fdl commit --assets` uploads each file by its content
-- Rows are added, changed and removed by their primary key, so a load changes only the cells that differ. Without a dbt build (no `sql` in the description), each table keeps the `sql`, `depends_on`, `materialized` and `source_path` the catalog holds
-- Primary keys and asset columns are not written into these tables: FDL takes them as its own declarations
+- Rows are added, changed and removed by their primary key, so a load changes only the cells that differ. Without a dbt build (no `sql` in the description), each table keeps the `sql`, `depends_on` and `source_path` the catalog holds
+- Primary keys and asset columns are not written into these tables. When the catalog is the working metadata `fdl clone` made (it noted `<catalog>.fdl.json` beside it), `load` declares them to FDL with `fdl declare`, which has to be on `PATH`: each table's `primary_key` and the asset columns of each table whose columns say `asset` (a view has neither), no profile for each table and view whose `published` is false and a profile for each other table described, the other datasets the SQL reads (from dbt's `profiles.yml`) as dependencies, and the keys of these five tables with `files.sha256` as an asset column and no profile. It runs only what differs from `fdl declare list`, and leaves what the description does not say as FDL has it
 - tabledoc writes no comments (`COMMENT ON`)
 
 ## Writing the files from a catalog

@@ -20,6 +20,7 @@ DATASET_KEYS = (
     "description",
     "topics",
     "homepage",
+    "repository",
     "language",
     "issued",
     "update_frequency",

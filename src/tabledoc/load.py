@@ -3,7 +3,8 @@
 The catalog is the one the build wrote (with fdl, the working metadata `fdl clone`
 made). The description's rows (`tables.rows`) go into the tables of a schema
 of it (`_tabledoc` unless told otherwise), and the folder ``out`` gets the files
-of its `files` table (for `fdl commit --assets`).
+of its `files` table (for `fdl commit --assets`). With fdl's working metadata, the
+primary keys, asset columns and dependencies are declared with `fdl declare`.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from . import tables
+from .declare import declare
 from .description import MANIFEST_MISSING, Description, Options, read
 from .report import Finding, Level, Report, SpecError
 
@@ -71,12 +73,29 @@ def _string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def remote_secret(catalog: str) -> str | None:
+    """The DuckDB secret that sends `FDL_TOKEN` to the HTTP remote `fdl clone` noted beside
+    ``catalog``, so the data files of a private dataset can be read; None without both."""
+    token = os.environ.get("FDL_TOKEN")
+    note = Path(catalog.removeprefix("ducklake:") + ".fdl.json")
+    if not token or not note.is_file():
+        return None
+    try:
+        remote = json.loads(note.read_text(encoding="utf-8")).get("remote")
+    except (OSError, ValueError, AttributeError) as exc:
+        raise SpecError(f"cannot read {note}: {exc}") from exc
+    if not isinstance(remote, str) or not remote.startswith(("http://", "https://")):
+        return None
+    return f"CREATE SECRET tabledoc_remote (TYPE http, BEARER_TOKEN {_string(token)}, SCOPE {_string(remote)})"
+
+
 @contextmanager
 def attached(catalog: str, data: str | None, *, read_only: bool = False) -> Iterator[Any]:
     """A DuckDB connection with ``catalog`` attached as ``ALIAS``: writable, unless ``read_only``.
 
     Every row goes to a data file (`DATA_INLINING_ROW_LIMIT 0`), as fdl commit
-    requires. Files over HTTP are read with httpfs and DuckDB's own secrets.
+    requires. Files over HTTP are read with httpfs and DuckDB's own secrets; with
+    fdl's working metadata, `FDL_TOKEN` is sent to its remote (`remote_secret`).
     """
     import duckdb
 
@@ -91,6 +110,9 @@ def attached(catalog: str, data: str | None, *, read_only: bool = False) -> Iter
         con.execute("INSTALL ducklake; LOAD ducklake; INSTALL httpfs; LOAD httpfs;")
         if catalog.endswith(".sqlite"):
             con.execute("INSTALL sqlite; LOAD sqlite;")
+        secret = remote_secret(catalog)
+        if secret:
+            con.execute(secret)
         try:
             con.execute(f"ATTACH {_string(target)} AS {ALIAS} ({', '.join(options)})")
         except duckdb.Error as exc:
@@ -213,12 +235,14 @@ def _warned(report: Report, but: str = "") -> bool:
     return any(f.code != but for f in report.of(Level.WARNING))
 
 
-def _keeps_dbt_sql(description: Description, carried: tables.Rows) -> bool:
+def _keeps_dbt_sql(description: Description, carried: tables.Rows, unlisted: set[tables.Key] | None) -> bool:
     """Whether the load keeps the SQL of every table dbt built, as the catalog holds it: there
-    is such a table, the description has no `sql` (no build), and it describes each of them."""
+    is such a table, the description has no `sql` (no build), and each of them keeps its row
+    (it is described, or ``unlisted`` holds it)."""
     built = {tables.fold(t["schema"], t["name"]) for t in carried.get("tables") or [] if t.get("source_path")}
-    described = {tables.fold(t["schema"], t["name"]) for t in description.tables}
-    return bool(built) and built <= described and not any("sql" in t for t in description.tables)
+    kept = {tables.fold(t["schema"], t["name"]) for t in description.tables}
+    kept |= {tables.fold(*key) for key in unlisted or set()}
+    return bool(built) and built <= kept and not any("sql" in t for t in description.tables)
 
 
 def _carried_over(report: Report) -> None:
@@ -254,6 +278,7 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
 
     try:
         with attached(target.catalog, data_path(target.catalog, target.data_path)) as con:
+            schema = tables.spelled_schema(con, ALIAS, schema)
             in_catalog, views, columns = tables.relations(con, ALIAS, schema)
             _missing(columns, description, report)
             if report.failed:
@@ -261,14 +286,22 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
             description = _spelled(description, columns)
             # Without a dbt build, the SQL and dependencies stay as the catalog has them.
             carried = tables.read(con, ALIAS, schema)
-            if _keeps_dbt_sql(description, carried):
+            unlisted = in_catalog | views if target.unlisted else None
+            if _keeps_dbt_sql(description, carried, unlisted):
                 _carried_over(report)
             if strict and _warned(report):
                 return None
-            unlisted = in_catalog | views if target.unlisted else None
-            tables.write(con, ALIAS, tables.rows(description, carried, unlisted, views), schema)
+            found = tables.rows(description, carried, unlisted, views)
+            tables.write(con, ALIAS, found, schema)
     except duckdb.Error as exc:
         raise SpecError(f"cannot write {schema} in {target.catalog}: {exc}") from exc
+    declare(
+        target.catalog,
+        description,
+        schema,
+        unpublished={f"{t['schema']}.{t['name']}" for t in found["tables"] if not tables.published(t)},
+        views={f"{s}.{n}" for s, n in views},
+    )
     if target.out is not None:
         write_out(description, target.out, target.assets)
     return description

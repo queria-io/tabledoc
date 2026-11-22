@@ -72,6 +72,7 @@ queria:
 | `name` | 必須 | データセットの名前。`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
 | `schema` | | `tabledoc load` が説明を書くスキーマ。既定は `_tabledoc` |
 | `title`・`description`・`topics`・`homepage`・`language`・`issued`・`update_frequency` | | `language` は BCP 47 のタグで、言語を付けずに書いた文字列の言語です ([言語](#言語))。`issued` は `YYYY-MM-DD` |
+| `repository` | | データセットのソースコードのリポジトリの URL。例: `https://github.com/queria-io/dataset-boj`。省くと `tabledoc load` は Git の `origin` を使います |
 | `licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` | | テーブルのファイルに書くと、そのテーブルだけの値になります |
 | `schemas` | | `name`・`title`・`description`・`guide` (スキーマのガイドのパス。省くと、あれば `<name>/README.md`)・`docs` (スキーマのほかの文書) |
 | `docs` | | データセットのほかの文書のパス |
@@ -147,7 +148,7 @@ columns:
 ```
 
 - tabledoc のキーのうち、値が文字列か文字列の一覧のものは、どちらの形でも書けます。たとえば `title`・`description`・`topics`・`homepage` と、ライセンス・出典・作成者の `title`・`url`・`path` です。一覧はタグから一覧への対応にします
-- 何かを指す値と、決まった語彙から選ぶ値は、値を 1 つだけ持ちます。`name`・`table`・`schema`・`primary_key`・entity の `name`・`language`・`$schema`・`issued`・`update_frequency`・`dimension`・`granularity`・`agg`・`expr`・`sql`・`depends_on`・`spdx`・`id`・`roles`・`spatial_coverage`・`temporal_coverage` と、ガイドと `docs` のパスです。言語ごとに変えると、同じテーブル・列・ファイルを指せなくなるためです
+- 何かを指す値と、決まった語彙から選ぶ値は、値を 1 つだけ持ちます。`name`・`table`・`schema`・`repository`・`primary_key`・entity の `name`・`language`・`$schema`・`issued`・`update_frequency`・`dimension`・`granularity`・`agg`・`expr`・`sql`・`depends_on`・`spdx`・`id`・`roles`・`spatial_coverage`・`temporal_coverage` と、ガイドと `docs` のパスです。言語ごとに変えると、同じテーブル・列・ファイルを指せなくなるためです
 - `queria:` と `annotations:` の下のキーは、それぞれの読み手が決めます
 - タグは BCP 47 として検査します。文字列が 1 つも無い対応はエラーです
 - dbt のプロジェクトの yml では、`description` は文字列だけで、`language` の言語として読みます。dbt はそこに対応を受け付けません
@@ -262,19 +263,19 @@ tabledoc load --ducklake work.sqlite --out build/assets
 fdl commit work.sqlite -m "..." --assets build/assets
 ```
 
-- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ `fdl clone` がカタログの横に記録したフォルダ)
+- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ `fdl clone` がカタログの横に記録したフォルダ)。HTTP のデータファイルは DuckDB の secret で読みます。カタログが fdl の作業用メタデータで `FDL_TOKEN` があるときは、`fdl clone` が記録した remote にそのトークンを送るので、非公開データセットのファイルも読めます
 - `--schema`: 書くスキーマ (既定は `tabledoc.yml` の `schema`、無ければ `_tabledoc`)。Queria は `_queria` を読みます。Queria で公開するデータセットでは `--schema _queria` (か `schema: _queria`) を指定します
 - `--out`: `fdl commit --assets` に渡すフォルダも書きます。`files` テーブルの各ファイルを `files/<path>` に置きます。`--assets <フォルダ>` を付けると、その下のファイル (ビルドが作った asset の列のファイル) を `data/` にリンクします。フォルダは空か前の `load` が書いたもので、fdl だけが書く `.fdl/` の外でなければなりません
-- `--unlisted`: 説明の無いテーブルとビューにも `tables` の行を作り、`published` を false にします。書き込むスキーマと、`dataset`・`schemas`・`tables`・`columns`・`files` のテーブルをすべて持つスキーマ (以前の load が書いたスキーマなど) のテーブルには行を作りません
+- `--unlisted`: 説明の無いテーブルとビューにも `tables` の行を作り、`published` を false にします。dbt が作ったテーブルで、SQL のほかに説明がどこにも書かれていないものも `published` を false にします。書き込むスキーマと、`dataset`・`schemas`・`tables`・`columns`・`files` のテーブルをすべて持つスキーマ (以前の load が書いたスキーマなど) のテーブルには行を作りません
 - 説明や主キーにあってカタログに無いテーブルと列、`varchar` でない `asset` の列はエラーです。名前は DuckDB と同じく大文字と小文字を区別せずに照合し、カタログの表記で書きます
 - 列に入らない値 (`YYYY-MM-DD` 以外の `issued` など) はエラーです
 - エラー (`--strict` では警告も) があると何も書きません
 
 | テーブル | 主キー | 元の値 |
 | --- | --- | --- |
-| `dataset` | `id` (常に `dataset`) | `tabledoc.yml` の `language`・`homepage`・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage`、`queria:` の `title_kana`・`cover`・`ai_context` |
+| `dataset` | `id` (常に `dataset`) | `tabledoc.yml` の `language`・`homepage`・`repository` (無ければ Git の `origin` を https で)・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage`、`queria:` の `title_kana`・`cover`・`ai_context` |
 | `schemas` | `schema` | `title` か `description` のある `schemas[]` |
-| `tables` | `schema`・`name` | 説明のあるテーブルとビュー: `licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`sql`・`depends_on`・dbt の `materialized` と `source_path`、`queria:` の `published`・`ai_context` |
+| `tables` | `schema`・`name` | 説明のあるテーブルとビュー: `licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`sql`・`depends_on`・`source_path`、`queria:` の `published`・`ai_context` |
 | `columns` | `schema`・`table`・`name` | `title`・`description`・`entity` のどれかがある列。`entity` は entity の `name` (`lg_code` などのコード体系) です |
 | `texts` | `schema`・`table`・`column`・`language` | データセット・スキーマ・テーブル・列の `title`・`description`・`topics`。書いた言語ごとに 1 行です。対象に当たらない段は `''` にします。データセットの行は 3 つとも `''`、スキーマの行は `table` と `column` が `''`、テーブルの行は `column` が `''` です |
 | `files` | `path` | [データセットの中のファイル](#データセットの中のパス): `path`・`sha256`・`bytes`・`media_type` |
@@ -283,11 +284,12 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - ほかのテーブルは各キーに値を 1 つだけ持ちます。`texts` に入らないキー (ライセンスの `title` など) を複数の言語で書いたときは、`language` の言語の値を書き、警告を出します
 - `topics` (以前の名前の `keywords`) は、`queria:` に `topics` が無ければ書きます。`queria:` の `themes` は書きません
 - `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
+- `source_path` はそのテーブルを定義しているファイルの、`repository` のルートからのパス (dbt の `original_file_path` に、Git の作業コピーの中での `tabledoc.yml` のフォルダを前に付けたもの)、`sql` はそのテーブルを作った SQL です。分からないときはどちらも NULL です。テーブルかビューかは書きません (カタログが持っています)
 - ビューの行には `sql` と `depends_on` を書きません。ビューの SQL はメタデータが持ちます
 - `annotations:` のうち Queria 以外の読み手のキーは書きません
 - ファイルの中身はカタログに入れません。`files.sha256` に各ファイルの sha256 を書き、`fdl commit --assets` が中身ごとにファイルをアップロードします
-- 行は主キーごとに追加・更新・削除するので、`load` は値の違うセルだけを変えます。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql`・`depends_on`・`materialized`・`source_path` をカタログから引き継ぎます
-- 主キーと asset の列はこれらのテーブルに書きません。FDL が自分の宣言として受け取ります
+- 行は主キーごとに追加・更新・削除するので、`load` は値の違うセルだけを変えます。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql`・`depends_on`・`source_path` をカタログから引き継ぎます
+- 主キーと asset の列はこれらのテーブルに書きません。カタログが `fdl clone` の作った作業用メタデータのとき (横に `<catalog>.fdl.json` があるとき)、`load` は `fdl declare` で FDL に宣言します (`fdl` が `PATH` にあることが必要です)。宣言するのは、各テーブルの `primary_key` と、列に `asset` があるテーブルの asset の列 (ビューにはどちらも宣言しません)、`published` が false のテーブルとビューにプロファイルを作らないことと、説明したほかのテーブルにプロファイルを作ること、SQL が読むほかのデータセット (dbt の `profiles.yml` から) の依存先、それにこの 5 テーブルの主キーと asset の列 `files.sha256` とプロファイルを作らないことです。`fdl declare list` と違うものだけを実行し、説明に無いものは FDL の宣言のまま残します
 - コメント (`COMMENT ON`) は書きません
 
 ## カタログからファイルを書く

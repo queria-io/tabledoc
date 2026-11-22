@@ -19,6 +19,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from . import shape
 from .description import Description
 from .shape import BUILT_KEYS, QUERIA
 
@@ -45,6 +46,7 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
             "description": "VARCHAR",
             "language": "VARCHAR",
             "homepage": "VARCHAR",
+            "repository": "VARCHAR",
             "issued": "DATE",
             "update_frequency": "VARCHAR",
             "licenses": _LICENSE,
@@ -71,7 +73,6 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
             "ai_context": "JSON",
             "sql": "VARCHAR",
             "depends_on": "VARCHAR[]",
-            "materialized": "VARCHAR",
             "source_path": "VARCHAR",
         },
         ("schema", "name"),
@@ -96,7 +97,7 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
 #: The `id` of the one row of `_tabledoc.dataset`.
 DATASET_ID = "dataset"
 #: Asset columns of `_tabledoc` itself, declared to FDL.
-ASSETS = {("files",): ("sha256",)}
+ASSETS = {"files": ("sha256",)}
 #: What `queria:` may say, as columns: of the dataset, and of a table.
 DATASET_OWN = ("title_kana", "topics", "cover", "ai_context")
 TABLE_OWN = ("topics", "published", "ai_context")
@@ -163,9 +164,10 @@ def rows(
     """The rows of each `_tabledoc` table for ``description``.
 
     ``carried`` is the `_tabledoc` the catalog held: without a dbt build (no `sql`
-    in the description), each table keeps `sql`, `depends_on`, `materialized`
-    and `source_path` from it. ``unlisted`` are the catalog's tables and views
-    with no description: they are written as not published. ``views`` are the
+    in the description), each table keeps `sql`, `depends_on` and `source_path`
+    from it. ``unlisted`` are the catalog's tables and views:
+    those with no description, and those dbt built that say nothing but their
+    SQL, are written as not published. ``views`` are the
     catalog's views, whose SQL the metadata already holds.
     """
     columns = {name: {c: t for c, t in spec[0].items() if c != "id"} for name, spec in TABLES.items()}
@@ -175,9 +177,20 @@ def rows(
     viewed = {fold(*v) for v in views or set()}
     table_columns = {c: t for c, t in columns["tables"].items() if c not in ("schema", "name")}
 
+    # `repository` from tabledoc.yml, else Git's origin; `source_path` from its root.
+    where = description.source or {}
+    folder = where.get("path") or ""
+    dataset = description.dataset
+    if not dataset.get("repository") and where.get("repository"):
+        dataset = {**dataset, "repository": where["repository"]}
+
     def table(t: dict[str, Any]) -> dict[str, Any]:
+        if t.get("source_path") and folder:
+            t = {**t, "source_path": f"{folder}/{t['source_path']}"}
         merged = {**kept.get(fold(t["schema"], t["name"]), {}), **t}
         record = _record(merged, table_columns, TABLE_OWN)
+        if unlisted is not None and not _said(t) and record.get("published") is None:
+            record["published"] = False
         if fold(t["schema"], t["name"]) in viewed:
             # The metadata holds a view's SQL, and so what it reads.
             record.pop("sql", None)
@@ -186,14 +199,14 @@ def rows(
 
     unlisted_keys = [(s, n) for s, n in sorted(unlisted or set()) if fold(s, n) not in described]
     return {
-        "dataset": [{"id": DATASET_ID, **_record(description.dataset, columns["dataset"], DATASET_OWN)}],
+        "dataset": [{"id": DATASET_ID, **_record(dataset, columns["dataset"], DATASET_OWN)}],
         "schemas": [
             {"schema": s["name"], **_pick(s, ["title", "description"])}
             for s in description.schemas
             if s.get("title") or s.get("description")
         ],
         "tables": [table(t) for t in description.tables]
-        + [{"schema": s, "name": n, "published": False} for s, n in unlisted_keys],
+        + [table({"schema": s, "name": n}) for s, n in unlisted_keys],
         "columns": [
             {
                 "schema": t["schema"],
@@ -208,6 +221,12 @@ def rows(
         ],
         "files": [f.entry() for f in description.files],
     }
+
+
+def _said(table: dict[str, Any]) -> bool:
+    """Whether an author described ``table``: more than the SQL dbt fills in."""
+    record = {k: v for k, v in table.items() if k not in ("schema", "name", "guide", "docs")}
+    return bool(table.get("guide") or table.get("docs")) or shape.described(record)
 
 
 def published(table: dict[str, Any]) -> bool:
@@ -272,6 +291,16 @@ def _literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def spelled_schema(con: Any, catalog: str, schema: str) -> str:
+    """``schema`` as ``catalog`` spells it, when it has a schema of that name in another case."""
+    found = con.execute(
+        "SELECT schema_name FROM duckdb_schemas() WHERE database_name = ? AND lower(schema_name) = lower(?) "
+        "ORDER BY schema_name = ? DESC LIMIT 1",
+        [catalog, schema, schema],
+    ).fetchone()
+    return found[0] if found else schema
+
+
 def relations(con: Any, catalog: str, schema: str = SCHEMA) -> tuple[set[Key], set[Key], dict[Key, dict[str, str]]]:
     """(tables, views, each one's columns and types) of ``catalog``, but those of a description's
     schema: ``schema``, and each schema that holds every table of `TABLES` (such as one an
@@ -306,16 +335,17 @@ def read(con: Any, catalog: str, schema: str = SCHEMA) -> Rows:
     Values of a JSON column come back parsed.
     """
     found = con.execute(
-        "SELECT table_name FROM duckdb_tables() WHERE database_name = ? AND schema_name = ?", [catalog, schema]
+        "SELECT schema_name, table_name FROM duckdb_tables() WHERE database_name = ? AND lower(schema_name) = lower(?)",
+        [catalog, schema],
     ).fetchall()
     result: Rows = {}
-    for (table,) in found:
-        if table not in TABLES:
+    for held_in, table in found:
+        if table.lower() not in TABLES:
             continue
-        cursor = con.execute(f"SELECT * FROM {catalog}.{quote(schema)}.{quote(table)}")
+        cursor = con.execute(f"SELECT * FROM {catalog}.{quote(held_in)}.{quote(table)}")
         names = [d[0] for d in cursor.description]
-        kinds = TABLES[table][0]
-        result[table] = [
+        kinds = TABLES[table.lower()][0]
+        result[table.lower()] = [
             {
                 n: json.loads(v) if kinds.get(n) == "JSON" and isinstance(v, str) else _plain(v)
                 for n, v in zip(names, row)
@@ -371,13 +401,18 @@ def _write_table(
     held = {
         name
         for (name,) in con.execute(
-            "SELECT column_name FROM duckdb_columns() WHERE database_name = ? AND schema_name = ? AND table_name = ?",
+            "SELECT column_name FROM duckdb_columns() WHERE database_name = ? "
+            "AND lower(schema_name) = lower(?) AND lower(table_name) = lower(?)",
             [catalog, schema, table],
         ).fetchall()
     }
+    lowered = {c.lower() for c in held}
     for column, kind in columns.items():
-        if column not in held:
+        if column.lower() not in lowered:
             con.execute(f"ALTER TABLE {target} ADD COLUMN {quote(column)} {kind}")
+    for column in sorted(c for c in held if c.lower() not in {k.lower() for k in columns}):
+        # A column an earlier tabledoc wrote and this one does not.
+        con.execute(f"ALTER TABLE {target} DROP COLUMN {quote(column)}")
     staged = f"tabledoc_{table}"
     names = ", ".join(quote(c) for c in columns)
     con.execute(f"CREATE OR REPLACE TEMP TABLE {staged} ({spec})")
