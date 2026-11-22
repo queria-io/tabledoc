@@ -73,12 +73,29 @@ def _string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def remote_secret(catalog: str) -> str | None:
+    """The DuckDB secret that sends `FDL_TOKEN` to the HTTP remote `fdl clone` noted beside
+    ``catalog``, so the data files of a private dataset can be read; None without both."""
+    token = os.environ.get("FDL_TOKEN")
+    note = Path(catalog.removeprefix("ducklake:") + ".fdl.json")
+    if not token or not note.is_file():
+        return None
+    try:
+        remote = json.loads(note.read_text(encoding="utf-8")).get("remote")
+    except (OSError, ValueError, AttributeError) as exc:
+        raise SpecError(f"cannot read {note}: {exc}") from exc
+    if not isinstance(remote, str) or not remote.startswith(("http://", "https://")):
+        return None
+    return f"CREATE SECRET tabledoc_remote (TYPE http, BEARER_TOKEN {_string(token)}, SCOPE {_string(remote)})"
+
+
 @contextmanager
 def attached(catalog: str, data: str | None, *, read_only: bool = False) -> Iterator[Any]:
     """A DuckDB connection with ``catalog`` attached as ``ALIAS``: writable, unless ``read_only``.
 
     Every row goes to a data file (`DATA_INLINING_ROW_LIMIT 0`), as fdl commit
-    requires. Files over HTTP are read with httpfs and DuckDB's own secrets.
+    requires. Files over HTTP are read with httpfs and DuckDB's own secrets; with
+    fdl's working metadata, `FDL_TOKEN` is sent to its remote (`remote_secret`).
     """
     import duckdb
 
@@ -93,6 +110,9 @@ def attached(catalog: str, data: str | None, *, read_only: bool = False) -> Iter
         con.execute("INSTALL ducklake; LOAD ducklake; INSTALL httpfs; LOAD httpfs;")
         if catalog.endswith(".sqlite"):
             con.execute("INSTALL sqlite; LOAD sqlite;")
+        secret = remote_secret(catalog)
+        if secret:
+            con.execute(secret)
         try:
             con.execute(f"ATTACH {_string(target)} AS {ALIAS} ({', '.join(options)})")
         except duckdb.Error as exc:
@@ -258,6 +278,7 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
 
     try:
         with attached(target.catalog, data_path(target.catalog, target.data_path)) as con:
+            schema = tables.spelled_schema(con, ALIAS, schema)
             in_catalog, views, columns = tables.relations(con, ALIAS, schema)
             _missing(columns, description, report)
             if report.failed:
@@ -270,10 +291,17 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
                 _carried_over(report)
             if strict and _warned(report):
                 return None
-            tables.write(con, ALIAS, tables.rows(description, carried, unlisted, views), schema)
+            found = tables.rows(description, carried, unlisted, views)
+            tables.write(con, ALIAS, found, schema)
     except duckdb.Error as exc:
         raise SpecError(f"cannot write {schema} in {target.catalog}: {exc}") from exc
-    declare(target.catalog, description, schema)
+    declare(
+        target.catalog,
+        description,
+        schema,
+        unpublished={f"{t['schema']}.{t['name']}" for t in found["tables"] if not tables.published(t)},
+        views={f"{s}.{n}" for s, n in views},
+    )
     if target.out is not None:
         write_out(description, target.out, target.assets)
     return description

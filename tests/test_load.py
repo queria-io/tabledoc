@@ -157,6 +157,14 @@ def test_writes_into_the_schema_it_is_told(write, catalog):
     assert held(catalog, "dataset", "title", schema="notes") == [("Notes",)]
 
 
+def test_a_schema_named_in_another_case_is_the_one_the_catalog_holds(write, catalog):
+    root = project(write)
+    assert run(root, catalog, schema="docs") is not None
+    (root / "tabledoc.yml").write_text(DATASET + "name: shop\ntitle: Again\n")
+    assert run(root, catalog, schema="Docs") is not None
+    assert held(catalog, "dataset", "title", schema="docs") == [("Again",)]
+
+
 def test_an_asset_column_has_to_be_varchar(write, catalog):
     root = project(write)
     (root / "sales" / "extra.yml").write_text(TABLE + "columns: [{name: x, asset: true}]\n", encoding="utf-8")
@@ -341,3 +349,17 @@ def test_repository_comes_from_git_and_source_path_from_its_root(write, catalog)
     load(Options(top / "ds"), Target(*catalog), Report())
     assert held(catalog, "dataset", "repository") == [("https://github.com/example/shop",)]
     assert held(catalog, "tables", "name", "source_path") == [("extra", "ds/models/extra.sql")]
+
+
+def test_sends_fdl_token_to_the_remote_of_a_working_metadata(tmp_path, monkeypatch):
+    from tabledoc.load import remote_secret
+
+    catalog = tmp_path / "work.sqlite"
+    monkeypatch.setenv("FDL_TOKEN", "t'k")
+    assert remote_secret(str(catalog)) is None
+    (tmp_path / "work.sqlite.fdl.json").write_text(json.dumps({"remote": "https://data.example/d/"}))
+    assert remote_secret(str(catalog)) == (
+        "CREATE SECRET tabledoc_remote (TYPE http, BEARER_TOKEN 't''k', SCOPE 'https://data.example/d/')"
+    )
+    monkeypatch.delenv("FDL_TOKEN")
+    assert remote_secret(str(catalog)) is None

@@ -228,14 +228,15 @@ def dump(source: Source, out: Path, *, force: bool = False) -> list[str]:
 
     try:
         with attached(source.catalog, None, read_only=True) as con:
-            found = tables.read(con, ALIAS, source.schema)
+            held_in = tables.spelled_schema(con, ALIAS, source.schema)
+            found = tables.read(con, ALIAS, held_in)
     except duckdb.Error as exc:
         raise SpecError(f"cannot read {source.schema} in {source.catalog}: {exc}") from exc
     if not found:
         raise SpecError(f"{source.catalog} has no {source.schema} schema")
     texts = {
         path: render(record).encode("utf-8")
-        for path, record in documents(found, dataset_name(source), source.schema).items()
+        for path, record in documents(found, dataset_name(source), held_in).items()
     }
     entries = sorted(found.get("files") or [], key=lambda f: f["path"])
     for path in [*texts, *(f["path"] for f in entries)]:

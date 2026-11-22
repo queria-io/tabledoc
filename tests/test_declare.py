@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from tabledoc import Options
 from tabledoc.declare import commands, declare, wanted
 from tabledoc.description import read
-from tabledoc.report import Report
+from tabledoc.report import Report, SpecError
 
 DATASET = "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\nname: shop\n"
 TABLE = "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"
@@ -53,3 +55,22 @@ def test_runs_fdl_declare_only_for_a_working_metadata(write, tmp_path):
     assert ["declare", "primary-key", str(catalog), "sales.orders", "id"] in calls
     assert ["declare", "assets", str(catalog), "_queria.files", "sha256"] in calls
     assert len(calls) == len(done) + 1
+
+
+def test_a_view_gets_no_key_and_a_table_not_listed_no_profile(write):
+    want = wanted(described(write), "_queria", unpublished={"sales.extra"}, views={"sales.orders"})
+    assert "sales.orders" not in want["primary_keys"]
+    assert "sales.orders" not in want["assets"]
+    assert want["unprofiled"] == ["_queria.columns", "_queria.dataset", "_queria.files", "_queria.schemas", "_queria.tables", "sales.extra"]
+    assert want["profiled"] == ["sales.orders"]
+    have = {**want, "unprofiled": ["sales.orders"]}
+    done = commands(have, want)
+    assert ["profile", "sales.extra", "false"] in done
+    assert ["profile", "sales.orders", "true"] in done
+    assert commands(want, want) == []
+
+
+def test_output_of_fdl_that_is_not_json_is_an_error(write, tmp_path):
+    (tmp_path / "work.sqlite.fdl.json").write_text("{}")
+    with pytest.raises(SpecError):
+        declare(str(tmp_path / "work.sqlite"), described(write), "_queria", lambda args: "not json")

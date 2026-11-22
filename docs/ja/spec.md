@@ -238,7 +238,7 @@ tabledoc load --ducklake work.sqlite --out build/assets
 fdl commit work.sqlite -m "..." --assets build/assets
 ```
 
-- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ `fdl clone` がカタログの横に記録したフォルダ)
+- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ `fdl clone` がカタログの横に記録したフォルダ)。HTTP のデータファイルは DuckDB の secret で読みます。カタログが fdl の作業用メタデータで `FDL_TOKEN` があるときは、`fdl clone` が記録した remote にそのトークンを送るので、非公開データセットのファイルも読めます
 - `--schema`: 書くスキーマ (既定は `tabledoc.yml` の `schema`、無ければ `_tabledoc`)。Queria は `_queria` を読みます。Queria で公開するデータセットでは `--schema _queria` (か `schema: _queria`) を指定します
 - `--out`: `fdl commit --assets` に渡すフォルダも書きます。`files` テーブルの各ファイルを `files/<path>` に置きます。`--assets <フォルダ>` を付けると、その下のファイル (ビルドが作った asset の列のファイル) を `data/` にリンクします。フォルダは空か前の `load` が書いたもので、fdl だけが書く `.fdl/` の外でなければなりません
 - `--unlisted`: 説明の無いテーブルとビューにも `tables` の行を作り、`published` を false にします。dbt が作ったテーブルで、SQL のほかに説明がどこにも書かれていないものも `published` を false にします。書き込むスキーマと、`dataset`・`schemas`・`tables`・`columns`・`files` のテーブルをすべて持つスキーマ (以前の load が書いたスキーマなど) のテーブルには行を作りません
@@ -261,7 +261,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - `annotations:` のうち Queria 以外の読み手のキーは書きません
 - ファイルの中身はカタログに入れません。`files.sha256` に各ファイルの sha256 を書き、`fdl commit --assets` が中身ごとにファイルをアップロードします
 - 行は主キーごとに追加・更新・削除するので、`load` は値の違うセルだけを変えます。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql`・`depends_on`・`source_path` をカタログから引き継ぎます
-- 主キーと asset の列はこれらのテーブルに書きません。カタログが `fdl clone` の作った作業用メタデータのとき (横に `<catalog>.fdl.json` があるとき)、`load` は `fdl declare` で FDL に宣言します (`fdl` が `PATH` にあることが必要です)。宣言するのは、各テーブルの `primary_key`、列に `asset` があるテーブルの asset の列、SQL が読むほかのデータセット (dbt の `profiles.yml` から) の依存先、それにこの 5 テーブルの主キーと asset の列 `files.sha256` です。`fdl declare list` と違うものだけを実行し、説明に無いものは FDL の宣言のまま残します
+- 主キーと asset の列はこれらのテーブルに書きません。カタログが `fdl clone` の作った作業用メタデータのとき (横に `<catalog>.fdl.json` があるとき)、`load` は `fdl declare` で FDL に宣言します (`fdl` が `PATH` にあることが必要です)。宣言するのは、各テーブルの `primary_key` と、列に `asset` があるテーブルの asset の列 (ビューにはどちらも宣言しません)、`published` が false のテーブルとビューにプロファイルを作らないことと、説明したほかのテーブルにプロファイルを作ること、SQL が読むほかのデータセット (dbt の `profiles.yml` から) の依存先、それにこの 5 テーブルの主キーと asset の列 `files.sha256` とプロファイルを作らないことです。`fdl declare list` と違うものだけを実行し、説明に無いものは FDL の宣言のまま残します
 - コメント (`COMMENT ON`) は書きません
 
 ## カタログからファイルを書く

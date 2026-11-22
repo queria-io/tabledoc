@@ -291,6 +291,16 @@ def _literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def spelled_schema(con: Any, catalog: str, schema: str) -> str:
+    """``schema`` as ``catalog`` spells it, when it has a schema of that name in another case."""
+    found = con.execute(
+        "SELECT schema_name FROM duckdb_schemas() WHERE database_name = ? AND lower(schema_name) = lower(?) "
+        "ORDER BY schema_name = ? DESC LIMIT 1",
+        [catalog, schema, schema],
+    ).fetchone()
+    return found[0] if found else schema
+
+
 def relations(con: Any, catalog: str, schema: str = SCHEMA) -> tuple[set[Key], set[Key], dict[Key, dict[str, str]]]:
     """(tables, views, each one's columns and types) of ``catalog``, but those of a description's
     schema: ``schema``, and each schema that holds every table of `TABLES` (such as one an
@@ -325,16 +335,17 @@ def read(con: Any, catalog: str, schema: str = SCHEMA) -> Rows:
     Values of a JSON column come back parsed.
     """
     found = con.execute(
-        "SELECT table_name FROM duckdb_tables() WHERE database_name = ? AND schema_name = ?", [catalog, schema]
+        "SELECT schema_name, table_name FROM duckdb_tables() WHERE database_name = ? AND lower(schema_name) = lower(?)",
+        [catalog, schema],
     ).fetchall()
     result: Rows = {}
-    for (table,) in found:
-        if table not in TABLES:
+    for held_in, table in found:
+        if table.lower() not in TABLES:
             continue
-        cursor = con.execute(f"SELECT * FROM {catalog}.{quote(schema)}.{quote(table)}")
+        cursor = con.execute(f"SELECT * FROM {catalog}.{quote(held_in)}.{quote(table)}")
         names = [d[0] for d in cursor.description]
-        kinds = TABLES[table][0]
-        result[table] = [
+        kinds = TABLES[table.lower()][0]
+        result[table.lower()] = [
             {
                 n: json.loads(v) if kinds.get(n) == "JSON" and isinstance(v, str) else _plain(v)
                 for n, v in zip(names, row)
@@ -390,14 +401,16 @@ def _write_table(
     held = {
         name
         for (name,) in con.execute(
-            "SELECT column_name FROM duckdb_columns() WHERE database_name = ? AND schema_name = ? AND table_name = ?",
+            "SELECT column_name FROM duckdb_columns() WHERE database_name = ? "
+            "AND lower(schema_name) = lower(?) AND lower(table_name) = lower(?)",
             [catalog, schema, table],
         ).fetchall()
     }
+    lowered = {c.lower() for c in held}
     for column, kind in columns.items():
-        if column not in held:
+        if column.lower() not in lowered:
             con.execute(f"ALTER TABLE {target} ADD COLUMN {quote(column)} {kind}")
-    for column in sorted(held - set(columns)):
+    for column in sorted(c for c in held if c.lower() not in {k.lower() for k in columns}):
         # A column an earlier tabledoc wrote and this one does not.
         con.execute(f"ALTER TABLE {target} DROP COLUMN {quote(column)}")
     staged = f"tabledoc_{table}"
