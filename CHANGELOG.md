@@ -1,6 +1,23 @@
 # CHANGELOG
 
 
+## v0.3.1 (2026-11-22)
+
+### Bug Fixes
+
+- Export --markdown writes text in the dataset's language
+  ([#13](https://github.com/queria-io/tabledoc/pull/13),
+  [`0cbda91`](https://github.com/queria-io/tabledoc/commit/0cbda917557e30989c548eadbded8ba7a97fa223))
+
+- Keep an export inside the root out of the next read, and refuse what export cannot write
+  ([#15](https://github.com/queria-io/tabledoc/pull/15),
+  [`a5034bf`](https://github.com/queria-io/tabledoc/commit/a5034bf21760a603ffaab8f25d5c1dc19d90c8b8))
+
+- Keep recognizing earlier description schemas, refuse empty text, compare tags without case
+  ([#14](https://github.com/queria-io/tabledoc/pull/14),
+  [`627e072`](https://github.com/queria-io/tabledoc/commit/627e0721debebf91c3f7553ebf96f704b46d23a9))
+
+
 ## v0.3.0 (2026-11-22)
 
 ### Features
