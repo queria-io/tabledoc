@@ -215,11 +215,6 @@ def published(table: dict[str, Any]) -> bool:
     return table.get("published") is not False
 
 
-def built_by_dbt(carried: Rows | None) -> bool:
-    """Whether the catalog holds a table dbt built, as its `source_path` says."""
-    return any(t.get("source_path") for t in (carried or {}).get("tables") or [])
-
-
 # -- checking the values -----------------------------------------------------------------
 
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -278,7 +273,9 @@ def _literal(value: str) -> str:
 
 
 def relations(con: Any, catalog: str, schema: str = SCHEMA) -> tuple[set[Key], set[Key], dict[Key, dict[str, str]]]:
-    """(tables, views, each one's columns and types) of ``catalog``, but those of ``schema``."""
+    """(tables, views, each one's columns and types) of ``catalog``, but those of a description's
+    schema: ``schema``, and each schema that holds every table of `TABLES` (such as one an
+    earlier load wrote into). Names match without regard to case."""
     found = con.execute(
         """
         SELECT schema_name, table_name, false FROM duckdb_tables() WHERE database_name = $1
@@ -287,7 +284,12 @@ def relations(con: Any, catalog: str, schema: str = SCHEMA) -> tuple[set[Key], s
         """,
         [catalog],
     ).fetchall()
-    kept = [(s, n, v) for s, n, v in found if s != schema]
+    held: dict[str, set[str]] = {}
+    for s, n, v in found:
+        if not v:
+            held.setdefault(s.lower(), set()).add(n.lower())
+    skipped = {schema.lower()} | {s for s, names in held.items() if names >= set(TABLES)}
+    kept = [(s, n, v) for s, n, v in found if s.lower() not in skipped]
     columns: dict[Key, dict[str, str]] = {(s, n): {} for s, n, _ in kept}
     for s, n, name, kind in con.execute(
         "SELECT schema_name, table_name, column_name, data_type FROM duckdb_columns() WHERE database_name = ?",

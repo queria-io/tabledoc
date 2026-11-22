@@ -151,11 +151,11 @@ columns:
 | 文書が指すファイル | ルートからのパスのまま |
 
 - Markdown の文書の中の相対リンクのうち、別のパスに置いたファイルを指すものは、新しいパスを指すように書き換えます。`sha256` と `bytes` は書き換えた後の文書の値です
-- データセットの中の同じパスに 2 つのファイルを置くことになるときはエラーです
+- データセットの中の同じパスに 2 つのファイルを置くことになるときはエラーです。1 つのファイルをデータセットの中の 2 つのパスに置くことになるとき (2 つのテーブルの `docs` に同じ文書を書いたときなど) もエラーです
 
 ## dbt のプロジェクト
 
-ルートに `dbt_project.yml` があると、tabledoc は `target/manifest.json` (`--manifest` で変更できます) を読みます。先に `dbt compile` (またはビルド) を実行してください。manifest が無いときは警告を出し、テーブルのファイルだけを読みます。カタログに dbt で作ったテーブル (`source_path` のあるテーブル) があるときは、`load` はその SQL を引き継ぐので、警告ではなく情報として出します。
+ルートに `dbt_project.yml` があると、tabledoc は `target/manifest.json` (`--manifest` で変更できます) を読みます。先に `dbt compile` (またはビルド) を実行してください。manifest が無いときは警告を出し、テーブルのファイルだけを読みます。カタログに dbt で作ったテーブル (`source_path` のあるテーブル) があり、説明に `sql` が無く、そのテーブルをすべて説明しているときは、`load` はその SQL を引き継ぐので、警告ではなく情報として出します。
 
 - テーブルは、有効なモデルのうち `materialized` が `table`・`view`・`incremental` のものです。モデルの `schema` と `alias` で名前を決めます。`ephemeral` と無効なモデル、seed・snapshot・テストはテーブルにならないので並べません。説明の無いモデルは dbt が埋める値 (`materialized`・`sql`・`depends_on`・`source_path`) だけで並べます
 - 説明はモデルの yml から取ります。`description` と列の `description` はそのまま、dbt に無いキー (`title`・`primary_key`・`sources`・列の `title`・`asset` など) と `queria` は `config.meta` に書きます
@@ -240,7 +240,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ `fdl clone` がカタログの横に記録したフォルダ)
 - `--schema`: 書くスキーマ (既定は `tabledoc.yml` の `schema`、無ければ `_tabledoc`)。Queria は `_queria` を読みます。Queria で公開するデータセットでは `--schema _queria` (か `schema: _queria`) を指定します
 - `--out`: `fdl commit --assets` に渡すフォルダも書きます。`files` テーブルの各ファイルを `files/<path>` に置きます。`--assets <フォルダ>` を付けると、その下のファイル (ビルドが作った asset の列のファイル) を `data/` にリンクします。フォルダは空か前の `load` が書いたもので、fdl だけが書く `.fdl/` の外でなければなりません
-- `--unlisted`: 説明の無いテーブルとビューにも `tables` の行を作り、`published` を false にします
+- `--unlisted`: 説明の無いテーブルとビューにも `tables` の行を作り、`published` を false にします。書き込むスキーマと、`dataset`・`schemas`・`tables`・`columns`・`files` のテーブルをすべて持つスキーマ (以前の load が書いたスキーマなど) のテーブルには行を作りません
 - 説明や主キーにあってカタログに無いテーブルと列、`varchar` でない `asset` の列はエラーです。名前は DuckDB と同じく大文字と小文字を区別せずに照合し、カタログの表記で書きます
 - 列に入らない値 (`YYYY-MM-DD` 以外の `issued` など) はエラーです
 - エラー (`--strict` では警告も) があると何も書きません
@@ -270,10 +270,10 @@ fdl commit work.sqlite -m "..." --assets build/assets
 tabledoc dump --ducklake work.sqlite --out description/
 ```
 
-- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--schema`: 説明のあるスキーマ (既定は `_tabledoc`)。`--out`: 書くフォルダ (既定は今のフォルダ)。`.fdl/` の外でなければなりません
+- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--schema`: 説明のあるスキーマ (既定は `_tabledoc`)。ほかのスキーマは `tabledoc.yml` の `schema` に書くので、`load` は同じスキーマに書き戻します。`--out`: 書くフォルダ (既定は今のフォルダ)。`.fdl/` の外でなければなりません
 - `--files`: `files` テーブルのファイルの置き場所。`<files>/<sha256>` で読みます。フォルダか http(s) の URL です。既定は、`fdl clone` がカタログの横に記録したリポジトリの `assets/` です。各ファイルは sha256 で照合します
 - `--name`: `tabledoc.yml` の `name`。既定はリポジトリの URL の最後の部分です
-- フォルダに同じファイルがあると、`--force` を付けない限り何も書きません
+- フォルダに同じファイルがあると、`--force` を付けない限り何も書きません。カタログのパスがフォルダの外を指すときはエラーです
 - テーブルのファイルは `<schema>/<table>.yml`、ガイドは `<schema>/<table>/README.md` に書きます。フォルダの `README.md` 以外の Markdown は、そのフォルダの `docs` に並べます
 - テーブルに無いものは書きません。主キー、asset の列、entity の種類 (`foreign` と書きます)・dimension・granularity・metrics、ほかの読み手のキーと、dbt の `profiles.yml` から取る SQL が読むほかのデータセットです。`--unlisted` だけが書いたテーブルにはテーブルのファイルを作りません。`sql` と `depends_on` は `source_path` の無いテーブル (dbt で作らないテーブル) にだけ書きます
 

@@ -134,11 +134,15 @@ def collect(root: Path, documents: list[tuple[str, str, Path]], report: Report) 
     document's links are rewritten to follow the files that moved. A named
     document that is missing, or outside the root, is an error. A link to a
     folder is left alone; a link to a missing file is a warning. Two files at
-    the same path in the dataset is an error.
+    the same path in the dataset is an error, and so is one file named for two
+    paths in the dataset.
     """
     placed: dict[str, str] = {}
     pending = [(local, where) for local, _, where in documents]
-    named = {local: path for local, path, _ in documents}
+    named: dict[str, str] = {}
+    for local, path, where in documents:
+        if named.setdefault(local, path) != path:
+            report.error("file-named-twice", f"{local} is named for both {named[local]} and {path} in the dataset", where)
     while pending:
         local, where = pending.pop(0)
         if local in placed:

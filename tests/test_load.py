@@ -246,3 +246,20 @@ def test_data_path_follows_fdl_clones_note(tmp_path):
     note.write_text(json.dumps({"data": str(tmp_path / "d")}))
     assert data_path(str(working), None) == (tmp_path / "d").resolve().as_posix() + "/"
     assert data_path(str(working), "given/") == "given/"
+
+
+def test_a_missing_manifest_stays_a_warning_when_a_table_dbt_built_is_not_described(write, catalog):
+    root = project(write)
+    write({"dbt_project.yml": "name: p\n"})
+    run(root, catalog, unlisted=True)
+    sql(catalog, "UPDATE lake._tabledoc.tables SET source_path = 'm.sql' WHERE name = 'extra'")
+    report = Report()
+    assert load(Options(root, with_source=False), Target(*catalog), report, strict=True) is None
+    assert [(f.level.value, f.code) for f in report.findings] == [("warning", "manifest-missing")]
+
+
+def test_unlisted_leaves_out_the_schemas_of_a_description(write, catalog):
+    root = project(write)
+    assert run(root, catalog, schema="_queria") is not None
+    assert run(root, catalog, unlisted=True) is not None
+    assert held(catalog, "tables", "schema", "name") == [("sales", "extra"), ("sales", "orders"), ("sales", "recent")]
