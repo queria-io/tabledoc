@@ -231,16 +231,18 @@ d.content(d.files[0])  # そのファイルの中身
 
 `tabledoc load` は `validate` と同じ検査をしてから、説明を [DuckLake](https://ducklake.select) のカタログの [`_fdl` スキーマ](https://fdl.queria.io/ja/spec/fdl-schema)のテーブルとして書きます。テーブルの形は FDL が定めます。カタログを読むプログラムは、データと一緒に説明も SQL で読めます。
 
+tabledoc は `_fdl` を fdl CLI (tabledoc が依存する fdl-cli) だけで読み書きします。`fdl meta objects` でテーブルとビューの一覧を、`fdl meta dump` で `_fdl` を読み、`fdl meta load` で `_fdl` を書いて FDL の検査を実行します。カタログは fdl の作業用メタデータ (`fdl clone` が作る `.sqlite` ファイル) です。
+
 ```bash
-tabledoc load --ducklake work.sqlite --data-path data/ --out build/assets
+tabledoc load --ducklake work.sqlite --out build/assets
 fdl commit work.sqlite -m "..." --assets build/assets
 ```
 
-- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ `fdl clone` がカタログの横に記録したフォルダ)
+- `--ducklake`: fdl の作業用メタデータ (既定は `FDL_WORKING`)
 - `--out`: `fdl commit --assets` に渡すフォルダも書きます。`_fdl.files` の各ファイルを `files/<path>` に置きます。`--assets <フォルダ>` を付けると、その下のファイル (ビルドが作った asset の列のファイル) を `data/` にリンクします。フォルダは空か前の `load` が書いたもので、fdl だけが書く `.fdl/` の外でなければなりません
 - `--unlisted`: 説明の無いテーブルとビューにも `_fdl.tables` の行を作って `profile` を false にし、属性 `queria-published` を false にします
 - 説明や主キーにあってカタログに無いテーブルと列、`varchar` でない `asset` の列はエラーです。名前は DuckDB と同じく大文字と小文字を区別せずに照合します
-- `YYYY-MM-DD` 以外の `issued` はエラーです
+- `fdl meta load` が受け付けない値 (`YYYY-MM-DD` 以外の `issued` など) はエラーです。fdl の出した理由を表示します
 - エラー (`--strict` では警告も) があると何も書きません
 
 | テーブル | 元の値 |
@@ -258,18 +260,20 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - `_fdl` に列の無い値は属性に書きます。列の `entity` (その `name`) は `queria-entity`、ライセンスの `commercial_use`・`share_alike`・`attribution_required` はライセンス ID ごとに `queria-license-terms` (`{"<id>": {"commercial_use": true}}`、データセットかテーブル)、dbt の `materialized`・`source_path` は `dbt-materialized`・`dbt-source-path` (テーブルかビュー) です
 - `licenses` は `{id, spdx, url, title}` のリストです。文字列で書いたライセンスは `{id}` になります
 - ファイルの中身はカタログに入れません。`_fdl.files.sha256` は asset の列で、`fdl commit --assets` が中身ごとにファイルをアップロードします
-- `_fdl` のテーブルは毎回 1 つのトランザクションで作り直します。tabledoc 0.3 が書いた `_meta` スキーマはその中で削除します。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql`・`depends_on`・`dbt-materialized`・`dbt-source-path` をカタログの `_fdl` (無ければ `_meta`) から引き継ぎます
+- `fdl meta load` で、`_fdl` をこれらの行だけにします。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql`・`depends_on`・`dbt-materialized`・`dbt-source-path` をカタログの `_fdl` から引き継ぎます
+- 名前はカタログの表記で書きます
+- tabledoc 0.3 が書いた `_meta` スキーマはそのまま残します。FDL は読みません。消すときは DuckDB で一度だけ削除してください
 - コメント (`COMMENT ON`) は書きません
 
 ## カタログからファイルを書く
 
-`tabledoc dump` は、カタログの `_fdl` が持つ説明のファイルを書きます。`tabledoc.yml`、説明のあるテーブルごとのテーブルのファイル、`_fdl.files` の各ファイル (そのパスに) です。書いたファイルを `tabledoc load` で読むと、同じ `_fdl` になります。
+`tabledoc dump` は、カタログの `_fdl` が持つ説明を `fdl meta dump` で読み、そのファイルを書きます。`tabledoc.yml`、説明のあるテーブルごとのテーブルのファイル、`_fdl.files` の各ファイル (そのパスに) です。書いたファイルを `tabledoc load` で読むと、同じ `_fdl` になります。
 
 ```bash
 tabledoc dump --ducklake work.sqlite --out description/
 ```
 
-- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--out`: 書くフォルダ (既定は今のフォルダ)。`.fdl/` の外でなければなりません
+- `--ducklake`: fdl の作業用メタデータ (既定は `FDL_WORKING`)。`--out`: 書くフォルダ (既定は今のフォルダ)。`.fdl/` の外でなければなりません
 - `--files`: `_fdl.files` のファイルの置き場所。`<files>/<sha256>` で読みます。フォルダか http(s) の URL です。既定は、`fdl clone` がカタログの横に記録したリポジトリの `assets/` です。各ファイルは sha256 で照合します
 - `--name`: `tabledoc.yml` の `name`。既定はリポジトリの URL の最後の部分です
 - フォルダに同じファイルがあると、`--force` を付けない限り何も書きません

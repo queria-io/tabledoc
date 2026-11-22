@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 
-from tabledoc import Options
+from tabledoc import Options, fdl
 from tabledoc.cli import main
 from tabledoc.dump import Source, dump
-from tabledoc.load import ALIAS, Target, attached, load
+from tabledoc.load import Target, load
 from tabledoc.report import Report, SpecError
 
 DATASET = "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\n"
@@ -15,15 +13,13 @@ TABLE = "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"
 
 
 @pytest.fixture
-def loaded(write, tmp_path):
-    """A catalog loaded from a description, and the folder of its files by sha256."""
-    path = tmp_path / "lake" / "work.sqlite"
-    data = tmp_path / "lake" / "data"
-    data.mkdir(parents=True)
-    with attached(str(path), data.as_posix() + "/") as con:
-        con.execute(f"CREATE SCHEMA {ALIAS}.sales")
-        con.execute(f"CREATE TABLE {ALIAS}.sales.orders AS SELECT 1 AS id, 'a' AS file")
-        con.execute(f"CREATE TABLE {ALIAS}.sales.extra AS SELECT 1 AS x")
+def loaded(write, lake, tmp_path):
+    """fdl's working metadata loaded from a description, and the folder of its files by sha256."""
+    path = lake(
+        "CREATE SCHEMA lake.sales;"
+        "CREATE TABLE lake.sales.orders AS SELECT 1 AS id, 'a' AS file;"
+        "CREATE TABLE lake.sales.extra AS SELECT 1 AS x"
+    )
     root = write(
         {
             "src/tabledoc.yml": DATASET
@@ -41,25 +37,21 @@ def loaded(write, tmp_path):
         }
     ) / "src"
     report = Report()
-    found = load(Options(root, with_source=False), Target(str(path), data.as_posix() + "/", unlisted=True), report)
+    found = load(Options(root, with_source=False), Target(str(path), unlisted=True), report)
     assert found is not None, report.render()
     files = tmp_path / "assets"
     files.mkdir()
     for file in found.files:
         (files / file.sha256).write_bytes(found.content(file))
-    return path, data.as_posix() + "/", files
+    return path, files
 
 
-def rows(path, data):
-    with attached(str(path), data) as con:
-        return {
-            table: con.execute(f'SELECT * FROM {ALIAS}._fdl."{table}" ORDER BY ALL').fetchall()
-            for table in ("dataset", "schemas", "tables", "columns", "files", "catalogs", "attributes")
-        }
+def rows(path):
+    return {table: sorted(map(repr, found)) for table, found in fdl.dump(str(path)).items()}
 
 
 def test_dump_writes_what_loads_to_the_same_fdl(loaded, tmp_path):
-    path, data, files = loaded
+    path, files = loaded
     out = tmp_path / "dumped"
     written = dump(Source(str(path), files.as_posix(), "shop"), out)
     assert written == [
@@ -83,16 +75,16 @@ def test_dump_writes_what_loads_to_the_same_fdl(loaded, tmp_path):
     )
     assert (out / "method.md").read_text() == "Method. [back](README.md)\n"
     assert "sales/extra" not in written
-    before = rows(path, data)
+    before = rows(path)
     report = Report()
-    assert load(Options(out, with_source=False), Target(str(path), data, unlisted=True), report) is not None, (
+    assert load(Options(out, with_source=False), Target(str(path), unlisted=True), report) is not None, (
         report.render()
     )
-    assert rows(path, data) == before
+    assert rows(path) == before
 
 
 def test_dump_refuses_to_replace_files(loaded, tmp_path):
-    path, _, files = loaded
+    path, files = loaded
     out = tmp_path / "dumped"
     out.mkdir()
     (out / "tabledoc.yml").write_text("mine\n")
@@ -104,7 +96,7 @@ def test_dump_refuses_to_replace_files(loaded, tmp_path):
 
 
 def test_dump_checks_the_content(loaded, tmp_path):
-    path, _, files = loaded
+    path, files = loaded
     victim = next(files.iterdir())
     victim.write_bytes(b"changed")
     with pytest.raises(SpecError, match="sha256"):
@@ -112,15 +104,15 @@ def test_dump_checks_the_content(loaded, tmp_path):
 
 
 def test_dump_reads_the_repository_from_fdl_clones_note(loaded, tmp_path, monkeypatch, capsys):
-    path, _, files = loaded
-    repo = tmp_path / "repo"
-    (repo / "assets").mkdir(parents=True)
+    path, files = loaded
+    # fdl clone noted the repository beside the working metadata.
+    repo = tmp_path / "remote"
+    (repo / "assets").mkdir(parents=True, exist_ok=True)
     for file in files.iterdir():
         (repo / "assets" / file.name).write_bytes(file.read_bytes())
-    (tmp_path / "lake" / "work.sqlite.fdl.json").write_text(json.dumps({"remote": str(repo) + "/"}))
     monkeypatch.setenv("FDL_WORKING", str(path))
     out = tmp_path / "dumped"
     assert main(["dump", "--out", str(out)]) == 0
-    assert "name: repo\n" in (out / "tabledoc.yml").read_text()
+    assert "name: remote\n" in (out / "tabledoc.yml").read_text()
     assert main(["dump", "--out", str(tmp_path / ".fdl" / "x")]) == 2
     assert ".fdl" in capsys.readouterr().err

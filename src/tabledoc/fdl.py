@@ -8,92 +8,36 @@
     _fdl.catalogs     the other datasets the views read     key: name
     _fdl.attributes   keys for one reader                   key: schema, table, column, key
 
-The tables are dropped and written again each time, in one transaction.
+tabledoc builds the rows; fdl writes and checks them. Every read and write of
+`_fdl` goes through the fdl CLI (`fdl meta dump`, `fdl meta objects`,
+`fdl meta load`), so `_fdl` is defined in one place.
 """
 
 from __future__ import annotations
 
-import datetime
 import json
-import re
-import tempfile
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 from .description import Description
+from .report import SpecError
 from .shape import BUILT_KEYS, QUERIA
 
 SCHEMA = "_fdl"
-#: The schema tabledoc 0.3 wrote; load drops it.
-OLD_SCHEMA = "_meta"
 
-_LICENSE = "STRUCT(id VARCHAR, spdx VARCHAR, url VARCHAR, title VARCHAR)[]"
-#: The terms of a license, written as Queria's `license_terms` by license id.
+#: The license's terms, written as Queria's `license_terms` by license id.
 LICENSE_TERMS = ("commercial_use", "share_alike", "attribution_required")
 DBT = "dbt"
 #: What dbt fills in that FDL has no column for, written as dbt's attributes.
 DBT_KEYS = ("materialized", "source_path")
-_SOURCE = "STRUCT(title VARCHAR, path VARCHAR)[]"
-_CONTRIBUTOR = "STRUCT(title VARCHAR, path VARCHAR, roles VARCHAR[])[]"
-_TEMPORAL = 'STRUCT(start VARCHAR, "end" VARCHAR)'
 
-#: Each table: its columns and types, in order, and its primary key.
-TABLES: dict[str, tuple[dict[str, str], list[str]]] = {
-    "dataset": (
-        {
-            "title": "VARCHAR",
-            "description": "VARCHAR",
-            "language": "VARCHAR",
-            "homepage": "VARCHAR",
-            "issued": "DATE",
-            "update_frequency": "VARCHAR",
-            "licenses": _LICENSE,
-            "sources": _SOURCE,
-            "contributors": _CONTRIBUTOR,
-            "temporal_coverage": _TEMPORAL,
-            "spatial_coverage": "VARCHAR[]",
-        },
-        [],
-    ),
-    "schemas": ({"schema": "VARCHAR", "title": "VARCHAR", "description": "VARCHAR"}, ["schema"]),
-    "tables": (
-        {
-            "schema": "VARCHAR",
-            "name": "VARCHAR",
-            "title": "VARCHAR",
-            "description": "VARCHAR",
-            "licenses": _LICENSE,
-            "sources": _SOURCE,
-            "temporal_coverage": _TEMPORAL,
-            "spatial_coverage": "VARCHAR[]",
-            "primary_key": "VARCHAR[]",
-            "profile": "BOOLEAN",
-            "sql": "VARCHAR",
-            "depends_on": "VARCHAR[]",
-        },
-        ["schema", "name"],
-    ),
-    "columns": (
-        {
-            "schema": "VARCHAR",
-            "table": "VARCHAR",
-            "name": "VARCHAR",
-            "title": "VARCHAR",
-            "description": "VARCHAR",
-            "asset": "BOOLEAN",
-        },
-        ["schema", "table", "name"],
-    ),
-    "files": (
-        {"path": "VARCHAR", "sha256": "VARCHAR", "bytes": "BIGINT", "media_type": "VARCHAR"},
-        ["path"],
-    ),
-    "catalogs": ({"name": "VARCHAR", "url": "VARCHAR"}, ["name"]),
-    "attributes": (
-        {"schema": "VARCHAR", "table": "VARCHAR", "column": "VARCHAR", "key": "VARCHAR", "value": "JSON"},
-        ["schema", "table", "column", "key"],
-    ),
-}
+_COVERAGE = ["licenses", "sources", "temporal_coverage", "spatial_coverage"]
+#: The columns of `_fdl.dataset` and `_fdl.tables` a description fills in.
+DATASET_COLUMNS = ["title", "description", "language", "homepage", "issued", "update_frequency", *_COVERAGE, "contributors"]
+TABLE_COLUMNS = ["title", "description", *_COVERAGE, "primary_key", "sql", "depends_on"]
 
 Rows = dict[str, list[dict[str, Any]]]
 Key = tuple[str, str]
@@ -192,8 +136,8 @@ def _built(carried: Rows) -> dict[tuple[str, ...], dict[str, Any]]:
         found[fold(t["schema"], t["name"])] = _pick(t, BUILT_KEYS)
     for a in carried.get("attributes") or []:
         reader, key = split_key(a["key"])
-        if reader == DBT and key in DBT_KEYS and a["table"] and not a["column"]:
-            found.setdefault(fold(a["schema"], a["table"]), {})[key] = a["value"]
+        if reader == DBT and key in DBT_KEYS and a.get("table") and not a.get("column"):
+            found.setdefault(fold(a.get("schema", ""), a["table"]), {})[key] = a["value"]
     return found
 
 
@@ -227,7 +171,6 @@ def rows(
     not list them and they get no profile. ``views`` are the catalog's views,
     whose SQL the metadata already holds.
     """
-    columns = {name: list(spec[0]) for name, spec in TABLES.items()}
     built = not carried or any("sql" in t for t in description.tables)
     kept = {} if built else _built(carried or {})
     described = {fold(t["schema"], t["name"]) for t in description.tables}
@@ -236,14 +179,14 @@ def rows(
     tables = [{**_pick(kept.get(fold(t["schema"], t["name"]), {}), BUILT_KEYS), **t} for t in description.tables]
 
     def table(t: dict[str, Any]) -> dict[str, Any]:
-        record = _record(t, columns["tables"][2:])
+        record = _record(t, TABLE_COLUMNS)
         if fold(t["schema"], t["name"]) in viewed:
             record.pop("sql", None)
         return {"schema": t["schema"], "name": t["name"], **record, **({} if published(t) else no_profile)}
 
     unlisted_keys = [(s, n) for s, n in sorted(unlisted or set()) if fold(s, n) not in described]
     return {
-        "dataset": [d] if (d := _record(description.dataset, columns["dataset"])) else [],
+        "dataset": [d] if (d := _record(description.dataset, DATASET_COLUMNS)) else [],
         "schemas": [
             {"schema": s["name"], **_pick(s, ["title", "description"])}
             for s in description.schemas
@@ -281,142 +224,48 @@ def rows(
     }
 
 
-_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+def _command() -> list[str]:
+    """The fdl CLI: the one installed beside this Python (fdl-cli is a dependency), else on PATH."""
+    beside = Path(sys.executable).with_name("fdl")
+    found = str(beside) if beside.is_file() else shutil.which("fdl")
+    if found is None:
+        raise SpecError("cannot find the fdl command; install fdl-cli")
+    return [found]
 
 
-def _fits(value: Any, kind: str) -> bool:
-    """Whether DuckDB can read ``value`` as a column of type ``kind`` (its outer shape)."""
-    if value is None or kind == "JSON":
-        return True
-    if kind == "DATE":
-        if not (isinstance(value, str) and _DATE.match(value)):
-            return False
-        try:
-            datetime.date.fromisoformat(value)
-        except ValueError:
-            return False
-        return True
-    if kind.endswith("[]"):
-        return isinstance(value, list) and (kind != "VARCHAR[]" or all(isinstance(v, str) for v in value))
-    if kind.startswith("STRUCT"):
-        return isinstance(value, dict)
-    if kind == "BOOLEAN":
-        return isinstance(value, bool)
-    if kind in ("INTEGER", "BIGINT"):
-        return isinstance(value, int) and not isinstance(value, bool)
-    return isinstance(value, (str, int, float)) and not isinstance(value, bool)
+def _run(*args: str, given: str | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([*_command(), "meta", *args], input=given, capture_output=True, text=True, encoding="utf-8")
 
 
-def unfit(found: Rows) -> list[tuple[str, str, str]]:
-    """(where, column, type) of each value in ``found`` its `_fdl` column cannot hold.
+def _failed(done: subprocess.CompletedProcess[str]) -> str:
+    return "\n".join(line.removeprefix("error: ") for line in done.stderr.strip().splitlines()) or f"fdl exited with {done.returncode}"
 
-    `issued` is any text in the JSON Schema; DuckDB refuses it here unless it is a date.
+
+def _json(*args: str) -> Any:
+    done = _run(*args)
+    if done.returncode != 0:
+        raise SpecError(f"fdl meta {args[0]}: {_failed(done)}")
+    return json.loads(done.stdout)
+
+
+def dump(working: str) -> Rows:
+    """Every row of `_fdl` in ``working`` (`fdl meta dump`), without NULL values."""
+    return _json("dump", working)
+
+
+def objects(working: str) -> tuple[set[Key], set[Key], dict[Key, dict[str, str]]]:
+    """(tables, views, each table's columns and types) of ``working`` (`fdl meta objects`)."""
+    found = _json("objects", working)
+    tables = {(o["schema"], o["name"]) for o in found if o["kind"] == "table"}
+    views = {(o["schema"], o["name"]) for o in found if o["kind"] == "view"}
+    columns = {(o["schema"], o["name"]): {c["name"]: c["type"] for c in o.get("columns") or []} for o in found}
+    return tables, views, columns
+
+
+def load(working: str, found: Rows) -> str | None:
+    """Make `_fdl` of ``working`` hold ``found`` and nothing else (`fdl meta load`).
+
+    None when written; else fdl's reason, and nothing is written.
     """
-    wrong = []
-    for table, records in found.items():
-        columns = TABLES[table][0]
-        for record in records:
-            key = ".".join(str(record[k]) for k in TABLES[table][1] if record.get(k))
-            where = f"{SCHEMA}.{table}" + (f" {key}" if key else "")
-            for column, value in record.items():
-                kind = columns.get(column)
-                if kind is not None and not _fits(value, kind):
-                    wrong.append((where, column, kind))
-    return wrong
-
-
-def quote(identifier: str) -> str:
-    return '"' + identifier.replace('"', '""') + '"'
-
-
-def _literal(value: str | None) -> str:
-    return "NULL" if value is None else "'" + value.replace("'", "''") + "'"
-
-
-def write(con: Any, catalog: str, found: Rows) -> None:
-    """Write ``found`` as the `_fdl` tables of ``catalog`` (attached on ``con``), and drop `_meta`.
-
-    In one transaction: a row DuckDB refuses (a date out of range, say) leaves
-    the catalog as it was.
-    """
-    con.execute("BEGIN")
-    try:
-        _drop_old(con, catalog)
-        _write(con, catalog, found)
-    except BaseException:
-        con.execute("ROLLBACK")
-        raise
-    con.execute("COMMIT")
-
-
-def _drop_old(con: Any, catalog: str) -> None:
-    """The `_meta` schema tabledoc 0.3 wrote, which `_fdl` replaces."""
-    old = con.execute(
-        "SELECT table_name FROM duckdb_tables() WHERE database_name = ? AND schema_name = ?", [catalog, OLD_SCHEMA]
-    ).fetchall()
-    for (name,) in old:
-        con.execute(f"DROP TABLE {catalog}.{OLD_SCHEMA}.{quote(name)}")
-    if con.execute(
-        "SELECT 1 FROM duckdb_schemas() WHERE database_name = ? AND schema_name = ?", [catalog, OLD_SCHEMA]
-    ).fetchall():
-        con.execute(f"DROP SCHEMA {catalog}.{OLD_SCHEMA}")
-
-
-def _write(con: Any, catalog: str, found: Rows) -> None:
-    con.execute(f"CREATE SCHEMA IF NOT EXISTS {catalog}.{SCHEMA}")
-    with tempfile.TemporaryDirectory(prefix="tabledoc-fdl-") as tmp:
-        for table, (columns, _) in TABLES.items():
-            target = f"{catalog}.{SCHEMA}.{quote(table)}"
-            con.execute(f"DROP TABLE IF EXISTS {target}")
-            spec = ", ".join(f"{quote(c)} {t}" for c, t in columns.items())
-            con.execute(f"CREATE TABLE {target} ({spec})")
-            records = found.get(table) or []
-            if not records:
-                continue
-            path = Path(tmp) / f"{table}.json"
-            path.write_text(
-                "\n".join(json.dumps(r, ensure_ascii=False, default=str) for r in records), encoding="utf-8"
-            )
-            typed = ", ".join(f"'{c}': {_literal(t)}" for c, t in columns.items())
-            names = ", ".join(quote(c) for c in columns)
-            con.execute(
-                f"INSERT INTO {target} ({names}) SELECT {names} FROM read_json(?, "
-                f"format = 'newline_delimited', columns = {{{typed}}})",
-                [path.as_posix()],
-            )
-
-
-def read(con: Any, catalog: str, schema: str = SCHEMA) -> Rows | None:
-    """The tables of ``schema`` (`_fdl`) ``catalog`` holds, or None when it has none.
-
-    Values of a JSON column come back parsed.
-    """
-    found = con.execute(
-        "SELECT table_name FROM duckdb_tables() WHERE database_name = ? AND schema_name = ?", [catalog, schema]
-    ).fetchall()
-    if not found:
-        return None
-    result: Rows = {}
-    for (table,) in found:
-        cursor = con.execute(f"SELECT * FROM {catalog}.{quote(schema)}.{quote(table)}")
-        names = [d[0] for d in cursor.description]
-        kinds = TABLES.get(table, ({}, []))[0] if schema == SCHEMA else {}
-        result[table] = [
-            {n: json.loads(v) if kinds.get(n) == "JSON" and isinstance(v, str) else v for n, v in zip(names, row)}
-            for row in cursor.fetchall()
-        ]
-    return result
-
-
-def relations(con: Any, catalog: str) -> tuple[set[Key], set[Key]]:
-    """(tables, views) of ``catalog``, but those of `_fdl` and `_meta`."""
-    found = con.execute(
-        """
-        SELECT schema_name, table_name, false FROM duckdb_tables() WHERE database_name = $1
-        UNION ALL
-        SELECT schema_name, view_name, true FROM duckdb_views() WHERE database_name = $1
-        """,
-        [catalog],
-    ).fetchall()
-    kept = [(s, n, v) for s, n, v in found if s not in (SCHEMA, OLD_SCHEMA)]
-    return {(s, n) for s, n, v in kept if not v}, {(s, n) for s, n, v in kept if v}
+    done = _run("load", working, "-", given=json.dumps(found, ensure_ascii=False, default=str))
+    return None if done.returncode == 0 else _failed(done)

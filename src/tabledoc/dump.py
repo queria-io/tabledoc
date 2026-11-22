@@ -1,4 +1,4 @@
-"""tabledoc dump: the `_fdl` schema of a DuckLake catalog back to the files an author writes.
+"""tabledoc dump: the `_fdl` schema of fdl's working metadata (`fdl meta dump`) back to the files an author writes.
 
     tabledoc.yml                  the dataset, the schemas, and the root's other documents
     <schema>/<table>.yml          each table described
@@ -25,7 +25,6 @@ import yaml
 
 from . import fdl, schemas
 from .description import README
-from .load import ALIAS, attached, data_path
 from .report import SpecError
 from .shape import QUERIA
 from .source import DATASET_FILE
@@ -48,7 +47,7 @@ TABLE_KEYS = ("title", "description", "primary_key", "licenses", "sources", "tem
 
 @dataclass(frozen=True)
 class Source:
-    #: The DuckLake catalog: a .sqlite or .duckdb file, or a ducklake: path.
+    #: fdl's working metadata (the .sqlite `fdl clone` made).
     catalog: str
     #: Where each file of `_fdl.files` is, as `<files>/<sha256>`: a folder or an http(s) URL.
     files: str | None = None
@@ -190,7 +189,7 @@ def documents(found: fdl.Rows, name: str) -> dict[str, dict[str, Any]]:
     attributes = found.get("attributes") or []
 
     def of(schema: str = "", table: str = "", column: str = "") -> list[dict[str, Any]]:
-        return [a for a in attributes if (a["schema"], a["table"], a["column"]) == (schema, table, column)]
+        return [a for a in attributes if (a.get("schema", ""), a.get("table", ""), a.get("column", "")) == (schema, table, column)]
 
     tables = sorted(found.get("tables") or [], key=lambda t: (t["schema"], t["name"]))
     columns = found.get("columns") or []
@@ -201,7 +200,7 @@ def documents(found: fdl.Rows, name: str) -> dict[str, dict[str, Any]]:
         own += [
             {"schema": schema, "table": table_name, "name": name}
             for name in dict.fromkeys(
-                a["column"] for a in attributes if (a["schema"], a["table"]) == (schema, table_name) and a["column"]
+                a["column"] for a in attributes if (a.get("schema"), a.get("table")) == (schema, table_name) and a.get("column")
             )
             if name not in {c["name"] for c in own}
         ]
@@ -266,17 +265,11 @@ def dump(source: Source, out: Path, *, force: bool = False) -> list[str]:
 
     Refused when one of them is already there, unless ``force``.
     """
-    import duckdb
-
     if ".fdl" in out.resolve().parts:
         raise SpecError(f"{out} is inside .fdl/, which only fdl writes; give a folder outside it")
-    try:
-        with attached(source.catalog, data_path(source.catalog, None)) as con:
-            found = fdl.read(con, ALIAS)
-    except duckdb.Error as exc:
-        raise SpecError(f"cannot read {fdl.SCHEMA} in {source.catalog}: {exc}") from exc
-    if found is None:
-        raise SpecError(f"{source.catalog} has no {fdl.SCHEMA} schema")
+    found = fdl.dump(source.catalog)
+    if not any(found.values()):
+        raise SpecError(f"{source.catalog} has nothing in {fdl.SCHEMA}")
     texts = {path: render(record).encode("utf-8") for path, record in documents(found, dataset_name(source)).items()}
     entries = sorted(found.get("files") or [], key=lambda f: f["path"])
     clash = sorted(p for p in [*texts, *(f["path"] for f in entries)] if (out / p).exists())
