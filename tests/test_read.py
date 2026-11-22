@@ -446,3 +446,16 @@ def test_an_empty_title_is_an_error(write):
     root = write({"tabledoc.yml": DATASET + "name: shop\ntitle: ''\n"})
     _, report = run(root)
     assert [f.code for f in report.findings] == ["schema-violation"]
+
+
+def test_a_readme_no_longer_found_by_itself_is_a_warning(write):
+    root = write(
+        {
+            "tabledoc.yml": DATASET + "name: d\n",
+            "sales/README.md": "The schema.\n",
+            "sales/orders.tabledoc.yml": TABLE,
+            "sales/orders/README.md": "The guide.\n",
+        }
+    )
+    _, report = run(root)
+    assert codes(report) == ["unlisted-readme", "unlisted-readme"]

@@ -130,9 +130,11 @@ def _table_key(root: Path, path: Path, models: dict[Path, Key], report: Report) 
     sql = path.with_name(stem(path) + ".sql")
     if sql in models:
         return models[sql]
-    if sql.is_file():
-        if models:
-            report.error("table-without-model", f"{rel(root, sql)} beside it is not a model that makes a table", path)
+    if sql.is_file() and models:
+        report.error("table-without-model", f"{rel(root, sql)} beside it is not a model that makes a table", path)
+        return None
+    if sql.is_file() and (root / "dbt_project.yml").is_file():
+        report.warning("table-not-read", f"{rel(root, sql)} beside it is a model, and dbt's manifest is not read", path)
         return None
     parts = PurePosixPath(rel(root, path)).parts
     if len(parts) == 1:

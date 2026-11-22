@@ -28,9 +28,8 @@ from .description import README
 from .files import normalized
 from .load import ALIAS, attached
 from .report import SpecError
-from .source import TABLE_SUFFIX
 from .shape import QUERIA
-from .source import DATASET_FILE
+from .source import DATASET_FILE, TABLE_SUFFIX
 
 DATASET_KEYS = (
     "title",

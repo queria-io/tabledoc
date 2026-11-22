@@ -88,15 +88,22 @@ def _merge_columns(
     built: list[dict[str, Any]], written: list[dict[str, Any]], where: str, path: Path, report: Report
 ) -> list[dict[str, Any]]:
     """Columns by name, key by key: dbt's order first, then the columns only the table file has."""
-    by_name = {c.get("name"): c for c in written if isinstance(c, dict)}
+    entries = [c for c in written if isinstance(c, dict)]
+    by_name: dict[Any, int] = {}
+    for i, c in enumerate(entries):
+        by_name.setdefault(c.get("name"), i)
+    used: set[int] = set()
     merged = []
     for column in built:
-        found = by_name.pop(column.get("name"), None) or {}
+        i = by_name.get(column.get("name"))
+        found = entries[i] if i is not None and i not in used else {}
+        if found:
+            used.add(i)
         twice = sorted(k for k in set(column) & set(found) if k != "name")
         if twice:
             report.error("described-twice", f"{where}.{column.get('name')}: {', '.join(twice)} also in dbt", path)
         merged.append({**column, **{k: v for k, v in found.items() if k not in column}})
-    return merged + [c for c in written if isinstance(c, dict) and c.get("name") in by_name]
+    return merged + [c for i, c in enumerate(entries) if i not in used]
 
 
 def _merge(
@@ -125,6 +132,9 @@ def _merge(
         twice = sorted(k for k in set(model.record) & set(found.record) if k not in ("columns", *shape.BUILT_KEYS))
         if twice:
             report.error("described-twice", f"{where}: {', '.join(twice)} also in dbt ({model.path}); keep one", found.path)
+        ignored = [k for k in shape.BUILT_KEYS if k in found.record]
+        if ignored:
+            report.warning("built-by-dbt", f"{where}: {', '.join(ignored)} not read; dbt builds this table", found.path)
         columns = _merge_columns(model.record.get("columns") or [], found.record.get("columns") or [], where, found.path, report)
         record = {
             **{k: v for k, v in found.record.items() if k not in shape.BUILT_KEYS},
@@ -135,6 +145,22 @@ def _merge(
             report.error("guide-twice", f"{where} has two guides: {model.guide} and {found.guide}", found.path)
         merged[model.key] = source.Table(found.schema, found.name, record=record, path=found.path, guide=found.guide or model.guide)
     return [merged[k] for k in sorted(merged)]
+
+
+def _warn_unlisted(
+    root: Path, schema_names: list[str], tables: list[source.Table], listed: set[str], report: Report
+) -> None:
+    """A README.md where earlier versions found a guide by itself, now that it is not listed."""
+    candidates = [Path(n) / README for n in schema_names] + [
+        t.path.with_name(source.stem(t.path)).relative_to(root) / README for t in tables if root in t.path.parents
+    ]
+    for path in candidates:
+        if (root / path).is_file() and path.as_posix() not in listed:
+            report.warning(
+                "unlisted-readme",
+                "not read: list it in the documents of what it describes, or move a table's guide to <table>.md",
+                root / path,
+            )
 
 
 def _check_dbtignore(root: Path, written: list[source.Table], report: Report) -> None:
@@ -257,6 +283,7 @@ def read(options: Options, report: Report) -> Description:
         )
         for t in shaped
     ]
+    _warn_unlisted(root, [s["name"] for s in schema_list], tables, {local for local, _, _ in named}, report)
     sent = files.collect(root, named, report)
     language = str(record.get("language") or languages.UNDETERMINED)
     return Description(

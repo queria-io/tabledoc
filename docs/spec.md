@@ -161,6 +161,7 @@ columns:
 - A document named `README.md` describes the thing it is listed under; it is the thing's guide. The others keep their names
 - Two documents are listed without being written: `README.md` at the root is the dataset's, and the `.md` with the same name next to a table file (`series.md` for `series.tabledoc.yml`, or for `series.sql` in a dbt project) is that table's guide
 - Two guides for one thing is an error (a table's `series.md` and a `README.md` in its `documents`, say)
+- A `README.md` in a schema's folder or in `<schema>/<table>/` that no `documents` lists is not read, with a warning
 - Documents have no front matter
 - The files a Markdown document links to with a relative path (images, PDFs, other documents) are sent too. A link that leaves the root is an error; a link to a missing file is a warning; a link to a folder is left alone
 - Build and maintenance notes belong in `CONTRIBUTING.md`, not in `documents`
