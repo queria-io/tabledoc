@@ -2,9 +2,9 @@
 
 A table that has `sql` and no `depends_on` gets the tables its SQL reads, as
 DuckDB parses them. A table of this dataset is written `schema.name`. A table
-of another dataset is written `<repository URL>#schema.name`, where the SQL
-names that dataset by the alias it is attached under, and `catalogs` (from
-dbt's profiles.yml) maps the alias to the repository.
+of another dataset is written `<URL>#schema.name`, where the SQL names that
+dataset by the alias it is attached under, and `dependencies` (from dbt's
+profiles.yml) maps the alias to the dataset's URL.
 
 Names are matched as DuckDB binds them: without regard to case, and an
 unqualified name is looked for in the reading table's own schema first.
@@ -70,19 +70,19 @@ def references(con: duckdb.DuckDBPyConnection, sql: str) -> list[Reference] | No
 
 
 def resolve(
-    reference: Reference, home: str, own: dict[Key, str], catalogs: dict[str, str]
+    reference: Reference, home: str, own: dict[Key, str], dependencies: dict[str, str]
 ) -> str | None:
     """``reference`` as an entry of `depends_on`, or None when it names nothing known.
 
     ``home`` is the schema of the table that reads it, ``own`` maps each table
     of this dataset, by its lower-case (schema, name), to how it is written in
-    `depends_on`, and ``catalogs`` maps each lower-case alias to its repository.
+    `depends_on`, and ``dependencies`` maps each lower-case alias to its dataset's URL.
     """
     catalog, schema, table = reference
     lowered = (catalog.lower(), schema.lower(), table.lower())
     if catalog:
-        if catalog != THIS_CATALOG and lowered[0] in catalogs:
-            return f"{catalogs[lowered[0]]}#{schema}.{table}"
+        if catalog != THIS_CATALOG and lowered[0] in dependencies:
+            return f"{dependencies[lowered[0]]}#{schema}.{table}"
         # Any other catalog is the one the writer attached this dataset under.
         return own.get(lowered[1:])
     if schema:
@@ -90,8 +90,8 @@ def resolve(
         if lowered[1:] in own:
             return own[lowered[1:]]
         return (
-            f"{catalogs[lowered[1]]}#{DEFAULT_SCHEMA}.{table}"
-            if lowered[1] in catalogs
+            f"{dependencies[lowered[1]]}#{DEFAULT_SCHEMA}.{table}"
+            if lowered[1] in dependencies
             else None
         )
     return own.get((home.lower(), lowered[2])) or own.get((DEFAULT_SCHEMA, lowered[2]))
@@ -102,20 +102,20 @@ def depends_on(
     key: Key,
     sql: str,
     own: dict[Key, str],
-    catalogs: dict[str, str],
+    dependencies: dict[str, str],
 ) -> list[str] | None:
     """What the table ``key`` reads, by its ``sql``. None when the SQL cannot be parsed."""
     found = references(con, sql)
     if found is None:
         return None
-    resolved = {resolve(reference, key[0], own, catalogs) for reference in found}
+    resolved = {resolve(reference, key[0], own, dependencies) for reference in found}
     return sorted(
         entry for entry in resolved if entry and entry != f"{key[0]}.{key[1]}"
     )
 
 
 def fill(
-    tables: list[dict[str, Any]], catalogs: dict[str, str], report: Report
+    tables: list[dict[str, Any]], dependencies: dict[str, str], report: Report
 ) -> list[dict[str, Any]]:
     """``tables`` with `depends_on` read from the `sql` of those that do not have it."""
     pending = [
@@ -129,7 +129,7 @@ def fill(
         (t["schema"].lower(), t["name"].lower()): f"{t['schema']}.{t['name']}"
         for t in tables
     }
-    aliases = {alias.lower(): url for alias, url in catalogs.items()}
+    aliases = {alias.lower(): url for alias, url in dependencies.items()}
     filled = list(tables)
     con = duckdb.connect()
     try:

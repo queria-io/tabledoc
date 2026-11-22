@@ -6,8 +6,8 @@ under their `schema` and `alias`. A model's description comes from its yml:
 `granularity`, and the keys dbt does not have under `config.meta`. `metrics`
 come from the semantic layer. The SQL is `compiled_code`.
 
-`catalogs` maps the alias another dataset is attached under in the SQL to its
-repository URL, read from the ATTACHes in profiles.yml, so `depends_on` can
+`dependencies` maps the alias another dataset is attached under in the SQL to its
+URL, read from the ATTACHes in profiles.yml, so `depends_on` can
 name tables of other datasets.
 """
 
@@ -151,8 +151,8 @@ def _render(text: str, env: Mapping[str, str]) -> str | None:
 _CATALOG_URL = re.compile(r"(https?://.+?/)(?:versions/[^/]+/)?(?:metadata\.db|ducklake\.duckdb)")
 
 
-def _repository(path: str, env: Mapping[str, str]) -> str | None:
-    """The repository URL a DuckLake ATTACH path reads."""
+def _url(path: str, env: Mapping[str, str]) -> str | None:
+    """The URL of the dataset a DuckLake ATTACH path reads."""
     rendered = _render(path, env)
     match = _CATALOG_URL.fullmatch(rendered.removeprefix("ducklake:")) if rendered else None
     return match.group(1) if match else None
@@ -164,11 +164,11 @@ def _target(profile: dict[str, Any], env: Mapping[str, str]) -> dict[str, Any] |
     return target if isinstance(target, dict) else None
 
 
-def catalogs(profiles: dict[str, Any], env: Mapping[str, str] | None = None) -> dict[str, str]:
-    """Alias -> repository URL of each other dataset the profiles attach."""
+def dependencies(profiles: dict[str, Any], env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Alias -> URL of each other dataset the profiles attach."""
     env = os.environ if env is None else env
     return {
-        str(attach["alias"]): repository
+        str(attach["alias"]): url
         for name, profile in profiles.items()
         if name != "config"
         and isinstance(profile, dict)
@@ -176,7 +176,7 @@ def catalogs(profiles: dict[str, Any], env: Mapping[str, str] | None = None) -> 
         for attach in target.get("attach") or []
         if isinstance(attach, dict)
         and attach.get("alias")
-        and (repository := _repository(str(attach.get("path", "")), env)) is not None
+        and (url := _url(str(attach.get("path", "")), env)) is not None
     }
 
 

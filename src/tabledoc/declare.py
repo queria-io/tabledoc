@@ -68,13 +68,12 @@ def wanted(
         primary_keys[f"{schema}.{own}"] = list(key)
     assets.update({f"{schema}.{own}": list(cols) for own, cols in tables.ASSETS.items()})
     unprofiled = sorted({*unpublished, *(f"{schema}.{own}" for own in tables.TABLES)})
-    dependencies = {alias: {"url": url} for alias, url in sorted((description.catalogs or {}).items())}
     return {
         "primary_keys": primary_keys,
         "assets": assets,
         "unprofiled": unprofiled,
         "profiled": sorted(profiled),
-        "dependencies": dependencies,
+        "dependencies": description.dependencies or {},
     }
 
 
