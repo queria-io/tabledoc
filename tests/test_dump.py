@@ -29,7 +29,7 @@ def loaded(write, tmp_path):
             "src/tabledoc.yml": DATASET
             + "name: shop\ntitle: Shop\ndescription: |-\n  Two\n  lines\nlicenses: [CC-BY-4.0]\nissued: 2026-10-30\n"
             + "schemas: [{name: sales, title: Sales}]\ndocs: [docs/method.md]\n"
-            + "queria: {themes: [trade], title_kana: ショップ}\n",
+            + "topics: [trade]\nqueria: {title_kana: ショップ}\n",
             "src/README.md": "Overview. ![chart](docs/chart.png)\n",
             "src/docs/method.md": "Method. [back](../README.md)\n",
             "src/docs/chart.png": b"PNG",
@@ -79,7 +79,7 @@ def test_dump_writes_what_loads_to_the_same_fdl(loaded, tmp_path):
         "licenses:\n- CC-BY-4.0\n"
         "schemas:\n- name: sales\n  title: Sales\n"
         "docs:\n- method.md\n"
-        "queria:\n  themes:\n  - trade\n  title_kana: ショップ\n"
+        "queria:\n  title_kana: ショップ\n  topics:\n  - trade\n"
     )
     assert (out / "method.md").read_text() == "Method. [back](README.md)\n"
     assert "sales/extra" not in written

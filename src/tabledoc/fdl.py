@@ -42,7 +42,6 @@ TABLES: dict[str, tuple[dict[str, str], list[str]]] = {
             "title": "VARCHAR",
             "description": "VARCHAR",
             "language": "VARCHAR",
-            "topics": "VARCHAR[]",
             "homepage": "VARCHAR",
             "issued": "DATE",
             "update_frequency": "VARCHAR",
@@ -61,7 +60,6 @@ TABLES: dict[str, tuple[dict[str, str], list[str]]] = {
             "name": "VARCHAR",
             "title": "VARCHAR",
             "description": "VARCHAR",
-            "topics": "VARCHAR[]",
             "licenses": _LICENSE,
             "sources": _SOURCE,
             "temporal_coverage": _TEMPORAL,
@@ -138,13 +136,28 @@ def split_key(key: str) -> tuple[str, str]:
     return reader, rest.replace("-", "_")
 
 
+#: Keys under `queria:` that Queria no longer reads, so they are not written.
+DROPPED = {QUERIA: ("themes",)}
+
+
+def readers(record: dict[str, Any]) -> dict[str, Any]:
+    """The keys of each reader for ``record``: its `annotations`, with `topics` as Queria's
+    `topics` unless `queria:` says them, and without the keys in ``DROPPED``."""
+    found = {r: dict(k) for r, k in (record.get("annotations") or {}).items() if isinstance(k, dict)}
+    if record.get("topics"):
+        found.setdefault(QUERIA, {}).setdefault("topics", record["topics"])
+    for reader, keys in DROPPED.items():
+        for key in keys:
+            found.get(reader, {}).pop(key, None)
+    return {r: k for r, k in found.items() if k}
+
+
 def _attributes(record: dict[str, Any], schema: str = "", table: str = "", column: str = "") -> list[dict[str, Any]]:
-    """One row per key of each reader under `annotations` (`queria:` among them)."""
-    readers = record.get("annotations") or {}
+    """One row per key of each reader (`queria:` among them)."""
+    readers_ = readers(record)
     return [
         {"schema": schema, "table": table, "column": column, "key": attribute_key(reader, key), "value": value}
-        for reader, keys in readers.items()
-        if isinstance(keys, dict)
+        for reader, keys in readers_.items()
         for key, value in keys.items()
     ]
 

@@ -69,7 +69,6 @@ def test_writes_fdl_and_the_folder_for_fdl_commit(write, catalog, tmp_path):
         ("sales/orders/README.md", "text/markdown"),
     ]
     assert query(path, data, f'SELECT schema, "table", key, value FROM {ALIAS}._fdl.attributes ORDER BY ALL') == [
-        ("", "", "queria-themes", '["trade"]'),
         ("sales", "extra", "queria-published", "false"),
     ]
     # load writes no comments: _fdl is where the description is.
@@ -80,15 +79,18 @@ def test_writes_fdl_and_the_folder_for_fdl_commit(write, catalog, tmp_path):
     assert not (out / "dataset.json").exists()
 
 
-def test_topics_and_keywords_go_to_topics(write, catalog):
+def test_topics_and_keywords_are_queria_topics(write, catalog):
     path, data = catalog
     root = project(write)
-    (root / "tabledoc.yml").write_text(DATASET + "name: shop\ntopics: [retail]\n")
+    (root / "tabledoc.yml").write_text(DATASET + "name: shop\ntitle: Shop\ntopics: [retail]\nqueria: {themes: [trade]}\n")
     (root / "sales" / "recent.yml").write_text(TABLE + "description: x\nkeywords: [latest]\n")
     report = Report()
     assert load(Options(root, with_source=False), Target(str(path), data), report) is not None, report.render()
-    assert query(path, data, f"SELECT topics FROM {ALIAS}._fdl.dataset") == [(["retail"],)]
-    assert query(path, data, f"SELECT topics FROM {ALIAS}._fdl.tables WHERE name = 'recent'") == [(["latest"],)]
+    # queria: themes is no longer written.
+    assert query(path, data, f'SELECT "table", key, value FROM {ALIAS}._fdl.attributes ORDER BY ALL') == [
+        ("", "queria-topics", '["retail"]'),
+        ("recent", "queria-topics", '["latest"]'),
+    ]
 
 
 def test_a_table_not_published_gets_no_profile(write, catalog):

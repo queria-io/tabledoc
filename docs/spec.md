@@ -63,7 +63,7 @@ schemas:
 docs:
   - docs/methodology.md
 queria:
-  themes: [economy]
+  title_kana: ニチギンジケイレツトウケイ
 ```
 
 | Key | Required | Meaning |
@@ -107,7 +107,7 @@ columns:
 | --- | --- |
 | `name` | The table's name. Defaults to the file name |
 | `table` | `<schema>.<table>`. Wins over the file's place ([which table](#which-table)) |
-| `title`, `description`, `topics` | `topics` as a repository's topics on GitHub. `keywords`, the earlier name, is read as `topics` |
+| `title`, `description`, `topics` | `topics` as a repository's topics on GitHub. `keywords`, the earlier name, is read as `topics`. Queria reads them, so they are written as `topics` under `queria:` |
 | `primary_key` | The columns that identify a row |
 | `licenses`, `sources`, `temporal_coverage`, `spatial_coverage` | Only when they differ from the dataset's |
 | `sql`, `depends_on` | For a table dbt does not build: the SQL it is made from and the tables it reads |
@@ -245,14 +245,15 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 | Table | From |
 | --- | --- |
-| `_fdl.dataset` | `tabledoc.yml`: `title`, `description`, `language`, `topics`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` |
+| `_fdl.dataset` | `tabledoc.yml`: `title`, `description`, `language`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` |
 | `_fdl.schemas` | `schemas[]` with a `title` or a `description` |
-| `_fdl.tables` | each table and view described: `title`, `description`, `topics`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `primary_key`, `profile` (false when `published` under `queria:` is false), `materialized`, `sql` (not for a view: the metadata holds its SQL), `depends_on`, `source_path` |
+| `_fdl.tables` | each table and view described: `title`, `description`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `primary_key`, `profile` (false when `published` under `queria:` is false), `materialized`, `sql` (not for a view: the metadata holds its SQL), `depends_on`, `source_path` |
 | `_fdl.columns` | each column with a `title`, a `description`, an `entity` (its `name`) or `asset: true` |
 | `_fdl.files` | the [files in the dataset](#paths-in-the-dataset): `path`, `sha256`, `bytes`, `media_type` |
 | `_fdl.catalogs` | the other datasets the SQL reads, by the name it reads them under |
 | `_fdl.attributes` | the keys under `queria:` and `annotations:` of the dataset, the tables and the columns |
 
+- `topics` (or `keywords`, its earlier name) becomes Queria's `topics`, the attribute `queria-topics`, unless `queria:` has `topics`. `themes` under `queria:` is not written
 - A key for one reader becomes the attribute `<reader>-<key>`, with `_` in the key written `-`: `title_kana` under `queria:` is `queria-title-kana`. The value is the JSON of what was written
 - `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
 - The files are not in the catalog. `_fdl.files.sha256` is an asset column: `fdl commit --assets` uploads each file by its content

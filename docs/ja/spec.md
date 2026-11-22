@@ -63,7 +63,7 @@ schemas:
 docs:
   - docs/methodology.md
 queria:
-  themes: [economy]
+  title_kana: ニチギンジケイレツトウケイ
 ```
 
 | キー | 必須 | 内容 |
@@ -107,7 +107,7 @@ columns:
 | --- | --- |
 | `name` | テーブル名。省くとファイル名 |
 | `table` | `<schema>.<table>`。置き場所より優先します ([テーブルとの対応](#テーブルとの対応)) |
-| `title`・`description`・`topics` | `topics` は GitHub のリポジトリのトピックと同じものです。以前の名前の `keywords` も `topics` として読みます |
+| `title`・`description`・`topics` | `topics` は GitHub のリポジトリのトピックと同じものです。以前の名前の `keywords` も `topics` として読みます。Queria が読むので、`queria:` の `topics` として書き出します |
 | `primary_key` | 1 行を識別する列の並び |
 | `licenses`・`sources`・`temporal_coverage`・`spatial_coverage` | データセットと違うときだけ書きます |
 | `sql`・`depends_on` | dbt で作らないテーブルの、元の SQL と元のテーブル |
@@ -245,14 +245,15 @@ fdl commit work.sqlite -m "..." --assets build/assets
 
 | テーブル | 元の値 |
 | --- | --- |
-| `_fdl.dataset` | `tabledoc.yml` の `title`・`description`・`language`・`topics`・`homepage`・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` |
+| `_fdl.dataset` | `tabledoc.yml` の `title`・`description`・`language`・`homepage`・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` |
 | `_fdl.schemas` | `title` か `description` のある `schemas[]` |
-| `_fdl.tables` | 説明のあるテーブルとビュー: `title`・`description`・`topics`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`primary_key`・`profile` (`queria:` の `published` が false なら false)・`materialized`・`sql` (ビューには書きません。SQL はメタデータが持ちます)・`depends_on`・`source_path` |
+| `_fdl.tables` | 説明のあるテーブルとビュー: `title`・`description`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`primary_key`・`profile` (`queria:` の `published` が false なら false)・`materialized`・`sql` (ビューには書きません。SQL はメタデータが持ちます)・`depends_on`・`source_path` |
 | `_fdl.columns` | `title`・`description`・`entity` (その `name`)・`asset: true` のどれかがある列 |
 | `_fdl.files` | [データセットの中のファイル](#データセットの中のパス): `path`・`sha256`・`bytes`・`media_type` |
 | `_fdl.catalogs` | SQL が読むほかのデータセット (SQL の中の名前と URL) |
 | `_fdl.attributes` | データセット・テーブル・列の `queria:` と `annotations:` のキー |
 
+- `topics` (以前の名前の `keywords`) は、`queria:` に `topics` が無ければ Queria のキー `topics` として属性 `queria-topics` になります。`queria:` の `themes` は書きません
 - 読み手ごとのキーは、属性 `<読み手>-<キー>` になります。キーの `_` は `-` にします (`queria:` の `title_kana` は `queria-title-kana`)。値は書いた値の JSON です
 - `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
 - ファイルの中身はカタログに入れません。`_fdl.files.sha256` は asset の列で、`fdl commit --assets` が中身ごとにファイルをアップロードします
