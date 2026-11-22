@@ -1,12 +1,13 @@
 """Reads what an author wrote under the root (the folder of tabledoc.yml).
 
-    tabledoc.yml              the dataset
-    README.md                 its overview
-    <schema>/<table>.yml      a table: a YAML file whose $schema is tabledoc's table schema
-    <schema>/<table>.md       that table's guide (or <schema>/<table>/README.md)
+    tabledoc.yml                    the dataset
+    README.md                       its overview
+    <schema>/<table>.tabledoc.yml   a table, with tabledoc's table schema as $schema
+    <schema>/<table>.md             that table's guide
 
-A table file elsewhere names its table with `table: <schema>.<table>`. A dbt
-project's tables come from dbt (see dbt.py); this module reads the files.
+In a dbt project, `<model>.tabledoc.yml` and `<model>.md` sit next to
+`<model>.sql` and describe that model's table. A dbt project's tables come
+from dbt (see dbt.py); this module reads the files.
 """
 
 from __future__ import annotations
@@ -27,6 +28,8 @@ IGNORED_DIRS = frozenset({"target", "dbt_packages", "node_modules", ".venv"})
 #: The file `tabledoc export --markdown` leaves in its folder; a folder holding it is not read either.
 EXPORT_MARK = ".tabledoc-export"
 DEFAULT_SCHEMA = "main"
+#: The end of a table file's name: `<table>.tabledoc.yml`.
+TABLE_SUFFIX = ".tabledoc.yml"
 
 Key = tuple[str, str]
 
@@ -117,30 +120,42 @@ def read_dataset(root: Path, report: Report) -> Dataset:
     return Dataset(record=converted, path=path, dependencies=dependencies if isinstance(dependencies, dict) else {})
 
 
-def _table_key(root: Path, path: Path, record: dict[str, Any], report: Report) -> Key | None:
-    """Which table a table file describes: `table:`, else its place under the root."""
-    if isinstance(record.get("table"), str) and "." in record["table"]:
-        schema, name = record["table"].split(".", 1)
-        return schema, name
+def stem(path: Path) -> str:
+    """The name a file is about: `series` for series.tabledoc.yml, series.sql and series.md."""
+    return path.name[: -len(TABLE_SUFFIX)] if path.name.endswith(TABLE_SUFFIX) else path.name.rsplit(".", 1)[0]
+
+
+def _table_key(root: Path, path: Path, models: dict[Path, Key], report: Report) -> Key | None:
+    """Which table a table file describes: the model whose SQL is beside it, else its place under the root."""
+    sql = path.with_name(stem(path) + ".sql")
+    if sql in models:
+        return models[sql]
+    if sql.is_file():
+        if models:
+            report.error("table-without-model", f"{rel(root, sql)} beside it is not a model that makes a table", path)
+        return None
     parts = PurePosixPath(rel(root, path)).parts
-    name = record.get("name") or path.name.split(".")[0]
     if len(parts) == 1:
-        return DEFAULT_SCHEMA, name
+        return DEFAULT_SCHEMA, stem(path)
     if len(parts) == 2:
-        return parts[0], name
-    report.error("table-unplaced", "not at <schema>/<table>.yml, so it has to say table: <schema>.<table>", path)
+        return parts[0], stem(path)
+    report.error(
+        "table-unplaced", f"not at <schema>/<table>{TABLE_SUFFIX} or next to a model's .sql", path
+    )
     return None
 
 
 def sibling_guide(root: Path, path: Path) -> str | None:
-    """The guide of the table described at ``path``: ``<name>.md`` beside it, else ``<name>/README.md``."""
-    stem = path.name.split(".")[0]
-    found = [g for g in (path.with_name(stem + ".md"), path.with_name(stem) / "README.md") if g.is_file()]
-    return rel(root, found[0]) if found else None
+    """The guide of the table described at ``path`` (its table file or its model's SQL): ``<name>.md`` beside it."""
+    guide = path.with_name(stem(path) + ".md")
+    return rel(root, guide) if guide.is_file() else None
 
 
-def read_table_files(root: Path, report: Report) -> list[Table]:
-    """The YAML files whose $schema is tabledoc's table schema. Other YAML is not read."""
+def read_table_files(root: Path, report: Report, models: dict[Path, Key] | None = None) -> list[Table]:
+    """The `<table>.tabledoc.yml` files. ``models`` maps each dbt model's SQL file to its table.
+
+    Other YAML is not read; YAML with tabledoc's table schema under another name is an error."""
+    models = models or {}
     tables = []
     for path in walk(root, (".yml", ".yaml")):
         if path.parent == root and path.name in (DATASET_FILE, legacy.DATASET_FILE):
@@ -156,10 +171,16 @@ def read_table_files(root: Path, report: Report) -> list[Table]:
             continue
         if schema != schemas.TABLE:
             raise _unknown(schema, path)
+        if not path.name.endswith(TABLE_SUFFIX):
+            report.error("table-misnamed", f"a table file is named <table>{TABLE_SUFFIX}", path)
+            continue
         schemas.check(record, schemas.TABLE, path, report)
-        key = _table_key(root, path, record, report)
+        if record.get("name") not in (None, stem(path)):
+            report.error("table-name", f"name {record['name']} is not the file's name {stem(path)}", path)
+            continue
+        key = _table_key(root, path, models, report)
         if key is not None:
-            body = {k: v for k, v in record.items() if k not in ("$schema", "table", "name")}
+            body = {k: v for k, v in record.items() if k not in ("$schema", "name")}
             tables.append(Table(*key, record=body, path=path, guide=sibling_guide(root, path)))
     return tables
 
@@ -198,5 +219,5 @@ def read_legacy_tables(root: Path, report: Report) -> list[Table]:
             Table(schema, name, record=converted, path=path, guide=rel(root, path) if body.strip() else None)
         )
     if tables:
-        report.info("legacy-format", f"{len(tables)} tables read from Markdown front matter; move them to <schema>/<table>.yml")
+        report.info("legacy-format", f"{len(tables)} tables read from Markdown front matter; move them to <table>{TABLE_SUFFIX}")
     return tables

@@ -302,8 +302,8 @@ def rows(
 
 def _said(table: dict[str, Any]) -> bool:
     """Whether an author described ``table``: more than the SQL dbt fills in."""
-    record = {k: v for k, v in table.items() if k not in ("schema", "name", "guide", "docs")}
-    return bool(table.get("guide") or table.get("docs")) or shape.described(record)
+    record = {k: v for k, v in table.items() if k not in ("schema", "name", "documents")}
+    return bool(table.get("documents")) or shape.described(record)
 
 
 def published(table: dict[str, Any]) -> bool:

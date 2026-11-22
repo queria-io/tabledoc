@@ -1,7 +1,7 @@
 """tabledoc dump: the description a DuckLake catalog holds (`_tabledoc` unless told otherwise) back to the files an author writes.
 
-    tabledoc.yml                  the dataset, the schemas, and the root's other documents
-    <schema>/<table>.yml          each table described
+    tabledoc.yml                    the dataset, the schemas, and the root's other documents
+    <schema>/<table>.tabledoc.yml   each table described
     every file of the files table at its path: README.md and the other documents of each folder
 
 Loading the files dump wrote gives the same tables again, but for what they do
@@ -28,6 +28,7 @@ from .description import README
 from .files import normalized
 from .load import ALIAS, attached
 from .report import SpecError
+from .source import TABLE_SUFFIX
 from .shape import QUERIA
 from .source import DATASET_FILE
 
@@ -131,12 +132,14 @@ def _queria(row: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
 
 
 def _documents(paths: list[str], folder: str) -> list[str]:
-    """The Markdown files directly in ``folder`` but its README.md: that folder's documents."""
-    return [
+    """The Markdown files directly in ``folder``, README.md first: that folder's documents.
+    The root's README.md is the dataset's without being listed."""
+    found = [
         p
         for p in paths
-        if posixpath.dirname(p) == folder and p.lower().endswith(".md") and posixpath.basename(p) != README
+        if posixpath.dirname(p) == folder and p.lower().endswith(".md") and (folder or posixpath.basename(p) != README)
     ]
+    return sorted(found, key=lambda p: posixpath.basename(p) != README)
 
 
 def _column(row: dict[str, Any]) -> dict[str, Any]:
@@ -203,20 +206,20 @@ def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> di
             continue
         docs = _documents(paths, f"{schema}/{table_name}")
         authored = not table.get("source_path")
-        written[f"{schema}/{table_name}.yml"] = {
+        written[f"{schema}/{table_name}{TABLE_SUFFIX}"] = {
             "$schema": schemas.TABLE,
             **_fields(table, TABLE_KEYS),
             **({"topics": table["topics"]} if table.get("topics") else {}),
             **({"sql": table["sql"]} if authored and table.get("sql") else {}),
             **({"depends_on": list(table["depends_on"])} if authored and table.get("depends_on") else {}),
-            **({"docs": docs} if docs else {}),
+            **({"documents": docs} if docs else {}),
             **({"columns": [_column(c) for c in own]} if own else {}),
             **_queria(table, tables.TABLE_OWN),
         }
     described = {s["schema"]: s for s in found.get("schemas") or []}
     names = sorted(set(described) | {t["schema"] for t in described_tables})
     schema_list = [
-        {"name": s, **_fields(described.get(s, {}), ("title", "description")), **({"docs": d} if d else {})}
+        {"name": s, **_fields(described.get(s, {}), ("title", "description")), **({"documents": d} if d else {})}
         for s in names
         if (d := _documents(paths, s)) or s in described
     ]
@@ -230,7 +233,7 @@ def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> di
             **_fields(dataset, DATASET_KEYS),
             **({"topics": dataset["topics"]} if dataset.get("topics") else {}),
             **({"schemas": schema_list} if schema_list else {}),
-            **({"docs": docs} if docs else {}),
+            **({"documents": docs} if docs else {}),
             **_queria(dataset, tables.DATASET_OWN),
         },
         **written,

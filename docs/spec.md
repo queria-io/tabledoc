@@ -128,7 +128,7 @@ Types, nullability and row counts are not written. The data store holds the stru
 - The name and place decide: `<schema>/<table>.tabledoc.yml` describes `<schema>.<table>`. A file directly under the root is in the `main` schema
 - In a dbt project, `<model>.tabledoc.yml` next to `<model>.sql` describes that model's table, named by the model's `schema` and `alias`. A table file there with no model beside it is an error
 - A table file anywhere else, or a `name` other than the file name, is an error
-- dbt reads every yml under its model paths but ignores a file without `models:` and the other keys it knows, so it does not read a table file
+- dbt parses every yml under its model paths, and a table file's `sources` is not what dbt's `sources:` is. A dbt project with table files lists `*.tabledoc.yml` in `.dbtignore`; without it, tabledoc gives an error
 
 ## Languages
 
@@ -308,7 +308,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--files`: where the files of the `files` table are, as `<files>/<sha256>`: a folder or an http(s) URL. Default: `assets/` of the repository `fdl clone` noted beside the catalog. Each file is checked against its sha256
 - `--name`: the dataset's `name` in `tabledoc.yml`. Default: the last part of the repository's URL
 - A file already in the folder is not replaced, and nothing is written, unless `--force`. A path in the catalog that would leave the folder is an error
-- Each table file is at `<schema>/<table>.tabledoc.yml` and its guide next to it at `<schema>/<table>.md`. The other files of a folder are kept at their paths in the dataset and listed in the `documents` of what the folder describes
+- Each table file is at `<schema>/<table>.tabledoc.yml`. Every file stays at its path in the dataset, and the Markdown files of a folder (its `README.md` first) are listed in the `documents` of what the folder describes; the root's `README.md` is the dataset's without being listed
 - The rows of `texts` are written as the text alone when there is one language and it is the dataset's `language`, and as a map otherwise
 - What the tables do not hold is not written: primary keys, asset columns, an entity's type (written `foreign`), dimensions, granularity, metrics, keys for other readers, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--unlisted` wrote gets no table file. `sql` and `depends_on` are written only for a table without `source_path` (one dbt does not build)
 

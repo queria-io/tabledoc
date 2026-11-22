@@ -28,20 +28,20 @@ def test_tables_by_place_with_guides_and_linked_files(write):
         {
             "tabledoc.yml": DATASET
             + "name: shop\ntitle: Shop\nlanguage: en\nissued: 2026-10-30\n"
-            + "schemas: [{name: sales, guide: docs/sales.md}]\ndocs: [docs/./method.md]\n"
+            + "schemas: [{name: sales, documents: [docs/sales/README.md]}]\ndocuments: [docs/./method.md]\n"
             + "queria: {cover: x}\nannotations: {other: {a: 1}}\n",
             "README.md": "See ![chart](docs/chart.png) and [site](https://example.com).\n",
-            "docs/sales.md": "# Sales\n",
+            "docs/sales/README.md": "# Sales\n",
             "docs/method.md": "[back](../README.md)\n",
             "docs/chart.png": b"\x89PNG",
-            "sales/orders.yml": TABLE
+            "sales/orders.tabledoc.yml": TABLE
             + "title: Orders\nprimary_key: [id]\nqueria: {published: false}\n"
             + "columns:\n  - {name: id, entity: primary}\n  - {name: shop, entity: {type: foreign, name: shop_id}}\n"
             + "  - {name: day, dimension: time, granularity: day}\n"
             + "metrics: [{name: total, agg: sum, expr: amount}]\n",
             "sales/orders.md": "Guide.\n",
-            "top.yml": TABLE + "name: things\n",
-            "deep/a/b.yml": TABLE + "table: other.thing\n",
+            "things.tabledoc.yml": TABLE + "name: things\n",
+            "other/thing.tabledoc.yml": TABLE,
             "models/schema.yml": "version: 2\nmodels: []\n",
         }
     )
@@ -52,11 +52,10 @@ def test_tables_by_place_with_guides_and_linked_files(write):
         "title": {"en": "Shop"},
         "language": "en",
         "issued": "2026-10-30",
-        "guide": "README.md",
-        "docs": ["method.md"],
+        "documents": ["README.md", "method.md"],
         "annotations": {"other": {"a": 1}, "queria": {"cover": "x"}},
     }
-    assert document["schemas"] == [{"name": "sales", "guide": "sales/README.md"}]
+    assert document["schemas"] == [{"name": "sales", "documents": ["sales/README.md"]}]
     assert [(t["schema"], t["name"]) for t in document["tables"]] == [
         ("main", "things"),
         ("other", "thing"),
@@ -68,7 +67,7 @@ def test_tables_by_place_with_guides_and_linked_files(write):
         "name": "orders",
         "title": {"en": "Orders"},
         "primary_key": ["id"],
-        "guide": "sales/orders/README.md",
+        "documents": ["sales/orders/README.md"],
         "columns": [
             {"name": "id", "entity": {"type": "primary"}},
             {"name": "shop", "entity": {"type": "foreign", "name": "shop_id"}},
@@ -134,11 +133,11 @@ def test_the_older_format(write):
         {"name": "count", "expr": "count"},
     ]
     assert a["depends_on"] == ["https://data.example/datasets/o/other/#x.y", "s.b"]
-    assert a["guide"] == "s/a/README.md"
+    assert a["documents"] == ["s/a/README.md"]
     assert a["annotations"] == {"queria": {"published": False}}
     sent = next(f for f in document["files"] if f["path"] == "s/a/README.md")
     assert sent["sha256"] == hashlib.sha256(b"The guide.\n").hexdigest()
-    assert "guide" not in document["tables"][1]
+    assert "documents" not in document["tables"][1]
     d = read(Options(root, with_source=False), Report())
     assert d.content(next(f for f in d.files if f.path == "s/a/README.md")) == b"The guide.\n"
 
@@ -146,11 +145,13 @@ def test_the_older_format(write):
 @pytest.mark.parametrize(
     ("files", "code"),
     [
-        ({"x/a.yml": TABLE + "table: s.a\n", "y/a.yml": TABLE + "table: s.a\n"}, "described-twice"),
-        ({"a/b/c.yml": TABLE}, "table-unplaced"),
+        ({"a/b/c.tabledoc.yml": TABLE}, "table-unplaced"),
+        ({"s/a.yml": TABLE}, "table-misnamed"),
+        ({"s/a.tabledoc.yml": TABLE + "name: b\n"}, "table-name"),
+        ({"s/a.tabledoc.yml": TABLE + "table: s.a\n"}, "schema-violation"),
         ({"README.md": "[x](../outside.md)\n"}, "link-outside"),
         ({"README.md": "[x](missing.md)\n"}, "link-broken"),
-        ({"s/a.yml": TABLE + "columns: [{name: a, entity: wrong}]\n"}, "schema-violation"),
+        ({"s/a.tabledoc.yml": TABLE + "columns: [{name: a, entity: wrong}]\n"}, "schema-violation"),
     ],
 )
 def test_findings(write, files, code):
@@ -159,7 +160,7 @@ def test_findings(write, files, code):
 
 
 def test_missing_docs_are_errors(write):
-    _, report = run(write({"tabledoc.yml": DATASET + "name: d\ndocs: [nothing.md]\n"}))
+    _, report = run(write({"tabledoc.yml": DATASET + "name: d\ndocuments: [nothing.md]\n"}))
     assert codes(report) == ["file-missing"]
 
 
@@ -168,7 +169,7 @@ def test_missing_docs_are_errors(write):
     [
         {"tabledoc.yml": DATASET + "name: d\n", "queria.yml": "name: d\n"},
         {"tabledoc.yml": "$schema: https://tabledoc.queria.io/schemas/dataset/v9.json\nname: d\n"},
-        {"tabledoc.yml": DATASET + "name: d\n", "s/a.yml": "$schema: https://tabledoc.queria.io/schemas/table/v9.json\n"},
+        {"tabledoc.yml": DATASET + "name: d\n", "s/a.tabledoc.yml": "$schema: https://tabledoc.queria.io/schemas/table/v9.json\n"},
         {},
     ],
 )
@@ -181,7 +182,7 @@ def test_cannot_read(write, files):
     "files",
     [
         {"tabledoc.yml": "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\nname: d\n"},
-        {"tabledoc.yml": DATASET + "name: d\n", "s/a.yml": "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"},
+        {"tabledoc.yml": DATASET + "name: d\n", "s/a.tabledoc.yml": "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"},
     ],
 )
 def test_moved_schema_urls_are_refused_with_the_new_one(write, files):
@@ -246,7 +247,7 @@ def test_dbt_models(write):
             "dbt_project.yml": "name: p\n",
             "target/manifest.json": nodes,
             "models/orders.md": "Guide\n",
-            "tables/python.yml": TABLE + "table: py.python\ntitle: Made in Python\n",
+            "py/python.tabledoc.yml": TABLE + "title: Made in Python\n",
         }
     )
     document, report = run(root)
@@ -273,7 +274,7 @@ def test_dbt_models(write):
         "sql": "select 1 as id from s.base",
         "depends_on": ["s.base"],
         "source_path": "models/orders.sql",
-        "guide": "s/orders/README.md",
+        "documents": ["s/orders/README.md"],
         "columns": [
             {"name": "id", "title": {"und": "ID"}, "entity": {"type": "primary", "name": "order"}},
             {"name": "day", "description": {"und": "Day"}, "dimension": {"type": "time"}, "granularity": "day"},
@@ -283,17 +284,73 @@ def test_dbt_models(write):
     }
 
 
-def test_a_table_is_described_in_one_place(write):
+def dbt_columns(**columns):
+    return {name: {"name": name, **c} for name, c in columns.items()}
+
+
+def test_a_table_file_beside_the_model_adds_what_dbt_does_not_say(write):
     root = write(
         {
             "tabledoc.yml": DATASET + "name: d\n",
             "dbt_project.yml": "name: p\n",
-            "target/manifest.json": manifest(a=model("a", description="from dbt")),
-            "s/a.yml": TABLE + "title: from the table file\n",
+            ".dbtignore": "*.tabledoc.yml\n",
+            "target/manifest.json": manifest(
+                a=model(
+                    "a",
+                    description="from dbt",
+                    columns=dbt_columns(id={"description": "", "constraints": [{"type": "primary_key"}]}),
+                )
+            ),
+            "models/a.tabledoc.yml": TABLE + "title: A\ncolumns: [{name: id, title: ID}, {name: extra, title: X}]\n",
+            "models/a.md": "Guide\n",
+        }
+    )
+    document, report = run(root)
+    assert not report.failed, report.render()
+    a = document["tables"][0]
+    assert (a["schema"], a["name"]) == ("s", "a")
+    assert a["title"] == {"und": "A"}
+    assert a["description"] == {"und": "from dbt"}
+    assert a["primary_key"] == ["id"]
+    assert a["documents"] == ["s/a/README.md"]
+    assert a["columns"] == [{"name": "id", "title": {"und": "ID"}}, {"name": "extra", "title": {"und": "X"}}]
+
+
+@pytest.mark.parametrize(
+    ("files", "code"),
+    [
+        ({"models/a.tabledoc.yml": TABLE + "description: again\n"}, "described-twice"),
+        ({"models/a.tabledoc.yml": TABLE + "columns: [{name: id, description: again}]\n"}, "described-twice"),
+        ({"models/b.tabledoc.yml": TABLE, "models/b.sql": "select 1"}, "table-without-model"),
+    ],
+)
+def test_a_key_is_written_in_one_place(write, files, code):
+    root = write(
+        {
+            "tabledoc.yml": DATASET + "name: d\n",
+            "dbt_project.yml": "name: p\n",
+            ".dbtignore": "*.tabledoc.yml\n",
+            "target/manifest.json": manifest(
+                a=model("a", description="from dbt", columns=dbt_columns(id={"description": "ID"}))
+            ),
+            **files,
         }
     )
     _, report = run(root)
-    assert codes(report) == ["described-twice"]
+    assert codes(report) == [code]
+
+
+def test_a_dbt_project_with_table_files_ignores_them_in_dbtignore(write):
+    root = write(
+        {
+            "tabledoc.yml": DATASET + "name: d\n",
+            "dbt_project.yml": "name: p\n",
+            "target/manifest.json": manifest(a=model("a")),
+            "models/a.tabledoc.yml": TABLE + "title: A\n",
+        }
+    )
+    _, report = run(root)
+    assert codes(report) == ["dbtignore"]
 
 
 def test_dbt_without_a_manifest_is_a_warning(write):
@@ -304,20 +361,19 @@ def test_dbt_without_a_manifest_is_a_warning(write):
 def test_documents_go_into_the_folder_of_what_they_are_for(write):
     root = write(
         {
-            "tabledoc.yml": DATASET + "name: d\nschemas: [{name: sales, docs: [notes/codes.md]}]\n",
+            "tabledoc.yml": DATASET + "name: d\nschemas: [{name: sales, documents: [sales/README.md, notes/codes.md]}]\n",
             "sales/README.md": "The schema. See [codes](../notes/codes.md).\n",
             "notes/codes.md": "Codes. ![map](map.png)\n",
             "notes/map.png": b"PNG",
-            "sales/orders.yml": TABLE + "title: Orders\ndocs: [notes/how.md]\n",
-            "sales/orders/README.md": "The guide.\n",
+            "sales/orders.tabledoc.yml": TABLE + "title: Orders\ndocuments: [notes/how.md]\n",
+            "sales/orders.md": "The guide.\n",
             "notes/how.md": "How.\n",
         }
     )
     d = read(Options(root, with_source=False), report := Report())
     assert not report.failed, report.render()
-    assert d.schemas == [{"name": "sales", "guide": "sales/README.md", "docs": ["sales/codes.md"]}]
-    assert d.tables[0]["guide"] == "sales/orders/README.md"
-    assert d.tables[0]["docs"] == ["sales/orders/how.md"]
+    assert d.schemas == [{"name": "sales", "documents": ["sales/README.md", "sales/codes.md"]}]
+    assert d.tables[0]["documents"] == ["sales/orders/README.md", "sales/orders/how.md"]
     assert [f.path for f in d.files] == [
         "notes/map.png",
         "sales/README.md",
@@ -333,7 +389,7 @@ def test_documents_go_into_the_folder_of_what_they_are_for(write):
 def test_two_files_at_one_path_is_an_error(write):
     root = write(
         {
-            "tabledoc.yml": DATASET + "name: d\ndocs: [a/x.md, b/x.md]\n",
+            "tabledoc.yml": DATASET + "name: d\ndocuments: [a/x.md, b/x.md]\n",
             "a/x.md": "A\n",
             "b/x.md": "B\n",
         }
@@ -346,8 +402,8 @@ def test_one_file_for_two_paths_is_an_error(write):
     root = write(
         {
             "tabledoc.yml": DATASET + "name: d\n",
-            "s/a.yml": TABLE + "title: A\ndocs: [docs/method.md]\n",
-            "s/b.yml": TABLE + "title: B\ndocs: [docs/method.md]\n",
+            "s/a.tabledoc.yml": TABLE + "title: A\ndocuments: [docs/method.md]\n",
+            "s/b.tabledoc.yml": TABLE + "title: B\ndocuments: [docs/method.md]\n",
             "docs/method.md": "Method.\n",
         }
     )
@@ -361,7 +417,7 @@ def test_text_in_more_than_one_language(write):
             "tabledoc.yml": DATASET
             + "name: shop\nlanguage: ja\ntitle: {ja: 店, en: Shop}\ndescription: 店の注文\n"
             + "topics: {ja: [小売], en: [retail]}\nsources: [{title: {ja: 出典, en: Source}, path: https://x.example}]\n",
-            "sales/orders.yml": TABLE + "columns: [{name: id, title: {en: Order ID}}]\n",
+            "sales/orders.tabledoc.yml": TABLE + "columns: [{name: id, title: {en: Order ID}}]\n",
         }
     )
     document, report = run(root)

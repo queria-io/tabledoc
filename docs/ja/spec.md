@@ -128,7 +128,7 @@ columns:
 - 名前と置き場所で決めます。`<schema>/<table>.tabledoc.yml` は `<schema>.<table>` を説明します。ルートの直下に置いたファイルは `main` スキーマです
 - dbt のプロジェクトでは、`<model>.sql` の隣の `<model>.tabledoc.yml` がそのモデルのテーブルを説明します。テーブル名はモデルの `schema` と `alias` で決まります。隣にモデルの無いテーブルのファイルはエラーです
 - それ以外の場所に置いたテーブルのファイルと、ファイル名と違う `name` はエラーです
-- dbt はモデルのパスの下の yml をすべて読みますが、`models:` など dbt が知るキーの無いファイルは無視するので、テーブルのファイルを読みません
+- dbt はモデルのパスの下の yml をすべて構文解析し、テーブルのファイルの `sources` を dbt の `sources:` として読もうとします。テーブルのファイルを置く dbt のプロジェクトは、`.dbtignore` に `*.tabledoc.yml` を書きます。書いていないと tabledoc はエラーにします
 
 ## 言語
 
@@ -308,7 +308,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--files`: `files` テーブルのファイルの置き場所。`<files>/<sha256>` で読みます。フォルダか http(s) の URL です。既定は、`fdl clone` がカタログの横に記録したリポジトリの `assets/` です。各ファイルは sha256 で照合します
 - `--name`: `tabledoc.yml` の `name`。既定はリポジトリの URL の最後の部分です
 - フォルダに同じファイルがあると、`--force` を付けない限り何も書きません。カタログのパスがフォルダの外を指すときはエラーです
-- テーブルのファイルは `<schema>/<table>.tabledoc.yml`、ガイドはその隣の `<schema>/<table>.md` に書きます。フォルダのほかのファイルはデータセットの中のパスのまま書き、そのフォルダが説明する対象の `documents` に並べます
+- テーブルのファイルは `<schema>/<table>.tabledoc.yml` に書きます。ファイルはデータセットの中のパスのまま書き、フォルダの Markdown (`README.md` を先頭に) を、そのフォルダが説明する対象の `documents` に並べます。ルートの `README.md` は並べなくてもデータセットの説明です
 - `texts` の行は、1 つの言語だけでそれがデータセットの `language` なら文字列だけで、それ以外は対応で書きます
 - テーブルに無いものは書きません。主キー、asset の列、entity の種類 (`foreign` と書きます)・dimension・granularity・metrics、ほかの読み手のキーと、dbt の `profiles.yml` から取る SQL が読むほかのデータセットです。`--unlisted` だけが書いたテーブルにはテーブルのファイルを作りません。`sql` と `depends_on` は `source_path` の無いテーブル (dbt で作らないテーブル) にだけ書きます
 

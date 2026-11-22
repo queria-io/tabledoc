@@ -2,9 +2,9 @@
 
 The tables are the enabled models materialized as table, view or incremental,
 under their `schema` and `alias`. A model's description comes from its yml:
-`description`, the columns' `description`, `entity`, `dimension` and
-`granularity`, and the keys dbt does not have under `config.meta`. `metrics`
-come from the semantic layer. The SQL is `compiled_code`.
+`description`, the columns' `description`, the primary key from `constraints`,
+`entity`, `dimension` and `granularity`, and the keys dbt does not have under
+`config.meta`. `metrics` come from the semantic layer. The SQL is `compiled_code`.
 
 `dependencies` maps the alias another dataset is attached under in the SQL to its
 URL, read from the ATTACHes in profiles.yml, so `depends_on` can
@@ -34,7 +34,7 @@ TABLE_META = (
     "sources",
     "temporal_coverage",
     "spatial_coverage",
-    "docs",
+    "documents",
     "queria",
     "annotations",
 )
@@ -88,6 +88,18 @@ def _metrics(manifest: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     return found
 
 
+def _primary_key(node: dict[str, Any]) -> list[str] | None:
+    """The columns of a `primary_key` constraint, on the model or on one column."""
+    for constraint in node.get("constraints") or []:
+        if isinstance(constraint, dict) and constraint.get("type") == "primary_key" and constraint.get("columns"):
+            return [str(c) for c in constraint["columns"]]
+    for column in (node.get("columns") or {}).values():
+        for constraint in (column.get("constraints") or []) if isinstance(column, dict) else []:
+            if isinstance(constraint, dict) and constraint.get("type") == "primary_key":
+                return [str(column.get("name"))]
+    return None
+
+
 def _yml_path(root: Path, node: dict[str, Any]) -> Path:
     """The yml that describes the model, else its SQL file."""
     patch = node.get("patch_path")
@@ -109,9 +121,16 @@ def tables(manifest: dict[str, Any], root: Path, report: Report) -> list[Table]:
             continue
         meta = _meta(node)
         columns = [_column(c) for c in (node.get("columns") or {}).values() if isinstance(c, dict)]
+        primary_key = _primary_key(node)
+        if primary_key and "primary_key" in meta:
+            report.error(
+                "described-twice", f"{node.get('name')}: primary_key in config.meta and in constraints; keep one",
+                _yml_path(root, node),
+            )
         described = {
             **({"description": node["description"]} if node.get("description") else {}),
             **{k: meta[k] for k in TABLE_META if k in meta},
+            **({"primary_key": primary_key} if primary_key and "primary_key" not in meta else {}),
             **({"columns": columns} if columns else {}),
             **({"metrics": metrics[uid]} if uid in metrics else {}),
         }

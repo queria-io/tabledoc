@@ -156,7 +156,13 @@ def _guide(d: Description, path: str | None) -> list[str]:
 
 
 def _documents(paths: Iterable[str], here: str) -> list[str]:
-    return [f"- {_link(posixpath.basename(p), _relative(p, here))}" for p in paths]
+    """The documents but the guide (README.md), as links."""
+    return [f"- {_link(posixpath.basename(p), _relative(p, here))}" for p in paths if posixpath.basename(p) != README]
+
+
+def _guide_of(record: dict[str, Any]) -> str | None:
+    """The document named README.md: the guide."""
+    return next((p for p in record.get("documents") or [] if posixpath.basename(p) == README), None)
 
 
 def _table(d: Description, table: Table, readers: dict[str, list[str]], keys: set[str]) -> str:
@@ -175,8 +181,8 @@ def _table(d: Description, table: Table, readers: dict[str, list[str]], keys: se
         *_section("Reads", reads),
         *_section("Read by", read_by),
         *_section("SQL", ["```sql", str(table["sql"]).strip(), "```"] if table.get("sql") else []),
-        *_section("Documents", _documents(table.get("docs") or [], here)),
-        *_guide(d, table.get("guide")),
+        *_section("Documents", _documents(table.get("documents") or [], here)),
+        *_guide(d, _guide_of(table)),
     ]
     return _page(lines)
 
@@ -196,8 +202,8 @@ def _schema(d: Description, schema: dict[str, Any], tables: list[Table]) -> str:
         _heading(schema.get("title"), schema["name"]),
         *_text(schema.get("description")),
         *_section("Tables", _table_list(tables, here)),
-        *_section("Documents", _documents(schema.get("docs") or [], here)),
-        *_guide(d, schema.get("guide")),
+        *_section("Documents", _documents(schema.get("documents") or [], here)),
+        *_guide(d, _guide_of(schema)),
     ]
     return _page(lines)
 
@@ -214,8 +220,8 @@ def _dataset(d: Description, schemas: list[dict[str, Any]], tables: list[Table])
         *_text(record.get("description")),
         *_block(_facts(record)),
         *(["", "## Tables", *[line for s in schemas for line in part(s)]] if schemas else []),
-        *_section("Documents", _documents(record.get("docs") or [], README)),
-        *_guide(d, record.get("guide")),
+        *_section("Documents", _documents(record.get("documents") or [], README)),
+        *_guide(d, _guide_of(record)),
     ]
     return _page(lines)
 

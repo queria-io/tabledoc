@@ -17,8 +17,8 @@ def described(write):
     root = write(
         {
             "tabledoc.yml": DATASET,
-            "sales/orders.yml": TABLE + "primary_key: [id]\ncolumns:\n  - {name: id}\n  - {name: file, asset: true}\n",
-            "sales/extra.yml": TABLE + "description: Extra.\n",
+            "sales/orders.tabledoc.yml": TABLE + "primary_key: [id]\ncolumns:\n  - {name: id}\n  - {name: file, asset: true}\n",
+            "sales/extra.tabledoc.yml": TABLE + "description: Extra.\n",
         }
     )
     return read(Options(root, with_source=False), Report())
