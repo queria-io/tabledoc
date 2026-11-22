@@ -1,6 +1,37 @@
 # CHANGELOG
 
 
+## v0.5.0 (2026-11-22)
+
+### Features
+
+- Describe each table in <table>.tabledoc.yml beside its SQL, list documents in documents, and layer
+  dbt's keys per key ([#17](https://github.com/queria-io/tabledoc/pull/17),
+  [`10ff9d3`](https://github.com/queria-io/tabledoc/commit/10ff9d3617a6dbc34c86879d7a873bfcd3e1fdb7))
+
+- Serve the docs and the JSON Schemas from tabledoc.queria.io on Cloudflare Workers
+  ([#16](https://github.com/queria-io/tabledoc/pull/16),
+  [`17c4436`](https://github.com/queria-io/tabledoc/commit/17c443604c2120440e407cf21f6fc5eeb0dedd34))
+
+* feat!: serve the docs and the JSON Schemas from tabledoc.queria.io on Cloudflare Workers
+
+The site is an assets-only Worker, like docs.queria.io. npm run build copies the JSON Schemas into
+  dist/schemas/, served with CORS. Their URLs move from queria-io.github.io/tabledoc/schemas/ to
+  tabledoc.queria.io/schemas/; the old ones were never served. GitHub Pages and its workflow are
+  removed.
+
+BREAKING CHANGE: $schema is https://tabledoc.queria.io/schemas/<kind>/v1.json
+
+* chore: sync uv.lock with the released version
+
+* fix: refuse the old schema URL, keep Blume's headers, build strictly, and name the custom domain
+  in wrangler.jsonc
+
+A file whose $schema is the old queria-io.github.io URL is refused with the new one, instead of
+  being skipped. The schema headers are appended to the _headers Blume writes. The account comes
+  from the environment, not the file.
+
+
 ## v0.4.0 (2026-11-22)
 
 ### Features
