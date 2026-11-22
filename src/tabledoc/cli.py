@@ -1,4 +1,4 @@
-"""tabledoc validate, load and dump."""
+"""tabledoc validate, load, dump and export."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from pathlib import Path
 from .description import Options, read
 from .dump import Source, dump
 from .load import Target, load
+from .markdown import export
 from .report import Level, Report, SpecError
 
 
@@ -44,6 +45,10 @@ def parser() -> argparse.ArgumentParser:
     d.add_argument("--files", default=None, help="where the files are, as <files>/<sha256> (default: the repository's assets)")
     d.add_argument("--name", default=None, help="the dataset's name (default: the repository's)")
     d.add_argument("--force", action="store_true", help="replace the files already there")
+    e = commands.add_parser("export", help="check the description and write it as Markdown, one file per table")
+    _common(e)
+    e.add_argument("--markdown", type=Path, required=True, help="the folder to write the Markdown into")
+    e.add_argument("--force", action="store_true", help="replace the files already there")
     return p
 
 
@@ -77,6 +82,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "validate":
             read(options, report)
+        elif args.command == "export":
+            described = read(options, report)
+            if not (report.failed or (args.strict and report.of(Level.WARNING))):
+                written = export(described, args.markdown, force=args.force)
+                print(f"wrote {len(written)} files in {args.markdown}", file=sys.stderr)
         else:
             catalog = _catalog(args.ducklake)
             data = args.data_path or os.environ.get("FDL_DATA_PATH")
