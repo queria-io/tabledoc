@@ -30,7 +30,7 @@ DATASET_KEYS = (
     "temporal_coverage",
     "spatial_coverage",
 )
-SCHEMA_KEYS = ("name", "title", "description", "guide")
+SCHEMA_KEYS = ("name", "title", "description")
 TABLE_KEYS = (
     "title",
     "description",

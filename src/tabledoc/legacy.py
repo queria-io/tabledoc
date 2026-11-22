@@ -46,9 +46,21 @@ def _queria(record: dict[str, Any], level: str) -> dict[str, Any]:
     }
 
 
+def _documents(record: dict[str, Any], guide: bool = False) -> dict[str, Any]:
+    """``record`` with `docs` (and a schema's `guide`) as `documents`."""
+    listed = [record[k] for k in (("guide",) if guide else ()) if record.get(k)]
+    listed += [str(d) for d in record.get("docs") or []] if isinstance(record.get("docs"), list) else []
+    rest = {k: v for k, v in record.items() if k not in ("docs", *(("guide",) if guide else ()))}
+    return {**rest, **({"documents": listed} if listed else {})}
+
+
 def dataset(record: dict[str, Any]) -> dict[str, Any]:
     """queria.yml as tabledoc.yml. `catalogs` stays; the caller takes it out as `dependencies`."""
-    return _queria(record, "dataset")
+    converted = _documents(_queria(record, "dataset"))
+    written = converted.get("schemas")
+    if isinstance(written, list):
+        converted["schemas"] = [_documents(s, guide=True) if isinstance(s, dict) else s for s in written]
+    return converted
 
 
 def _semantic(field: dict[str, Any], primary_key: list[str]) -> tuple[dict[str, Any], dict[str, Any] | None]:
@@ -72,7 +84,7 @@ def _semantic(field: dict[str, Any], primary_key: list[str]) -> tuple[dict[str, 
 
 def table(record: dict[str, Any]) -> dict[str, Any]:
     """A table front matter as a table file. `fields` is `columns`, `semantic` is read as dbt's."""
-    own = _queria(record, "table")
+    own = _documents(_queria(record, "table"))
     fields = own.pop("fields", None)
     primary_key = own.get("primary_key") if isinstance(own.get("primary_key"), list) else []
     converted = [

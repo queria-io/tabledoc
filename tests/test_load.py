@@ -30,12 +30,12 @@ def project(write):
             "tabledoc.yml": DATASET
             + "name: shop\ntitle: Shop\nlicenses: [CC-BY-4.0]\nqueria: {themes: [trade], title_kana: ショップ}\n",
             "README.md": "Overview.\n",
-            "sales/orders.yml": TABLE
+            "sales/orders.tabledoc.yml": TABLE
             + "title: Orders\ndescription: One row is one order.\nprimary_key: [id]\n"
             + "columns:\n  - {name: id, description: The order, entity: {type: primary, name: order}}\n"
             + "  - {name: file, asset: true}\n",
             "sales/orders.md": "Guide.\n",
-            "sales/recent.yml": TABLE + "description: The last orders.\n",
+            "sales/recent.tabledoc.yml": TABLE + "description: The last orders.\n",
         }
     )
 
@@ -83,7 +83,7 @@ def test_queria_keys_are_columns(write, catalog):
     (root / "tabledoc.yml").write_text(
         DATASET + "name: shop\ntopics: [retail]\nqueria: {cover: cover.png, ai_context: {hint: x}}\n"
     )
-    (root / "sales" / "recent.yml").write_text(TABLE + "description: x\nkeywords: [latest]\nqueria: {published: false}\n")
+    (root / "sales" / "recent.tabledoc.yml").write_text(TABLE + "description: x\nkeywords: [latest]\nqueria: {published: false}\n")
     report = Report()
     assert run(root, catalog, report) is not None, report.render()
     assert held(catalog, "dataset", "cover", "ai_context") == [("cover.png", {"hint": "x"})]
@@ -104,8 +104,8 @@ def test_license_terms_stay_in_licenses(write, catalog):
 
 def test_a_view_gets_no_sql(write, catalog):
     root = project(write)
-    (root / "sales" / "recent.yml").write_text(TABLE + "description: x\nsql: select 1\ndepends_on: [sales.orders]\n")
-    (root / "sales" / "orders.yml").write_text(TABLE + "title: Orders\nsql: select 1 as id, 'a' as file\n")
+    (root / "sales" / "recent.tabledoc.yml").write_text(TABLE + "description: x\nsql: select 1\ndepends_on: [sales.orders]\n")
+    (root / "sales" / "orders.tabledoc.yml").write_text(TABLE + "title: Orders\nsql: select 1 as id, 'a' as file\n")
     assert run(root, catalog) is not None
     assert held(catalog, "tables", "name", "sql", "depends_on") == [
         ("orders", "select 1 as id, 'a' as file", None),
@@ -121,7 +121,7 @@ def test_a_second_load_changes_only_what_differs(write, catalog):
     assert run(root, catalog) is not None
     # Nothing differs, so nothing is written.
     assert sql(catalog, snapshots) == before
-    (root / "sales" / "orders.yml").write_text(TABLE + "title: Orders again\n", encoding="utf-8")
+    (root / "sales" / "orders.tabledoc.yml").write_text(TABLE + "title: Orders again\n", encoding="utf-8")
     assert run(root, catalog) is not None
     assert held(catalog, "texts", "table", "title") == [("", "Shop"), ("orders", "Orders again"), ("recent", None)]
     assert held(catalog, "columns", "name") == []
@@ -168,7 +168,7 @@ def test_a_schema_named_in_another_case_is_the_one_the_catalog_holds(write, cata
 
 def test_an_asset_column_has_to_be_varchar(write, catalog):
     root = project(write)
-    (root / "sales" / "extra.yml").write_text(TABLE + "columns: [{name: x, asset: true}]\n", encoding="utf-8")
+    (root / "sales" / "extra.tabledoc.yml").write_text(TABLE + "columns: [{name: x, asset: true}]\n", encoding="utf-8")
     report = Report()
     assert run(root, catalog, report) is None
     assert [f.code for f in report.findings] == ["asset-type"]
@@ -182,7 +182,7 @@ def test_refuses_a_folder_inside_dot_fdl(write, catalog, tmp_path):
 
 def test_a_table_not_in_the_catalog_writes_nothing(write, catalog):
     root = project(write)
-    (root / "sales" / "gone.yml").write_text(TABLE + "title: Gone\n", encoding="utf-8")
+    (root / "sales" / "gone.tabledoc.yml").write_text(TABLE + "title: Gone\n", encoding="utf-8")
     report = Report()
     assert run(root, catalog, report) is None
     assert [f.code for f in report.findings] == ["table-missing"]
@@ -191,7 +191,7 @@ def test_a_table_not_in_the_catalog_writes_nothing(write, catalog):
 
 def test_a_column_not_in_the_catalog_is_an_error(write, catalog):
     root = project(write)
-    (root / "sales" / "extra.yml").write_text(TABLE + "primary_key: [z]\ncolumns: [{name: y}]\n", encoding="utf-8")
+    (root / "sales" / "extra.tabledoc.yml").write_text(TABLE + "primary_key: [z]\ncolumns: [{name: y}]\n", encoding="utf-8")
     report = Report()
     assert run(root, catalog, report) is None
     assert [f.code for f in report.findings] == ["column-missing", "column-missing"]
@@ -229,7 +229,7 @@ def test_text_in_more_than_one_language_is_a_row_for_each(write, catalog):
         + "name: shop\nlanguage: ja\ntitle: {ja: 店, en: Shop}\ntopics: {ja: [小売], en: [retail]}\n"
         + "homepage: {ja: https://example.jp, en: https://example.com}\n"
     )
-    (root / "sales" / "orders.yml").write_text(
+    (root / "sales" / "orders.tabledoc.yml").write_text(
         TABLE + "title: 注文\ncolumns: [{name: id, title: {ja: ID, en: Order ID}}]\n", encoding="utf-8"
     )
     report = Report()
@@ -258,11 +258,11 @@ def test_a_value_the_table_cannot_hold_is_an_error(write, catalog):
 
 def test_names_are_written_as_the_catalog_spells_them(write, catalog):
     root = project(write)
-    (root / "sales" / "Orders.yml").write_text(
+    (root / "sales" / "Orders.tabledoc.yml").write_text(
         TABLE + "description: Upper.\nprimary_key: [ID]\ncolumns: [{name: ID, description: The order}]\n",
         encoding="utf-8",
     )
-    (root / "sales" / "orders.yml").unlink()
+    (root / "sales" / "orders.tabledoc.yml").unlink()
     (root / "sales" / "orders.md").unlink()
     report = Report()
     assert run(root, catalog, report, unlisted=True) is not None, report.render()
@@ -316,7 +316,7 @@ def test_unlisted_covers_a_table_dbt_built_that_says_only_its_sql(write, catalog
     root = write(
         {
             "tabledoc.yml": DATASET + "name: shop\n",
-            "sales/orders.yml": TABLE + "description: One row is one order.\n",
+            "sales/orders.tabledoc.yml": TABLE + "description: One row is one order.\n",
             "dbt_project.yml": "name: p\n",
             "target/manifest.json": json.dumps({"nodes": nodes}),
         }

@@ -8,8 +8,7 @@
   "additionalProperties": false,
   "properties": {
     "$schema": { "const": "https://tabledoc.queria.io/schemas/table/v1.json" },
-    "name": { "type": "string", "minLength": 1, "description": "The table's name. Defaults to the file name." },
-    "table": { "type": "string", "pattern": "^[^.\\s]+\\.[^.\\s]+$", "description": "<schema>.<table>. Wins over the file's place." },
+    "name": { "type": "string", "minLength": 1, "description": "The table's name: the file's name, <name>.tabledoc.yml." },
     "title": { "$ref": "../dataset/v1.json#/$defs/text" },
     "description": { "$ref": "../dataset/v1.json#/$defs/text" },
     "topics": { "$ref": "../dataset/v1.json#/$defs/texts" },
@@ -21,7 +20,7 @@
     "spatial_coverage": { "$ref": "../dataset/v1.json#/$defs/spatialCoverage" },
     "sql": { "type": "string", "description": "The SQL the table is made from, for a table dbt does not build." },
     "depends_on": { "$ref": "../dataset/v1.json#/$defs/strings" },
-    "docs": { "$ref": "../dataset/v1.json#/$defs/paths", "description": "Paths of the table's other documents, relative to the root. They go into the table's folder by file name." },
+    "documents": { "$ref": "../dataset/v1.json#/$defs/paths", "description": "Paths of the table's documents, relative to the root. They go into the table's folder by file name; README.md is its guide. <name>.md beside the table file is its guide without being listed." },
     "columns": { "type": "array", "items": { "$ref": "#/$defs/column" } },
     "metrics": { "type": "array", "items": { "$ref": "#/$defs/metric" } },
     "queria": { "type": "object", "description": "Keys only Queria reads. Queria checks them." },

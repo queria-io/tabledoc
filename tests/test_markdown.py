@@ -15,7 +15,7 @@ FILES = {
     + "queria: {title_kana: ショップ}\n",
     "README.md": "# Shop\n\nSee ![chart](docs/chart.png).\n",
     "docs/chart.png": b"\x89PNG",
-    "sales/orders.yml": TABLE
+    "sales/orders.tabledoc.yml": TABLE
     + "title: Orders\ndescription: |-\n  One row is one order.\n\n  More.\nprimary_key: [id]\n"
     + "columns:\n  - {name: id, title: ID, entity: primary}\n"
     + "  - {name: shop, description: 'a | b', entity: {type: foreign, name: shop_id}}\n"
@@ -23,7 +23,7 @@ FILES = {
     + "  - {name: receipt, asset: true}\n"
     + "metrics: [{name: total, agg: sum, expr: amount}]\n",
     "sales/orders.md": "How to read it. ![chart](../docs/chart.png)\n",
-    "sales/daily.yml": TABLE + "title: Daily\nsql: select day, count(*) from sales.orders group by day\n",
+    "sales/daily.tabledoc.yml": TABLE + "title: Daily\nsql: select day, count(*) from sales.orders group by day\n",
 }
 
 
@@ -81,10 +81,10 @@ def test_export_refuses_to_replace_files_unless_forced(write, tmp_path):
 
 
 def test_export_inside_the_root_is_not_read_again(write):
-    root = write({**FILES, "sales/orders.md": "See [the table file](orders.yml).\n"})
+    root = write({**FILES, "sales/orders.md": "See [the table file](orders.tabledoc.yml).\n"})
     out = root / "ai-docs"
     assert main(["export", "--root", str(root), "--markdown", str(out)]) == 0
-    assert (out / "sales" / "orders.yml").is_file()
+    assert (out / "sales" / "orders.tabledoc.yml").is_file()
     assert (out / ".tabledoc-export").is_file()
     assert main(["validate", "--root", str(root)]) == 0
 
@@ -99,7 +99,7 @@ def test_export_into_a_file_is_refused(write, tmp_path):
 def test_links_with_spaces_and_the_repository(write):
     files = {
         **FILES,
-        "tabledoc.yml": FILES["tabledoc.yml"] + "repository: https://example.com/repo\ndocs: ['docs/Data dictionary.md']\n",
+        "tabledoc.yml": FILES["tabledoc.yml"] + "repository: https://example.com/repo\ndocuments: ['docs/Data dictionary.md']\n",
         "docs/Data dictionary.md": "# Dictionary\n",
     }
     report = Report()

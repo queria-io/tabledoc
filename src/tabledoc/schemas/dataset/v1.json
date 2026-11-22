@@ -34,14 +34,13 @@
           "name": { "type": "string", "minLength": 1 },
           "title": { "$ref": "#/$defs/text" },
           "description": { "$ref": "#/$defs/text" },
-          "guide": { "$ref": "#/$defs/path", "description": "Path of the schema's guide, relative to the root. Default: <name>/README.md when it is there." },
-          "docs": { "$ref": "#/$defs/paths", "description": "Paths of the schema's other documents, relative to the root. They go into the schema's folder by file name." }
+          "documents": { "$ref": "#/$defs/paths", "description": "Paths of the schema's documents, relative to the root. They go into the schema's folder by file name; README.md is its guide." }
         }
       }
     },
-    "docs": {
+    "documents": {
       "$ref": "#/$defs/paths",
-      "description": "Paths of the dataset's other documents, relative to the root. They go into the dataset's root by file name."
+      "description": "Paths of the dataset's documents, relative to the root. They go into the dataset's root by file name. README.md at the root is one without being listed."
     },
     "queria": { "type": "object", "description": "Keys only Queria reads. Queria checks them." },
     "annotations": { "$ref": "#/$defs/annotations" }

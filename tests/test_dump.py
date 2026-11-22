@@ -26,12 +26,12 @@ def loaded(write, lake, tmp_path):
         {
             "src/tabledoc.yml": DATASET
             + "name: shop\ntitle: Shop\ndescription: |-\n  Two\n  lines\nlicenses: [CC-BY-4.0, {id: own, commercial_use: false}]\nissued: 2026-10-30\n"
-            + "schemas: [{name: sales, title: Sales}]\ndocs: [docs/method.md]\n"
+            + "schemas: [{name: sales, title: Sales}]\ndocuments: [docs/method.md]\n"
             + "topics: [trade]\nqueria: {title_kana: ショップ}\n",
             "src/README.md": "Overview. ![chart](docs/chart.png)\n",
             "src/docs/method.md": "Method. [back](../README.md)\n",
             "src/docs/chart.png": b"PNG",
-            "src/sales/orders.yml": TABLE
+            "src/sales/orders.tabledoc.yml": TABLE
             + "title: Orders\nprimary_key: [id]\nqueria: {published: false}\n"
             + "columns:\n  - {name: id, description: The order, entity: {type: primary, name: order}}\n"
             + "  - {name: file, asset: true, annotations: {other: {wide: true}}}\n",
@@ -61,7 +61,7 @@ def test_dump_writes_what_loads_to_the_same_tables(loaded, tmp_path):
         "README.md",
         "docs/chart.png",
         "method.md",
-        "sales/orders.yml",
+        "sales/orders.tabledoc.yml",
         "sales/orders/README.md",
         "tabledoc.yml",
     ]
@@ -74,7 +74,7 @@ def test_dump_writes_what_loads_to_the_same_tables(loaded, tmp_path):
         "licenses:\n- CC-BY-4.0\n- id: own\n  commercial_use: false\n"
         "topics:\n- trade\n"
         "schemas:\n- name: sales\n  title: Sales\n"
-        "docs:\n- method.md\n"
+        "documents:\n- method.md\n"
         "queria:\n  title_kana: ショップ\n"
     )
     assert (out / "method.md").read_text() == "Method. [back](README.md)\n"
@@ -124,7 +124,7 @@ def test_dump_reads_the_repository_from_fdl_clones_note(loaded, tmp_path, monkey
 
 def test_dump_writes_a_schema_other_than_tabledoc(write, lake, tmp_path):
     catalog = lake("CREATE SCHEMA lake.sales; CREATE TABLE lake.sales.orders AS SELECT 1 AS id")
-    root = write({"src/tabledoc.yml": DATASET + "name: shop\ntitle: Shop\n", "src/sales/orders.yml": TABLE + "title: O\n"}) / "src"
+    root = write({"src/tabledoc.yml": DATASET + "name: shop\ntitle: Shop\n", "src/sales/orders.tabledoc.yml": TABLE + "title: O\n"}) / "src"
     report = Report()
     assert load(Options(root, with_source=False), Target(*catalog, schema="_queria"), report) is not None, report.render()
     out = tmp_path / "dumped"
@@ -153,7 +153,7 @@ def test_text_in_more_than_one_language_comes_back_as_a_map(write, lake, tmp_pat
     root = write(
         {
             "src/tabledoc.yml": DATASET + "name: shop\nlanguage: ja\ntitle: {ja: 店, en: Shop}\ndescription: 店の注文\n",
-            "src/sales/orders.yml": TABLE + "columns: [{name: id, title: {en: Order ID}}]\n",
+            "src/sales/orders.tabledoc.yml": TABLE + "columns: [{name: id, title: {en: Order ID}}]\n",
         }
     ) / "src"
     report = Report()
@@ -162,6 +162,6 @@ def test_text_in_more_than_one_language_comes_back_as_a_map(write, lake, tmp_pat
     dump(Source(catalog[0], None, "shop"), out)
     dataset = (out / "tabledoc.yml").read_text()
     assert "title:\n  en: Shop\n  ja: 店\ndescription: 店の注文\n" in dataset
-    assert "title:\n    en: Order ID\n" in (out / "sales" / "orders.yml").read_text()
+    assert "title:\n    en: Order ID\n" in (out / "sales" / "orders.tabledoc.yml").read_text()
     again = Report()
     assert load(Options(out, with_source=False), Target(*catalog), again) is not None, again.render()

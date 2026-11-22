@@ -84,10 +84,34 @@ def _dbt_tables(options: Options, report: Report) -> tuple[list[source.Table], d
     return dbt.tables(manifest, root, report), dbt.dependencies(_profiles(options))
 
 
+def _merge_columns(
+    built: list[dict[str, Any]], written: list[dict[str, Any]], where: str, path: Path, report: Report
+) -> list[dict[str, Any]]:
+    """Columns by name, key by key: dbt's order first, then the columns only the table file has."""
+    entries = [c for c in written if isinstance(c, dict)]
+    by_name: dict[Any, int] = {}
+    for i, c in enumerate(entries):
+        by_name.setdefault(c.get("name"), i)
+    used: set[int] = set()
+    merged = []
+    for column in built:
+        i = by_name.get(column.get("name"))
+        found = entries[i] if i is not None and i not in used else {}
+        if found:
+            used.add(i)
+        twice = sorted(k for k in set(column) & set(found) if k != "name")
+        if twice:
+            report.error("described-twice", f"{where}.{column.get('name')}: {', '.join(twice)} also in dbt", path)
+        merged.append({**column, **{k: v for k, v in found.items() if k not in column}})
+    return merged + [c for i, c in enumerate(entries) if i not in used]
+
+
 def _merge(
     built: list[source.Table], written: list[source.Table], report: Report
 ) -> list[source.Table]:
-    """One table per (schema, name). A table is described in one place only."""
+    """One table per (schema, name): what dbt says and what a table file adds, key by key.
+
+    A key written in both is an error; so is a table in two table files."""
     by_key: dict[source.Key, source.Table] = {}
     for table in written:
         if table.key in by_key:
@@ -104,21 +128,55 @@ def _merge(
         if found is None:
             merged[model.key] = model
             continue
-        if shape.described(model.record):
-            report.error(
-                "described-twice",
-                f"{model.schema}.{model.name} is described in dbt's yml and in {found.path}; keep one",
-                model.path,
-            )
-        built = {k: model.record[k] for k in shape.BUILT_KEYS if k in model.record and k not in found.record}
-        merged[model.key] = source.Table(
-            found.schema,
-            found.name,
-            record={**found.record, **built},
-            path=found.path,
-            guide=found.guide or model.guide,
-        )
+        where = f"{model.schema}.{model.name}"
+        twice = sorted(k for k in set(model.record) & set(found.record) if k not in ("columns", *shape.BUILT_KEYS))
+        if twice:
+            report.error("described-twice", f"{where}: {', '.join(twice)} also in dbt ({model.path}); keep one", found.path)
+        ignored = [k for k in shape.BUILT_KEYS if k in found.record]
+        if ignored:
+            report.warning("built-by-dbt", f"{where}: {', '.join(ignored)} not read; dbt builds this table", found.path)
+        columns = _merge_columns(model.record.get("columns") or [], found.record.get("columns") or [], where, found.path, report)
+        record = {
+            **{k: v for k, v in found.record.items() if k not in shape.BUILT_KEYS},
+            **{k: v for k, v in model.record.items() if k not in found.record or k in shape.BUILT_KEYS},
+            **({"columns": columns} if columns else {}),
+        }
+        if model.guide and found.guide and model.guide != found.guide:
+            report.error("guide-twice", f"{where} has two guides: {model.guide} and {found.guide}", found.path)
+        merged[model.key] = source.Table(found.schema, found.name, record=record, path=found.path, guide=found.guide or model.guide)
     return [merged[k] for k in sorted(merged)]
+
+
+def _warn_unlisted(
+    root: Path, schema_names: list[str], tables: list[source.Table], listed: set[str], report: Report
+) -> None:
+    """A README.md where earlier versions found a guide by itself, now that it is not listed."""
+    candidates = [Path(n) / README for n in schema_names] + [
+        t.path.with_name(source.stem(t.path)).relative_to(root) / README for t in tables if root in t.path.parents
+    ]
+    for path in candidates:
+        if (root / path).is_file() and path.as_posix() not in listed:
+            report.warning(
+                "unlisted-readme",
+                "not read: list it in the documents of what it describes, or move a table's guide to <table>.md",
+                root / path,
+            )
+
+
+def _check_dbtignore(root: Path, written: list[source.Table], report: Report) -> None:
+    """dbt parses every yml under its model paths; a table file there has to be in .dbtignore."""
+    project = root / "dbt_project.yml"
+    if not project.is_file():
+        return
+    loaded = yaml.safe_load(project.read_text(encoding="utf-8"))
+    paths = (loaded.get("model-paths") if isinstance(loaded, dict) else None) or ["models"]
+    folders = [(root / str(p)).resolve() for p in paths]
+    if not any(t.path.name.endswith(source.TABLE_SUFFIX) and any(f in t.path.parents for f in folders) for t in written):
+        return
+    ignore = root / ".dbtignore"
+    lines = ignore.read_text(encoding="utf-8").splitlines() if ignore.is_file() else []
+    if not any(line.strip().lstrip("/").removeprefix("**/") == f"*{source.TABLE_SUFFIX}" for line in lines):
+        report.error("dbtignore", f"add *{source.TABLE_SUFFIX} to .dbtignore, or dbt parses the table files", ignore)
 
 
 def _warn_metrics(tables: list[source.Table], report: Report) -> None:
@@ -134,38 +192,36 @@ def _table(table: source.Table) -> dict[str, Any]:
     shaped = shape.table(table.record)
     head = {k: shaped[k] for k in shape.TABLE_KEYS if k in shaped}
     tail = {k: v for k, v in shaped.items() if k not in shape.TABLE_KEYS}
-    docs = table.record.get("docs")
+    documents = [*([table.guide] if table.guide else []), *_paths(table.record.get("documents"))]
     return {
         "schema": table.schema,
         "name": table.name,
         **head,
-        **({"guide": table.guide} if table.guide else {}),
-        **({"docs": [str(d) for d in docs]} if isinstance(docs, list) and docs else {}),
+        **({"documents": documents} if documents else {}),
         **tail,
     }
 
 
-def _schemas(record: dict[str, Any], tables: list[source.Table], root: Path) -> list[dict[str, Any]]:
-    """The schemas of tabledoc.yml, and each other schema whose folder holds a README.md.
+def _paths(value: Any) -> list[str]:
+    return [str(d) for d in value] if isinstance(value, list) else []
 
-    `guide` and `docs` stay as written (paths under the root) until ``_place``.
+
+def _schemas(record: dict[str, Any], tables: list[source.Table]) -> list[dict[str, Any]]:
+    """The schemas of tabledoc.yml, and each other schema a table is in.
+
+    `documents` stay as written (paths under the root) until ``_place``.
     """
     written = record.get("schemas")
     listed = [
         {
             **shape.pick(s, shape.SCHEMA_KEYS),
-            **({"guide": s["guide"]} if s.get("guide") else {}),
-            **({"docs": [str(d) for d in s["docs"]]} if isinstance(s.get("docs"), list) and s["docs"] else {}),
+            **({"documents": _paths(s["documents"])} if _paths(s.get("documents")) else {}),
         }
         for s in (written if isinstance(written, list) else [])
         if isinstance(s, dict) and s.get("name")
     ]
     names = {s["name"] for s in listed}
-    others = [{"name": n} for n in sorted({t.schema for t in tables} - names)]
-    return [
-        {**s, "guide": f"{s['name']}/{README}"} if "guide" not in s and (root / s["name"] / README).is_file() else s
-        for s in listed + others
-    ]
+    return listed + [{"name": n} for n in sorted({t.schema for t in tables} - names)]
 
 
 def _local(entry: Any, root: Path, where: Path, report: Report) -> str | None:
@@ -178,20 +234,17 @@ def _local(entry: Any, root: Path, where: Path, report: Report) -> str | None:
 def _place(
     record: dict[str, Any], folder: str, root: Path, where: Path, report: Report, named: list[tuple[str, str, Path]]
 ) -> dict[str, Any]:
-    """``record`` with its `guide` and `docs` at their paths in the dataset: the guide is
-    ``folder``/README.md, and each document goes into ``folder`` by its file name."""
+    """``record`` with its `documents` at their paths in the dataset: each goes into
+    ``folder`` by its file name, and the first, when it is the guide beside a table
+    file or a model (``guide``), as ``folder``/README.md. The README.md comes first."""
     prefix = f"{folder}/" if folder else ""
-    guide = _local(record["guide"], root, where, report) if record.get("guide") else None
-    docs = [d for d in (_local(e, root, where, report) for e in record.get("docs") or []) if d]
-    if guide:
-        named.append((guide, prefix + README, where))
-    named.extend((d, prefix + posixpath.basename(d), where) for d in docs)
-    placed = {k: v for k, v in record.items() if k not in ("guide", "docs")}
-    return {
-        **placed,
-        **({"guide": prefix + README} if guide else {}),
-        **({"docs": [prefix + posixpath.basename(d) for d in docs]} if docs else {}),
-    }
+    guide = record.get("guide")
+    documents = [d for d in (_local(e, root, where, report) for e in record.get("documents") or []) if d]
+    pairs = [(d, prefix + (README if d == guide else posixpath.basename(d))) for d in documents]
+    named.extend((local, placed, where) for local, placed in pairs)
+    paths = sorted((p for _, p in pairs), key=lambda p: posixpath.basename(p) != README)
+    placed_record = {k: v for k, v in record.items() if k not in ("guide", "documents")}
+    return {**placed_record, **({"documents": paths} if paths else {})}
 
 
 def read(options: Options, report: Report) -> Description:
@@ -200,26 +253,37 @@ def read(options: Options, report: Report) -> Description:
     options = Options(root, options.manifest, options.profiles, options.with_source)
     dataset = source.read_dataset(root, report)
     models, attached = _dbt_tables(options, report)
-    written = [*source.read_table_files(root, report), *source.read_legacy_tables(root, report)]
+    sql = {root / str(m.record["source_path"]): m.key for m in models if m.record.get("source_path")}
+    written = [*source.read_table_files(root, report, sql), *source.read_legacy_tables(root, report)]
+    _check_dbtignore(root, written, report)
     tables = _merge(models, written, report)
     _warn_metrics(tables, report)
     record = dataset.record
     named: list[tuple[str, str, Path]] = []
+    readme = [README] if (root / README).is_file() else []
     top = _place(
-        {**({"guide": README} if (root / README).is_file() else {}), "docs": record.get("docs") or []},
+        {**({"guide": README} if readme else {}), "documents": readme + _paths(record.get("documents"))},
         "",
         root,
         dataset.path,
         report,
         named,
     )
-    schema_list = [_place(s, s["name"], root, dataset.path, report, named) for s in _schemas(record, tables, root)]
+    schema_list = [_place(s, s["name"], root, dataset.path, report, named) for s in _schemas(record, tables)]
     shaped = lineage.fill([_table(t) for t in tables], {**attached, **dataset.dependencies}, report)
     by_key = {t.key: t for t in tables}
     placed_tables = [
-        _place(t, f"{t['schema']}/{t['name']}", root, by_key[(t["schema"], t["name"])].path, report, named)
+        _place(
+            {**t, **({"guide": g} if (g := by_key[(t["schema"], t["name"])].guide) else {})},
+            f"{t['schema']}/{t['name']}",
+            root,
+            by_key[(t["schema"], t["name"])].path,
+            report,
+            named,
+        )
         for t in shaped
     ]
+    _warn_unlisted(root, [s["name"] for s in schema_list], tables, {local for local, _, _ in named}, report)
     sent = files.collect(root, named, report)
     language = str(record.get("language") or languages.UNDETERMINED)
     return Description(
@@ -241,6 +305,6 @@ def read(options: Options, report: Report) -> Description:
 
 
 def _ordered(table: dict[str, Any]) -> dict[str, Any]:
-    """Keys in a fixed order: depends_on, filled in last, after sql; guide and docs, placed last, before columns."""
-    order = ["schema", "name", *shape.TABLE_KEYS, "guide", "docs", "columns", "metrics", "annotations"]
+    """Keys in a fixed order: depends_on, filled in last, after sql; documents, placed last, before columns."""
+    order = ["schema", "name", *shape.TABLE_KEYS, "documents", "columns", "metrics", "annotations"]
     return {k: table[k] for k in order if k in table}
