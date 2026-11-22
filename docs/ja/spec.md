@@ -6,13 +6,14 @@ sidebar:
 description: tabledoc が読むファイル、その検査、プログラムに返す値を定めます。
 ---
 
-tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) の書き方を定め、検査し、ほかのプログラムのために読むツールです。特定の配信先には依存しません。`tabledoc load` は説明を DuckLake のカタログに、1 つのスキーマ (既定は `_tabledoc`) の普通のテーブルとして書き、`tabledoc dump` はそこからファイルを書き戻します。書き手のファイルが正です。
+tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) の書き方を定め、検査し、ほかのプログラムのために読むツールです。特定の配信先には依存しません。`tabledoc load` は説明を DuckLake のカタログに、1 つのスキーマ (既定は `_tabledoc`) の普通のテーブルとして書き、`tabledoc dump` はそこからファイルを書き戻します。`tabledoc export --markdown` は、AI アシスタントや人が読む Markdown のファイルとして書き出します。書き手のファイルが正です。
 
 ## コマンド
 
 - `tabledoc validate`: 書き手のファイルを検査します
 - `tabledoc load`: 検査してから、説明を DuckLake のカタログに書きます ([DuckLake のカタログに書く](#ducklake-のカタログに書く))
 - `tabledoc dump`: カタログが持つ説明のファイルを書きます ([カタログからファイルを書く](#カタログからファイルを書く))
+- `tabledoc export --markdown`: 検査してから、テーブルごとに 1 つの Markdown として書き出します ([AI のために Markdown を書き出す](#ai-のために-markdown-を書き出す))
 
 エラーがあると終了コード 1 (`--strict` では警告も)、ファイルやカタログを読み書きできないときは 2 で終わります。
 
@@ -278,6 +279,27 @@ tabledoc dump --ducklake work.sqlite --out description/
 - フォルダに同じファイルがあると、`--force` を付けない限り何も書きません。カタログのパスがフォルダの外を指すときはエラーです
 - テーブルのファイルは `<schema>/<table>.yml`、ガイドは `<schema>/<table>/README.md` に書きます。フォルダの `README.md` 以外の Markdown は、そのフォルダの `docs` に並べます
 - テーブルに無いものは書きません。主キー、asset の列、entity の種類 (`foreign` と書きます)・dimension・granularity・metrics、ほかの読み手のキーと、dbt の `profiles.yml` から取る SQL が読むほかのデータセットです。`--unlisted` だけが書いたテーブルにはテーブルのファイルを作りません。`sql` と `depends_on` は `source_path` の無いテーブル (dbt で作らないテーブル) にだけ書きます
+
+## AI のために Markdown を書き出す
+
+`tabledoc export --markdown <フォルダ>` は、`validate` と同じく説明を検査してから、Markdown として書き出します。データセットに 1 つ、スキーマごとに 1 つ、テーブルごとに 1 つのファイルを書きます。AI アシスタントや人はこのフォルダをそのまま読めます。データのドキュメントと一緒に公開することもできます。
+
+```bash
+tabledoc export --markdown ai-docs/
+```
+
+| ファイル | 内容 |
+| --- | --- |
+| `README.md` | データセットの名前、説明、ライセンス、出典など `tabledoc.yml` のキー。スキーマとテーブルの一覧 (それぞれへのリンクと、説明の最初の段落)。文書の一覧。最後にデータセットの概要 (`README.md`) |
+| `<schema>/README.md` | スキーマの名前と説明、テーブルと文書の一覧。最後にスキーマのガイド |
+| `<schema>/<table>/README.md` | テーブルの名前、説明、主キー、ライセンス、出典、`materialized`。列 (名前、説明、semantic、`asset`) とメトリクスの表。そのテーブルが読むテーブルと、そのテーブルを読むテーブル (データセットの中のテーブルはリンク)。SQL。文書の一覧。最後にテーブルのガイド |
+
+- ファイルは [データセットの中のパス](#データセットの中のパス) に書きます。`files` のほかのファイル (文書、画像) もそれぞれのパスに書くので、ガイドの中のリンクはそのまま使えます
+- ガイドは区切り線 (`---`) の後に、書かれたとおりに置きます。見出しのレベルは変えません
+- 読み手ごとのキー (`queria:`、`annotations:`) は書きません
+- 型・NULL の可否・行数は説明に含まれないので、書きません
+- フォルダに同じパスのファイルがあると、`--force` を付けない限り何も書きません。前の書き出しにあって今回書かないファイルは、フォルダに残ります
+- エラーがあると (`--strict` では警告も) 何も書きません
 
 ## 以前の形式
 
