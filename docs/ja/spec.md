@@ -245,7 +245,7 @@ d.schemas   # [{"name": "timeseries", "title": "Time series"}]
 d.tables    # [{"schema": "timeseries", "name": "series", "sql": …, "depends_on": […], "guide": …, "columns": […]}]
 d.files     # [File(path="README.md", sha256="…", bytes=1234, media_type="text/markdown", local="README.md"), …]
 d.source    # {"repository": "https://github.com/…", "commit": "…", "path": "", "dirty": False}
-d.catalogs  # {"other": "https://…"}: SQL が読むほかのデータセット (SQL の中の名前 → URL)
+d.dependencies  # {"other": {"url": "https://…"}}: SQL が読むほかのデータセット (SQL の中の名前 → URL)。FDL の tables.json の dependencies と同じ形
 d.content(d.files[0])  # そのファイルの中身
 ```
 
@@ -336,7 +336,7 @@ tabledoc export --markdown ai-docs/
 
 すべてのデータセットを一度に書き換えずに済むように、tabledoc は置き換える前の形式も読みます。新しく書くのは tabledoc の形式だけです。
 
-- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。最上位の `title_kana`・`themes`・`cover`・`ai_context` は `queria:` の下にあるものとして扱います。`catalogs` は `depends_on` に使い、`catalogs` として返します
+- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。最上位の `title_kana`・`themes`・`cover`・`ai_context` は `queria:` の下にあるものとして扱います。`catalogs` は `depends_on` に使い、`dependencies` として返します
 - フロントマターに `$schema: https://queria.io/schemas/table/v1.json` を持つ Markdown は、フロントマターをテーブルのファイル、本文をガイドとして読みます。`table:` で対応を決め、`fields` は `columns`、`published`・`themes`・`ai_context` は `queria:` の下として扱います。ガイドはその Markdown のパスで、送る本文はフロントマターを外したものです
 - 列の `semantic: {role, name, agg}` は次のように読み替えます。`role: entity` → `entity: {type: foreign, name}`、その列だけで `primary_key` になっていれば `type: primary`。`role: dimension` → `dimension: categorical`。`role: measure` → テーブルの metrics に `{name: <列名>, agg, expr: <列名>}` (`agg` が無ければ警告)
 - 同じフォルダに `tabledoc.yml` と `queria.yml` があるとエラーになります

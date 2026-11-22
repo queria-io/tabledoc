@@ -47,7 +47,7 @@ def _queria(record: dict[str, Any], level: str) -> dict[str, Any]:
 
 
 def dataset(record: dict[str, Any]) -> dict[str, Any]:
-    """queria.yml as tabledoc.yml. `catalogs` stays; the caller takes it out."""
+    """queria.yml as tabledoc.yml. `catalogs` stays; the caller takes it out as `dependencies`."""
     return _queria(record, "dataset")
 
 

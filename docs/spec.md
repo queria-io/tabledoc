@@ -245,7 +245,7 @@ d.schemas   # [{"name": "timeseries", "title": "Time series"}]
 d.tables    # [{"schema": "timeseries", "name": "series", "sql": …, "depends_on": […], "guide": …, "columns": […]}]
 d.files     # [File(path="README.md", sha256="…", bytes=1234, media_type="text/markdown", local="README.md"), …]
 d.source    # {"repository": "https://github.com/…", "commit": "…", "path": "", "dirty": False}
-d.catalogs  # {"other": "https://…"}: the other datasets the SQL reads, by the name it reads them under
+d.dependencies  # {"other": {"url": "https://…"}}: the other datasets the SQL reads, by the name it reads them under, as `dependencies` of FDL's tables.json
 d.content(d.files[0])  # the bytes of that file
 ```
 
@@ -336,7 +336,7 @@ tabledoc export --markdown ai-docs/
 
 So that every dataset need not be rewritten at once, tabledoc also reads the format it replaces. Only tabledoc's format is written anew.
 
-- Without `tabledoc.yml`, `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) is read as `tabledoc.yml`. Its top-level `title_kana`, `themes`, `cover` and `ai_context` are read as if under `queria:`. `catalogs` is used for `depends_on` and returned as `catalogs`
+- Without `tabledoc.yml`, `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) is read as `tabledoc.yml`. Its top-level `title_kana`, `themes`, `cover` and `ai_context` are read as if under `queria:`. `catalogs` is used for `depends_on` and returned as `dependencies`
 - Markdown whose front matter has `$schema: https://queria.io/schemas/table/v1.json` is read as a table file (the front matter) and its guide (the text below). `table:` says which table, `fields` is `columns`, and `published`, `themes` and `ai_context` are read as if under `queria:`. The guide is that Markdown's path, and what is sent is the text without the front matter
 - A field's `semantic: {role, name, agg}` is read as: `role: entity` → `entity: {type: foreign, name}`, or `type: primary` when the column alone is the `primary_key`; `role: dimension` → `dimension: categorical`; `role: measure` → a metric `{name: <column>, agg, expr: <column>}` on the table (without `agg`, a warning)
 - `tabledoc.yml` and `queria.yml` in the same folder is an error

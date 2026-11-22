@@ -5,7 +5,7 @@
     every file of the files table at its path: README.md and the other documents of each folder
 
 Loading the files dump wrote gives the same tables again, but for what they do
-not keep: an entity's type (written `foreign`), dimensions, granularity, metrics, `catalogs`
+not keep: an entity's type (written `foreign`), dimensions, granularity, metrics, `dependencies`
 (from dbt's profiles.yml), primary keys and asset columns (declared to FDL),
 and keys for readers other than Queria.
 """

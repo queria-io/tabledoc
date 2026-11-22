@@ -52,8 +52,8 @@ class Table:
 class Dataset:
     record: dict[str, Any]
     path: Path
-    #: Alias -> repository URL, from queria.yml `catalogs` (the older format only).
-    catalogs: dict[str, str]
+    #: Name -> URL of the other datasets the SQL reads, from queria.yml `catalogs` (the older format only).
+    dependencies: dict[str, str]
 
 
 def rel(root: Path, path: Path) -> str:
@@ -107,11 +107,11 @@ def read_dataset(root: Path, report: Report) -> Dataset:
         raise SpecError(f"{path}: $schema has to be {expected}")
     schemas.check(record, expected, path, report)
     if path is current:
-        return Dataset(record={k: v for k, v in record.items() if k != "$schema"}, path=path, catalogs={})
+        return Dataset(record={k: v for k, v in record.items() if k != "$schema"}, path=path, dependencies={})
     report.info("legacy-format", f"read as {DATASET_FILE}; rename it and move Queria's keys under queria:", path)
     converted = legacy.dataset({k: v for k, v in record.items() if k != "$schema"})
-    catalogs = converted.pop("catalogs", None)
-    return Dataset(record=converted, path=path, catalogs=catalogs if isinstance(catalogs, dict) else {})
+    dependencies = converted.pop("catalogs", None)
+    return Dataset(record=converted, path=path, dependencies=dependencies if isinstance(dependencies, dict) else {})
 
 
 def _table_key(root: Path, path: Path, record: dict[str, Any], report: Report) -> Key | None:

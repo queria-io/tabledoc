@@ -44,8 +44,9 @@ class Description:
     files: list[files.File]
     #: The Git working copy around the root; None outside Git or without ``with_source``.
     source: dict[str, Any] | None = None
-    #: Alias -> repository URL of each other dataset the SQL reads (from dbt's profiles.yml).
-    catalogs: dict[str, str] | None = None
+    #: The other datasets the SQL reads, by the name it reads them under, as `dependencies`
+    #: of FDL's tables.json: ``{name: {"url": …}}`` (from dbt's profiles.yml).
+    dependencies: dict[str, dict[str, str]] | None = None
 
     def content(self, file: files.File) -> bytes:
         """What goes into the dataset for ``file``: its bytes, with a Markdown document's
@@ -78,9 +79,9 @@ def _dbt_tables(options: Options, report: Report) -> tuple[list[source.Table], d
             f"{path} is not here, so dbt's models are not read; run dbt compile first",
             root / "dbt_project.yml",
         )
-        return [], dbt.catalogs(_profiles(options))
+        return [], dbt.dependencies(_profiles(options))
     manifest = json.loads(path.read_text(encoding="utf-8"))
-    return dbt.tables(manifest, root, report), dbt.catalogs(_profiles(options))
+    return dbt.tables(manifest, root, report), dbt.dependencies(_profiles(options))
 
 
 def _merge(
@@ -213,7 +214,7 @@ def read(options: Options, report: Report) -> Description:
         named,
     )
     schema_list = [_place(s, s["name"], root, dataset.path, report, named) for s in _schemas(record, tables, root)]
-    shaped = lineage.fill([_table(t) for t in tables], {**attached, **dataset.catalogs}, report)
+    shaped = lineage.fill([_table(t) for t in tables], {**attached, **dataset.dependencies}, report)
     by_key = {t.key: t for t in tables}
     placed_tables = [
         _place(t, f"{t['schema']}/{t['name']}", root, by_key[(t["schema"], t["name"])].path, report, named)
@@ -235,7 +236,7 @@ def read(options: Options, report: Report) -> Description:
         tables=[languages.table(_ordered(t), language) for t in placed_tables],
         files=sent,
         source=git.source(root) if options.with_source else None,
-        catalogs={**attached, **dataset.catalogs} or None,
+        dependencies={name: {"url": url} for name, url in sorted({**attached, **dataset.dependencies}.items())} or None,
     )
 
 

@@ -118,6 +118,9 @@ def test_the_older_format(write):
     assert "metric-without-agg" in codes(report)
     assert document["dataset"]["annotations"] == {"queria": {"themes": ["economy"], "cover": "x"}}
     assert "catalogs" not in document["dataset"]
+    assert read(Options(root, with_source=False), Report()).dependencies == {
+        "other": {"url": "https://data.example/datasets/o/other/"}
+    }
     a = document["tables"][0]
     assert a["columns"] == [
         {"name": "id", "entity": {"type": "primary", "name": "code"}},
