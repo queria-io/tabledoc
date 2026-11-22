@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 
+import pytest
+
 from tabledoc import Options, read
 from tabledoc.report import Report, SpecError
-
-import pytest
 
 DATASET = "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\n"
 TABLE = "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"
@@ -53,10 +53,10 @@ def test_tables_by_place_with_guides_and_linked_files(write):
         "language": "en",
         "issued": "2026-10-30",
         "guide": "README.md",
-        "docs": ["docs/method.md"],
+        "docs": ["method.md"],
         "annotations": {"other": {"a": 1}, "queria": {"cover": "x"}},
     }
-    assert document["schemas"] == [{"name": "sales", "guide": "docs/sales.md"}]
+    assert document["schemas"] == [{"name": "sales", "guide": "sales/README.md"}]
     assert [(t["schema"], t["name"]) for t in document["tables"]] == [
         ("main", "things"),
         ("other", "thing"),
@@ -68,7 +68,7 @@ def test_tables_by_place_with_guides_and_linked_files(write):
         "name": "orders",
         "title": "Orders",
         "primary_key": ["id"],
-        "guide": "sales/orders.md",
+        "guide": "sales/orders/README.md",
         "columns": [
             {"name": "id", "entity": {"type": "primary"}},
             {"name": "shop", "entity": {"type": "foreign", "name": "shop_id"}},
@@ -77,8 +77,14 @@ def test_tables_by_place_with_guides_and_linked_files(write):
         "metrics": [{"name": "total", "agg": "sum", "expr": "amount"}],
         "annotations": {"queria": {"published": False}},
     }
+    # Each document goes into the folder of what it is for; what they link to stays where it is.
     paths = [f["path"] for f in document["files"]]
-    assert paths == ["README.md", "docs/chart.png", "docs/method.md", "docs/sales.md", "sales/orders.md"]
+    assert paths == ["README.md", "docs/chart.png", "method.md", "sales/README.md", "sales/orders/README.md"]
+    d = read(Options(root, with_source=False), Report())
+    method = next(f for f in d.files if f.path == "method.md")
+    assert method.local == "docs/method.md"
+    assert d.content(method) == b"[back](README.md)\n"
+    assert method.sha256 == hashlib.sha256(b"[back](README.md)\n").hexdigest()
     png = next(f for f in document["files"] if f["path"] == "docs/chart.png")
     assert png == {
         "path": "docs/chart.png",
@@ -125,13 +131,13 @@ def test_the_older_format(write):
         {"name": "count", "expr": "count"},
     ]
     assert a["depends_on"] == ["https://data.example/datasets/o/other/#x.y", "s.b"]
-    assert a["guide"] == "models/a.md"
+    assert a["guide"] == "s/a/README.md"
     assert a["annotations"] == {"queria": {"published": False}}
-    sent = next(f for f in document["files"] if f["path"] == "models/a.md")
+    sent = next(f for f in document["files"] if f["path"] == "s/a/README.md")
     assert sent["sha256"] == hashlib.sha256(b"The guide.\n").hexdigest()
     assert "guide" not in document["tables"][1]
     d = read(Options(root, with_source=False), Report())
-    assert d.content(next(f for f in d.files if f.path == "models/a.md")) == b"The guide.\n"
+    assert d.content(next(f for f in d.files if f.path == "s/a/README.md")) == b"The guide.\n"
 
 
 @pytest.mark.parametrize(
@@ -145,7 +151,7 @@ def test_the_older_format(write):
     ],
 )
 def test_findings(write, files, code):
-    document, report = run(write({"tabledoc.yml": DATASET + "name: d\n", **files}))
+    _, report = run(write({"tabledoc.yml": DATASET + "name: d\n", **files}))
     assert code in codes(report)
 
 
@@ -178,7 +184,7 @@ def model(name, schema="s", materialized="table", **node):
             "original_file_path": f"models/{name}.sql",
             "patch_path": "p://models/schema.yml",
             "config": {"materialized": materialized, "enabled": True, "meta": node.pop("meta", {})},
-            "compiled_code": node.pop("sql", f"select 1 as id from s.base"),
+            "compiled_code": node.pop("sql", "select 1 as id from s.base"),
             "columns": node.pop("columns", {}),
             "description": node.pop("description", ""),
         }
@@ -252,7 +258,7 @@ def test_dbt_models(write):
         "sql": "select 1 as id from s.base",
         "depends_on": ["s.base"],
         "source_path": "models/orders.sql",
-        "guide": "models/orders.md",
+        "guide": "s/orders/README.md",
         "columns": [
             {"name": "id", "title": "ID", "entity": {"type": "primary", "name": "order"}},
             {"name": "day", "description": "Day", "dimension": {"type": "time"}, "granularity": "day"},
@@ -278,3 +284,57 @@ def test_a_table_is_described_in_one_place(write):
 def test_dbt_without_a_manifest_is_a_warning(write):
     _, report = run(write({"tabledoc.yml": DATASET + "name: d\n", "dbt_project.yml": "name: p\n"}))
     assert codes(report) == ["manifest-missing"]
+
+
+def test_documents_go_into_the_folder_of_what_they_are_for(write):
+    root = write(
+        {
+            "tabledoc.yml": DATASET + "name: d\nschemas: [{name: sales, docs: [notes/codes.md]}]\n",
+            "sales/README.md": "The schema. See [codes](../notes/codes.md).\n",
+            "notes/codes.md": "Codes. ![map](map.png)\n",
+            "notes/map.png": b"PNG",
+            "sales/orders.yml": TABLE + "title: Orders\ndocs: [notes/how.md]\n",
+            "sales/orders/README.md": "The guide.\n",
+            "notes/how.md": "How.\n",
+        }
+    )
+    d = read(Options(root, with_source=False), report := Report())
+    assert not report.failed, report.render()
+    assert d.schemas == [{"name": "sales", "guide": "sales/README.md", "docs": ["sales/codes.md"]}]
+    assert d.tables[0]["guide"] == "sales/orders/README.md"
+    assert d.tables[0]["docs"] == ["sales/orders/how.md"]
+    assert [f.path for f in d.files] == [
+        "notes/map.png",
+        "sales/README.md",
+        "sales/codes.md",
+        "sales/orders/README.md",
+        "sales/orders/how.md",
+    ]
+    by_path = {f.path: f for f in d.files}
+    assert d.content(by_path["sales/README.md"]) == b"The schema. See [codes](codes.md).\n"
+    assert d.content(by_path["sales/codes.md"]) == b"Codes. ![map](../notes/map.png)\n"
+
+
+def test_two_files_at_one_path_is_an_error(write):
+    root = write(
+        {
+            "tabledoc.yml": DATASET + "name: d\ndocs: [a/x.md, b/x.md]\n",
+            "a/x.md": "A\n",
+            "b/x.md": "B\n",
+        }
+    )
+    _, report = run(root)
+    assert codes(report) == ["file-clash"]
+
+
+def test_one_file_for_two_paths_is_an_error(write):
+    root = write(
+        {
+            "tabledoc.yml": DATASET + "name: d\n",
+            "s/a.yml": TABLE + "title: A\ndocs: [docs/method.md]\n",
+            "s/b.yml": TABLE + "title: B\ndocs: [docs/method.md]\n",
+            "docs/method.md": "Method.\n",
+        }
+    )
+    _, report = run(root)
+    assert codes(report) == ["file-named-twice"]

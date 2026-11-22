@@ -11,8 +11,11 @@
     "name": { "$ref": "#/$defs/name" },
     "title": { "type": "string", "minLength": 1 },
     "description": { "type": "string" },
-    "keywords": { "$ref": "#/$defs/strings" },
+    "schema": { "type": "string", "minLength": 1, "description": "The schema tabledoc load writes the description into; default _tabledoc." },
+    "topics": { "$ref": "#/$defs/strings", "description": "Topics, as a repository's topics on GitHub." },
+    "keywords": { "$ref": "#/$defs/strings", "description": "The earlier name of topics, read as topics." },
     "homepage": { "type": "string", "format": "uri" },
+    "repository": { "type": "string", "format": "uri" },
     "language": { "$ref": "#/$defs/language" },
     "issued": { "$ref": "#/$defs/date" },
     "update_frequency": { "$ref": "#/$defs/updateFrequency" },
@@ -31,14 +34,14 @@
           "name": { "type": "string", "minLength": 1 },
           "title": { "type": "string" },
           "description": { "type": "string" },
-          "guide": { "$ref": "#/$defs/path", "description": "Path of the schema's guide, relative to the root." }
+          "guide": { "$ref": "#/$defs/path", "description": "Path of the schema's guide, relative to the root. Default: <name>/README.md when it is there." },
+          "docs": { "$ref": "#/$defs/paths", "description": "Paths of the schema's other documents, relative to the root. They go into the schema's folder by file name." }
         }
       }
     },
     "docs": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/path" },
-      "description": "Paths of documents that belong to no one table, relative to the root, in the order they are shown."
+      "$ref": "#/$defs/paths",
+      "description": "Paths of the dataset's other documents, relative to the root. They go into the dataset's root by file name."
     },
     "queria": { "type": "object", "description": "Keys only Queria reads. Queria checks them." },
     "annotations": { "$ref": "#/$defs/annotations" }
@@ -47,6 +50,7 @@
     "name": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$" },
     "strings": { "type": "array", "items": { "type": "string" } },
     "path": { "type": "string", "minLength": 1 },
+    "paths": { "type": "array", "items": { "$ref": "#/$defs/path" } },
     "language": { "type": "string", "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)*$", "description": "BCP 47 tag of the language the description is written in." },
     "date": { "type": "string", "description": "YYYY-MM-DD." },
     "updateFrequency": { "enum": ["continuous", "daily", "weekly", "monthly", "quarterly", "yearly", "irregular"] },

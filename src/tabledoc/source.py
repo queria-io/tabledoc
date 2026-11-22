@@ -3,7 +3,7 @@
     tabledoc.yml              the dataset
     README.md                 its overview
     <schema>/<table>.yml      a table: a YAML file whose $schema is tabledoc's table schema
-    <schema>/<table>.md       that table's guide
+    <schema>/<table>.md       that table's guide (or <schema>/<table>/README.md)
 
 A table file elsewhere names its table with `table: <schema>.<table>`. A dbt
 project's tables come from dbt (see dbt.py); this module reads the files.
@@ -122,9 +122,11 @@ def _table_key(root: Path, path: Path, record: dict[str, Any], report: Report) -
     return None
 
 
-def _sibling_guide(root: Path, path: Path) -> str | None:
-    guide = path.with_name(path.name.split(".")[0] + ".md")
-    return rel(root, guide) if guide.is_file() else None
+def sibling_guide(root: Path, path: Path) -> str | None:
+    """The guide of the table described at ``path``: ``<name>.md`` beside it, else ``<name>/README.md``."""
+    stem = path.name.split(".")[0]
+    found = [g for g in (path.with_name(stem + ".md"), path.with_name(stem) / "README.md") if g.is_file()]
+    return rel(root, found[0]) if found else None
 
 
 def read_table_files(root: Path, report: Report) -> list[Table]:
@@ -146,7 +148,7 @@ def read_table_files(root: Path, report: Report) -> list[Table]:
         key = _table_key(root, path, record, report)
         if key is not None:
             body = {k: v for k, v in record.items() if k not in ("$schema", "table", "name")}
-            tables.append(Table(*key, record=body, path=path, guide=_sibling_guide(root, path)))
+            tables.append(Table(*key, record=body, path=path, guide=sibling_guide(root, path)))
     return tables
 
 

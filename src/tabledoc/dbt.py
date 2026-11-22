@@ -21,18 +21,20 @@ from typing import Any
 
 from . import schemas
 from .report import Report
-from .source import Key, Table
+from .source import Key, Table, sibling_guide
 
 MATERIALIZED = ("table", "view", "incremental")
 #: The keys of a table file a model writes under config.meta.
 TABLE_META = (
     "title",
+    "topics",
     "keywords",
     "primary_key",
     "licenses",
     "sources",
     "temporal_coverage",
     "spatial_coverage",
+    "docs",
     "queria",
     "annotations",
 )
@@ -117,7 +119,7 @@ def tables(manifest: dict[str, Any], root: Path, report: Report) -> list[Table]:
         schemas.check({"$schema": schemas.TABLE, **described}, schemas.TABLE, path, report)
         code = node.get("compiled_code")
         sql_file = root / node.get("original_file_path", "")
-        guide = sql_file.with_suffix(".md")
+        guide = sibling_guide(root, sql_file)
         found.append(
             Table(
                 str(node.get("schema", "")),
@@ -129,7 +131,7 @@ def tables(manifest: dict[str, Any], root: Path, report: Report) -> list[Table]:
                     **({"source_path": node["original_file_path"]} if node.get("original_file_path") else {}),
                 },
                 path=path,
-                guide=guide.relative_to(root).as_posix() if guide.is_file() else None,
+                guide=guide,
             )
         )
     return found

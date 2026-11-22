@@ -20,3 +20,20 @@ def write(tmp_path: Path):
         return tmp_path
 
     return _write
+
+
+@pytest.fixture
+def lake(tmp_path: Path):
+    """lake(sql) -> (catalog, data path): a DuckLake catalog after ``sql`` (on ``lake``)."""
+
+    def _lake(sql: str) -> tuple[str, str]:
+        from tabledoc.load import attached
+
+        path = tmp_path / "lake" / "work.sqlite"
+        data = tmp_path / "lake" / "data"
+        data.mkdir(parents=True)
+        with attached(str(path), data.as_posix() + "/") as con:
+            con.execute(sql)
+        return str(path), data.as_posix() + "/"
+
+    return _lake
