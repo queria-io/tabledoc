@@ -269,6 +269,13 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
     if not report.failed:
         for where, column, kind in tables.unfit(tables.rows(description)):
             report.error("value-type", f"{where}: {column} cannot be written as {kind}", description.root)
+    if not report.failed:
+        for where in tables.several(description):
+            report.warning(
+                "one-language",
+                f"{where} is written in more than one language; only the one in `language` is written",
+                description.root,
+            )
     if report.failed or (strict and _warned(report, but=MANIFEST_MISSING)):
         return None
     if target.out is not None:
