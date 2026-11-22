@@ -37,9 +37,10 @@ def one(value: Any, language: str) -> Any:
     """The text of ``value`` in ``language``, else the undetermined one, else the first by tag."""
     if not isinstance(value, dict):
         return value
+    by_tag = {tag.lower(): text for tag, text in sorted(value.items(), reverse=True)}
     for tag in (language, UNDETERMINED, *sorted(value)):
-        if tag in value:
-            return value[tag]
+        if tag.lower() in by_tag:
+            return by_tag[tag.lower()]
     return None
 
 

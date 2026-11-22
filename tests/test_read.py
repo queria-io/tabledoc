@@ -363,3 +363,15 @@ def test_a_language_tag_is_checked(write):
     root = write({"tabledoc.yml": DATASET + "name: shop\ntitle: {'not a tag': x}\n"})
     _, report = run(root)
     assert [f.code for f in report.findings] == ["schema-violation"]
+
+
+def test_a_map_with_no_text_is_an_error(write):
+    root = write({"tabledoc.yml": DATASET + "name: shop\ntitle: {ja: ''}\ntopics: {ja: []}\n"})
+    _, report = run(root)
+    assert [f.code for f in report.findings] == ["schema-violation", "schema-violation"]
+
+
+def test_an_empty_title_is_an_error(write):
+    root = write({"tabledoc.yml": DATASET + "name: shop\ntitle: ''\n"})
+    _, report = run(root)
+    assert [f.code for f in report.findings] == ["schema-violation"]
