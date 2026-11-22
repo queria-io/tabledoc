@@ -305,3 +305,12 @@ def test_unlisted_covers_a_table_dbt_built_that_says_only_its_sql(write, catalog
         ("orders", None, "select 1 as x"),
         ("recent", False, None),
     ]
+
+
+def test_drops_a_column_an_earlier_tabledoc_wrote(write, catalog):
+    root = project(write)
+    run(root, catalog)
+    sql(catalog, "ALTER TABLE lake._tabledoc.tables ADD COLUMN materialized VARCHAR")
+    run(root, catalog)
+    found = sql(catalog, "SELECT column_name FROM duckdb_columns() WHERE schema_name = '_tabledoc' AND table_name = 'tables'")
+    assert ("materialized",) not in found

@@ -249,16 +249,17 @@ fdl commit work.sqlite -m "..." --assets build/assets
 | --- | --- | --- |
 | `dataset` | `id` (常に `dataset`) | `tabledoc.yml` の `title`・`description`・`language`・`homepage`・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage`・`topics`、`queria:` の `title_kana`・`cover`・`ai_context` |
 | `schemas` | `schema` | `title` か `description` のある `schemas[]` |
-| `tables` | `schema`・`name` | 説明のあるテーブルとビュー: `title`・`description`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`topics`・`sql`・`depends_on`・dbt の `materialized` と `source_path`、`queria:` の `published`・`ai_context` |
+| `tables` | `schema`・`name` | 説明のあるテーブルとビュー: `title`・`description`・`licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`topics`・`sql`・`depends_on`・`source_path`、`queria:` の `published`・`ai_context` |
 | `columns` | `schema`・`table`・`name` | `title`・`description`・`entity` のどれかがある列。`entity` は entity の `name` (`lg_code` などのコード体系) です |
 | `files` | `path` | [データセットの中のファイル](#データセットの中のパス): `path`・`sha256`・`bytes`・`media_type` |
 
 - `topics` (以前の名前の `keywords`) は、`queria:` に `topics` が無ければ書きます。`queria:` の `themes` は書きません
 - `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
+- `source_path` はそのテーブルを定義しているファイルのリポジトリ内のパス (dbt の `original_file_path`)、`sql` はそのテーブルを作った SQL です。分からないときはどちらも NULL です。テーブルかビューかは書きません (カタログが持っています)
 - ビューの行には `sql` と `depends_on` を書きません。ビューの SQL はメタデータが持ちます
 - `annotations:` のうち Queria 以外の読み手のキーは書きません
 - ファイルの中身はカタログに入れません。`files.sha256` に各ファイルの sha256 を書き、`fdl commit --assets` が中身ごとにファイルをアップロードします
-- 行は主キーごとに追加・更新・削除するので、`load` は値の違うセルだけを変えます。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql`・`depends_on`・`materialized`・`source_path` をカタログから引き継ぎます
+- 行は主キーごとに追加・更新・削除するので、`load` は値の違うセルだけを変えます。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql`・`depends_on`・`source_path` をカタログから引き継ぎます
 - 主キーと asset の列はこれらのテーブルに書きません。カタログが `fdl clone` の作った作業用メタデータのとき (横に `<catalog>.fdl.json` があるとき)、`load` は `fdl declare` で FDL に宣言します (`fdl` が `PATH` にあることが必要です)。宣言するのは、各テーブルの `primary_key`、列に `asset` があるテーブルの asset の列、SQL が読むほかのデータセット (dbt の `profiles.yml` から) の依存先、それにこの 5 テーブルの主キーと asset の列 `files.sha256` です。`fdl declare list` と違うものだけを実行し、説明に無いものは FDL の宣言のまま残します
 - コメント (`COMMENT ON`) は書きません
 

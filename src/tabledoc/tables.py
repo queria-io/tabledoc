@@ -72,7 +72,6 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
             "ai_context": "JSON",
             "sql": "VARCHAR",
             "depends_on": "VARCHAR[]",
-            "materialized": "VARCHAR",
             "source_path": "VARCHAR",
         },
         ("schema", "name"),
@@ -164,8 +163,8 @@ def rows(
     """The rows of each `_tabledoc` table for ``description``.
 
     ``carried`` is the `_tabledoc` the catalog held: without a dbt build (no `sql`
-    in the description), each table keeps `sql`, `depends_on`, `materialized`
-    and `source_path` from it. ``unlisted`` are the catalog's tables and views:
+    in the description), each table keeps `sql`, `depends_on` and `source_path`
+    from it. ``unlisted`` are the catalog's tables and views:
     those with no description, and those dbt built that say nothing but their
     SQL, are written as not published. ``views`` are the
     catalog's views, whose SQL the metadata already holds.
@@ -388,6 +387,9 @@ def _write_table(
     for column, kind in columns.items():
         if column not in held:
             con.execute(f"ALTER TABLE {target} ADD COLUMN {quote(column)} {kind}")
+    for column in sorted(held - set(columns)):
+        # A column an earlier tabledoc wrote and this one does not.
+        con.execute(f"ALTER TABLE {target} DROP COLUMN {quote(column)}")
     staged = f"tabledoc_{table}"
     names = ", ".join(quote(c) for c in columns)
     con.execute(f"CREATE OR REPLACE TEMP TABLE {staged} ({spec})")

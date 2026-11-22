@@ -249,16 +249,17 @@ fdl commit work.sqlite -m "..." --assets build/assets
 | --- | --- | --- |
 | `dataset` | `id` (always `dataset`) | `tabledoc.yml`: `title`, `description`, `language`, `homepage`, `issued`, `update_frequency`, `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage`, `topics`; `title_kana`, `cover` and `ai_context` under `queria:` |
 | `schemas` | `schema` | `schemas[]` with a `title` or a `description` |
-| `tables` | `schema`, `name` | each table and view described: `title`, `description`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `topics`, `sql`, `depends_on`, dbt's `materialized` and `source_path`; `published` and `ai_context` under `queria:` |
+| `tables` | `schema`, `name` | each table and view described: `title`, `description`, `licenses`, `sources`, `temporal_coverage`, `spatial_coverage`, `topics`, `sql`, `depends_on`, `source_path`; `published` and `ai_context` under `queria:` |
 | `columns` | `schema`, `table`, `name` | each column with a `title`, a `description` or an `entity`: `entity` is the entity's `name` (a code system such as `lg_code`) |
 | `files` | `path` | the [files in the dataset](#paths-in-the-dataset): `path`, `sha256`, `bytes`, `media_type` |
 
 - `topics` (or `keywords`, its earlier name) unless `queria:` has `topics`. `themes` under `queria:` is not written
 - `licenses` is a list of `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`; a license written as a string is `{id}`
+- `source_path` is the path, in the repository, of the file that defines the table (dbt's `original_file_path`), and `sql` is the SQL that made it; both are NULL where they are not known. Whether it is a table or a view is not written: the catalog holds that
 - A view's row has no `sql` or `depends_on`: the metadata holds the view's SQL
 - Keys under `annotations:` for readers other than Queria are not written
 - The files are not in the catalog. `files.sha256` holds the sha256 of each, and `fdl commit --assets` uploads each file by its content
-- Rows are added, changed and removed by their primary key, so a load changes only the cells that differ. Without a dbt build (no `sql` in the description), each table keeps the `sql`, `depends_on`, `materialized` and `source_path` the catalog holds
+- Rows are added, changed and removed by their primary key, so a load changes only the cells that differ. Without a dbt build (no `sql` in the description), each table keeps the `sql`, `depends_on` and `source_path` the catalog holds
 - Primary keys and asset columns are not written into these tables. When the catalog is the working metadata `fdl clone` made (it noted `<catalog>.fdl.json` beside it), `load` declares them to FDL with `fdl declare`, which has to be on `PATH`: each table's `primary_key`, the asset columns of each table whose columns say `asset`, the other datasets the SQL reads (from dbt's `profiles.yml`) as dependencies, and the keys of these five tables with `files.sha256` as an asset column. It runs only what differs from `fdl declare list`, and leaves what the description does not say as FDL has it
 - tabledoc writes no comments (`COMMENT ON`)
 
