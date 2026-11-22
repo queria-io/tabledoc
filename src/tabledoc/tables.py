@@ -197,7 +197,7 @@ def rows(
             if s.get("title") or s.get("description")
         ],
         "tables": [table(t) for t in description.tables]
-        + [{"schema": s, "name": n, "published": False} for s, n in unlisted_keys],
+        + [table({"schema": s, "name": n}) for s, n in unlisted_keys],
         "columns": [
             {
                 "schema": t["schema"],

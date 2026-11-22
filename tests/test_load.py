@@ -295,3 +295,13 @@ def test_unlisted_covers_a_table_dbt_built_that_says_only_its_sql(write, catalog
         ("orders", None, "select 1 as x"),
         ("recent", False, None),
     ]
+    # Without a build, each keeps its SQL, and the missing manifest is only worth knowing.
+    (root / "target" / "manifest.json").unlink()
+    report = Report()
+    assert run(root, catalog, report, unlisted=True) is not None, report.render()
+    assert [(f.level.value, f.code) for f in report.findings] == [("info", "manifest-missing")]
+    assert held(catalog, "tables", "name", "published", "sql") == [
+        ("extra", False, "select 1 as x"),
+        ("orders", None, "select 1 as x"),
+        ("recent", False, None),
+    ]

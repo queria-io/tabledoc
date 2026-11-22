@@ -215,12 +215,14 @@ def _warned(report: Report, but: str = "") -> bool:
     return any(f.code != but for f in report.of(Level.WARNING))
 
 
-def _keeps_dbt_sql(description: Description, carried: tables.Rows) -> bool:
+def _keeps_dbt_sql(description: Description, carried: tables.Rows, unlisted: set[tables.Key] | None) -> bool:
     """Whether the load keeps the SQL of every table dbt built, as the catalog holds it: there
-    is such a table, the description has no `sql` (no build), and it describes each of them."""
+    is such a table, the description has no `sql` (no build), and each of them keeps its row
+    (it is described, or ``unlisted`` holds it)."""
     built = {tables.fold(t["schema"], t["name"]) for t in carried.get("tables") or [] if t.get("source_path")}
-    described = {tables.fold(t["schema"], t["name"]) for t in description.tables}
-    return bool(built) and built <= described and not any("sql" in t for t in description.tables)
+    kept = {tables.fold(t["schema"], t["name"]) for t in description.tables}
+    kept |= {tables.fold(*key) for key in unlisted or set()}
+    return bool(built) and built <= kept and not any("sql" in t for t in description.tables)
 
 
 def _carried_over(report: Report) -> None:
@@ -263,11 +265,11 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
             description = _spelled(description, columns)
             # Without a dbt build, the SQL and dependencies stay as the catalog has them.
             carried = tables.read(con, ALIAS, schema)
-            if _keeps_dbt_sql(description, carried):
+            unlisted = in_catalog | views if target.unlisted else None
+            if _keeps_dbt_sql(description, carried, unlisted):
                 _carried_over(report)
             if strict and _warned(report):
                 return None
-            unlisted = in_catalog | views if target.unlisted else None
             tables.write(con, ALIAS, tables.rows(description, carried, unlisted, views), schema)
     except duckdb.Error as exc:
         raise SpecError(f"cannot write {schema} in {target.catalog}: {exc}") from exc
