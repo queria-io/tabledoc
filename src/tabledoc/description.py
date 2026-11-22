@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import posixpath
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -47,7 +48,9 @@ class Description:
     catalogs: dict[str, str] | None = None
 
     def content(self, file: files.File) -> bytes:
-        return files.content(self.root, file.path)
+        """What goes into the dataset for ``file``: its bytes, with a Markdown document's
+        relative links following the files that moved."""
+        return files.body(self.root, file, {f.local: f.path for f in self.files})
 
 
 def _profiles(options: Options) -> dict[str, Any]:
@@ -127,46 +130,64 @@ def _table(table: source.Table) -> dict[str, Any]:
     shaped = shape.table(table.record)
     head = {k: shaped[k] for k in shape.TABLE_KEYS if k in shaped}
     tail = {k: v for k, v in shaped.items() if k not in shape.TABLE_KEYS}
+    docs = table.record.get("docs")
     return {
         "schema": table.schema,
         "name": table.name,
         **head,
         **({"guide": table.guide} if table.guide else {}),
+        **({"docs": [str(d) for d in docs]} if isinstance(docs, list) and docs else {}),
         **tail,
     }
 
 
-def _schemas(record: dict[str, Any]) -> list[dict[str, Any]]:
+def _schemas(record: dict[str, Any], tables: list[source.Table], root: Path) -> list[dict[str, Any]]:
+    """The schemas of tabledoc.yml, and each other schema whose folder holds a README.md.
+
+    `guide` and `docs` stay as written (paths under the root) until ``_place``.
+    """
     written = record.get("schemas")
-    return [
-        {**shape.pick(s, shape.SCHEMA_KEYS), **({"guide": files.normalized(s["guide"])} if s.get("guide") else {})}
+    listed = [
+        {
+            **shape.pick(s, shape.SCHEMA_KEYS),
+            **({"guide": s["guide"]} if s.get("guide") else {}),
+            **({"docs": [str(d) for d in s["docs"]]} if isinstance(s.get("docs"), list) and s["docs"] else {}),
+        }
         for s in (written if isinstance(written, list) else [])
-        if isinstance(s, dict)
+        if isinstance(s, dict) and s.get("name")
+    ]
+    names = {s["name"] for s in listed}
+    others = [{"name": n} for n in sorted({t.schema for t in tables} - names)]
+    return [
+        {**s, "guide": f"{s['name']}/{README}"} if "guide" not in s and (root / s["name"] / README).is_file() else s
+        for s in listed + others
     ]
 
 
-def _documents(
-    dataset: source.Dataset, schema_list: list[dict[str, Any]], tables: list[source.Table], root: Path, report: Report
-) -> tuple[list[str], list[tuple[str, Path]]]:
-    """The dataset's docs as normalized paths, and every document named, with where it is named."""
-    written = dataset.record.get("docs")
-    docs = []
-    for entry in written if isinstance(written, list) else []:
-        path = files.normalized(str(entry))
-        if path is None:
-            report.error("file-outside", f"docs: {entry} is outside {root}", dataset.path)
-        else:
-            docs.append(path)
-    named = [
-        *([(README, root / README)] if (root / README).is_file() else []),
-        *[(s["guide"], dataset.path) for s in schema_list if s.get("guide")],
-        *[(d, dataset.path) for d in docs],
-        *[(t.guide, t.path) for t in tables if t.guide],
-    ]
-    for schema in schema_list:
-        if "guide" in schema and schema["guide"] is None:
-            report.error("file-outside", f"schemas: {schema['name']}'s guide is outside {root}", dataset.path)
-    return docs, [(p, w) for p, w in named if p]
+def _local(entry: Any, root: Path, where: Path, report: Report) -> str | None:
+    path = files.normalized(str(entry))
+    if path is None:
+        report.error("file-outside", f"{entry} is outside {root}", where)
+    return path
+
+
+def _place(
+    record: dict[str, Any], folder: str, root: Path, where: Path, report: Report, named: list[tuple[str, str, Path]]
+) -> dict[str, Any]:
+    """``record`` with its `guide` and `docs` at their paths in the dataset: the guide is
+    ``folder``/README.md, and each document goes into ``folder`` by its file name."""
+    prefix = f"{folder}/" if folder else ""
+    guide = _local(record["guide"], root, where, report) if record.get("guide") else None
+    docs = [d for d in (_local(e, root, where, report) for e in record.get("docs") or []) if d]
+    if guide:
+        named.append((guide, prefix + README, where))
+    named.extend((d, prefix + posixpath.basename(d), where) for d in docs)
+    placed = {k: v for k, v in record.items() if k not in ("guide", "docs")}
+    return {
+        **placed,
+        **({"guide": prefix + README} if guide else {}),
+        **({"docs": [prefix + posixpath.basename(d) for d in docs]} if docs else {}),
+    }
 
 
 def read(options: Options, report: Report) -> Description:
@@ -178,21 +199,33 @@ def read(options: Options, report: Report) -> Description:
     written = [*source.read_table_files(root, report), *source.read_legacy_tables(root, report)]
     tables = _merge(models, written, report)
     _warn_metrics(tables, report)
-    schema_list = _schemas(dataset.record)
-    docs, named = _documents(dataset, schema_list, tables, root, report)
-    sent = files.collect(root, named, report)
-    shaped = lineage.fill([_table(t) for t in tables], {**attached, **dataset.catalogs}, report)
     record = dataset.record
+    named: list[tuple[str, str, Path]] = []
+    top = _place(
+        {**({"guide": README} if (root / README).is_file() else {}), "docs": record.get("docs") or []},
+        "",
+        root,
+        dataset.path,
+        report,
+        named,
+    )
+    schema_list = [_place(s, s["name"], root, dataset.path, report, named) for s in _schemas(record, tables, root)]
+    shaped = lineage.fill([_table(t) for t in tables], {**attached, **dataset.catalogs}, report)
+    by_key = {t.key: t for t in tables}
+    placed_tables = [
+        _place(t, f"{t['schema']}/{t['name']}", root, by_key[(t["schema"], t["name"])].path, report, named)
+        for t in shaped
+    ]
+    sent = files.collect(root, named, report)
     return Description(
         root=root,
         dataset={
             **shape.pick(record, shape.DATASET_KEYS),
-            **({"guide": README} if (root / README).is_file() else {}),
-            **({"docs": docs} if docs else {}),
+            **top,
             **shape.annotations(record),
         },
-        schemas=schema_list,
-        tables=[_ordered(t) for t in shaped],
+        schemas=[s for s in schema_list if set(s) - {"name"}],
+        tables=[_ordered(t) for t in placed_tables],
         files=sent,
         source=git.source(root) if options.with_source else None,
         catalogs={**attached, **dataset.catalogs} or None,
@@ -200,8 +233,6 @@ def read(options: Options, report: Report) -> Description:
 
 
 def _ordered(table: dict[str, Any]) -> dict[str, Any]:
-    """depends_on, filled in last, back in its place after sql."""
-    if "depends_on" not in table:
-        return table
-    order = ["schema", "name", *shape.TABLE_KEYS, "guide", "columns", "metrics", "annotations"]
+    """Keys in a fixed order: depends_on, filled in last, after sql; guide and docs, placed last, before columns."""
+    order = ["schema", "name", *shape.TABLE_KEYS, "guide", "docs", "columns", "metrics", "annotations"]
     return {k: table[k] for k in order if k in table}

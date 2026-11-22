@@ -47,76 +47,86 @@ def query(path, data, sql):
         return con.execute(sql).fetchall()
 
 
-def test_writes_meta_comments_and_the_folder_for_fdl(write, catalog, tmp_path):
+def test_writes_fdl_and_the_folder_for_fdl_commit(write, catalog, tmp_path):
     path, data = catalog
     root = project(write)
-    out = root / ".fdl" / "pack"
+    out = tmp_path / "pack"
     report = Report()
     found = load(Options(root, with_source=False), Target(str(path), data, out, unlisted=True), report)
     assert found is not None, report.render()
-    assert query(path, data, f"SELECT title, licenses[1].id, themes FROM {ALIAS}._meta.dataset") == [
-        ("Shop", "CC-BY-4.0", ["trade"])
+    assert query(path, data, f"SELECT title, licenses[1].id FROM {ALIAS}._fdl.dataset") == [("Shop", "CC-BY-4.0")]
+    assert query(path, data, f"SELECT schema, name, primary_key, profile FROM {ALIAS}._fdl.tables ORDER BY name") == [
+        ("sales", "extra", None, False),
+        ("sales", "orders", ["id"], None),
+        ("sales", "recent", None, None),
     ]
-    assert query(path, data, f"SELECT schema, name, published FROM {ALIAS}._meta.tables ORDER BY name") == [
-        ("sales", "extra", False),
-        ("sales", "orders", None),
-        ("sales", "recent", None),
+    assert query(path, data, f"SELECT name, entity, asset FROM {ALIAS}._fdl.columns ORDER BY name") == [
+        ("file", None, True),
+        ("id", "order", None),
     ]
-    assert query(path, data, f"SELECT name, entity FROM {ALIAS}._meta.columns") == [("id", "order")]
-    assert query(path, data, f"SELECT path, kind, \"table\" FROM {ALIAS}._meta.files ORDER BY path") == [
-        ("README.md", "guide", None),
-        ("sales/orders.md", "guide", "orders"),
+    assert query(path, data, f"SELECT path, media_type FROM {ALIAS}._fdl.files ORDER BY path") == [
+        ("README.md", "text/markdown"),
+        ("sales/orders/README.md", "text/markdown"),
     ]
+    assert query(path, data, f'SELECT schema, "table", key, value FROM {ALIAS}._fdl.attributes ORDER BY ALL') == [
+        ("", "", "queria-themes", '["trade"]'),
+        ("sales", "extra", "queria-published", "false"),
+    ]
+    # load writes no comments: _fdl is where the description is.
     comments = f"SELECT comment FROM duckdb_tables() WHERE database_name = '{ALIAS}' AND table_name = 'orders'"
-    assert query(path, data, comments) == [("One row is one order.",)]
-    view = f"SELECT comment FROM duckdb_views() WHERE database_name = '{ALIAS}' AND view_name = 'recent'"
-    assert query(path, data, view) == [("The last orders.",)]
-    column = (
-        f"SELECT comment FROM duckdb_columns() WHERE database_name = '{ALIAS}' "
-        "AND table_name = 'orders' AND column_name = 'id'"
-    )
-    assert query(path, data, column) == [("The order",)]
-
-    structure = json.loads((out / "dataset.json").read_text())
-    assert structure["name"] == "shop"
-    assert {"schema": "sales", "name": "orders", "primary_key": ["id"], "fields": [{"name": "file", "asset": True}]} in (
-        structure["tables"]
-    )
-    assert {
-        "schema": "_meta",
-        "name": "files",
-        "primary_key": ["path"],
-        "fields": [{"name": "sha256", "asset": True}],
-        "profile": False,
-    } in structure["tables"]
-    # Queria does not list sales.extra (no description), so fdl makes no profile of it.
-    assert {"schema": "sales", "name": "extra", "profile": False} in structure["tables"]
-    assert not [t for t in structure["tables"] if t["name"] == "recent"]
-    assert (out / "assets" / "files" / "README.md").read_text() == "Overview.\n"
+    assert query(path, data, comments) == [(None,)]
+    assert (out / "files" / "README.md").read_text() == "Overview.\n"
+    assert (out / "files" / "sales" / "orders" / "README.md").read_text() == "Guide.\n"
+    assert not (out / "dataset.json").exists()
 
 
-def test_a_table_not_published_gets_no_profile(write, catalog, tmp_path):
+def test_a_table_not_published_gets_no_profile(write, catalog):
     path, data = catalog
     root = project(write)
     (root / "sales" / "recent.yml").write_text(TABLE + "description: The last orders.\nqueria: {published: false}\n")
-    out = root / ".fdl" / "pack"
     report = Report()
-    assert load(Options(root, with_source=False), Target(str(path), data, out), report) is not None, report.render()
-    tables = json.loads((out / "dataset.json").read_text())["tables"]
-    assert {"schema": "sales", "name": "recent", "profile": False} in tables
-    # Without --unlisted Queria lists sales.extra, so it keeps its profile.
-    assert not [t for t in tables if t["name"] == "extra"]
+    assert load(Options(root, with_source=False), Target(str(path), data), report) is not None, report.render()
+    assert query(path, data, f"SELECT name, profile FROM {ALIAS}._fdl.tables ORDER BY name") == [
+        ("orders", None),
+        ("recent", False),
+    ]
 
 
-def test_a_second_load_replaces_meta_and_clears_comments(write, catalog):
+def test_a_view_keeps_its_sql_in_the_metadata(write, catalog):
+    path, data = catalog
+    root = project(write)
+    (root / "sales" / "recent.yml").write_text(TABLE + "description: x\nsql: select 1\n")
+    (root / "sales" / "orders.yml").write_text(TABLE + "title: Orders\nsql: select 1 as id, 'a' as file\n")
+    assert load(Options(root, with_source=False), Target(str(path), data), Report()) is not None
+    assert query(path, data, f"SELECT name, sql FROM {ALIAS}._fdl.tables ORDER BY name") == [
+        ("orders", "select 1 as id, 'a' as file"),
+        ("recent", None),
+    ]
+
+
+def test_drops_the_meta_schema_of_tabledoc_0_3(write, catalog):
+    path, data = catalog
+    root = project(write)
+    with attached(str(path), data) as con:
+        con.execute(f"CREATE SCHEMA {ALIAS}._meta")
+        con.execute(f"CREATE TABLE {ALIAS}._meta.tables AS SELECT 'sales' AS schema, 'orders' AS name, "
+                    "'select 2' AS sql, ['sales.extra'] AS depends_on")
+    assert load(Options(root, with_source=False), Target(str(path), data), Report()) is not None
+    schemas = f"SELECT schema_name FROM duckdb_schemas() WHERE database_name = '{ALIAS}' ORDER BY 1"
+    assert ("_meta",) not in query(path, data, schemas)
+    # What _meta held of the build stays, as without a build it would from _fdl.
+    assert query(path, data, f"SELECT sql, depends_on FROM {ALIAS}._fdl.tables WHERE name = 'orders'") == [
+        ("select 2", ["sales.extra"])
+    ]
+
+
+def test_a_second_load_replaces_fdl(write, catalog):
     path, data = catalog
     root = project(write)
     load(Options(root, with_source=False), Target(str(path), data), Report())
     (root / "sales" / "orders.yml").write_text(TABLE + "title: Orders\n", encoding="utf-8")
     assert load(Options(root, with_source=False), Target(str(path), data), Report()) is not None
-    assert query(path, data, f"SELECT count(*) FROM {ALIAS}._meta.columns") == [(0,)]
-    comments = f"SELECT comment FROM duckdb_tables() WHERE database_name = '{ALIAS}' AND table_name = 'orders'"
-    assert query(path, data, comments) == [(None,)]
+    assert query(path, data, f"SELECT count(*) FROM {ALIAS}._fdl.columns") == [(0,)]
 
 
 def test_keeps_the_sql_without_a_build(write, catalog):
@@ -124,11 +134,27 @@ def test_keeps_the_sql_without_a_build(write, catalog):
     root = project(write)
     load(Options(root, with_source=False), Target(str(path), data), Report())
     with attached(str(path), data) as con:
-        con.execute(f"UPDATE {ALIAS}._meta.tables SET sql = 'select 1', depends_on = ['sales.extra'] WHERE name = 'orders'")
+        con.execute(f"UPDATE {ALIAS}._fdl.tables SET sql = 'select 1', depends_on = ['sales.extra'] WHERE name = 'orders'")
     load(Options(root, with_source=False), Target(str(path), data), Report())
-    assert query(path, data, f"SELECT sql, depends_on FROM {ALIAS}._meta.tables WHERE name = 'orders'") == [
+    assert query(path, data, f"SELECT sql, depends_on FROM {ALIAS}._fdl.tables WHERE name = 'orders'") == [
         ("select 1", ["sales.extra"])
     ]
+
+
+def test_an_asset_column_has_to_be_varchar(write, catalog):
+    path, data = catalog
+    root = project(write)
+    (root / "sales" / "extra.yml").write_text(TABLE + "columns: [{name: x, asset: true}]\n", encoding="utf-8")
+    report = Report()
+    assert load(Options(root, with_source=False), Target(str(path), data), report) is None
+    assert [f.code for f in report.findings] == ["asset-type"]
+
+
+def test_refuses_a_folder_inside_dot_fdl(write, catalog, tmp_path):
+    path, data = catalog
+    root = project(write)
+    with pytest.raises(SpecError, match=".fdl"):
+        load(Options(root, with_source=False), Target(str(path), data, tmp_path / ".fdl" / "pack"), Report())
 
 
 def test_a_table_not_in_the_catalog_writes_nothing(write, catalog):
@@ -138,7 +164,7 @@ def test_a_table_not_in_the_catalog_writes_nothing(write, catalog):
     report = Report()
     assert load(Options(root, with_source=False), Target(str(path), data), report) is None
     assert [f.code for f in report.findings] == ["table-missing"]
-    tables = f"SELECT count(*) FROM duckdb_tables() WHERE database_name = '{ALIAS}' AND schema_name = '_meta'"
+    tables = f"SELECT count(*) FROM duckdb_tables() WHERE database_name = '{ALIAS}' AND schema_name = '_fdl'"
     assert query(path, data, tables) == [(0,)]
 
 
@@ -175,20 +201,19 @@ def test_cli_reads_the_catalog_from_the_environment(write, catalog, monkeypatch)
     monkeypatch.setenv("FDL_WORKING", str(path))
     monkeypatch.setenv("FDL_DATA_PATH", data)
     assert main(["load", "--root", str(root), "--quiet"]) == 0
-    assert query(path, data, f"SELECT title FROM {ALIAS}._meta.dataset") == [("Shop",)]
+    assert query(path, data, f"SELECT title FROM {ALIAS}._fdl.dataset") == [("Shop",)]
 
 
-def test_a_value_meta_cannot_hold_is_an_error(write, catalog):
+def test_a_value_fdl_cannot_hold_is_an_error(write, catalog):
     path, data = catalog
     root = project(write)
     (root / "tabledoc.yml").write_text(
-        DATASET + "name: shop\nissued: 2026-10\nqueria: {themes: trade}\n", encoding="utf-8"
+        DATASET + "name: shop\nissued: 2026-10\n", encoding="utf-8"
     )
     report = Report()
     assert load(Options(root, with_source=False), Target(str(path), data), report) is None
-    assert sorted(f.message for f in report.findings if f.code == "meta-type") == [
-        "_meta.dataset: issued cannot be written as DATE",
-        "_meta.dataset: themes cannot be written as VARCHAR[]",
+    assert sorted(f.message for f in report.findings if f.code == "fdl-type") == [
+        "_fdl.dataset: issued cannot be written as DATE",
     ]
 
 
@@ -205,13 +230,11 @@ def test_names_match_without_regard_to_case(write, catalog):
     assert load(Options(root, with_source=False), Target(str(path), data, unlisted=True), report) is not None, (
         report.render()
     )
-    assert query(path, data, f"SELECT name FROM {ALIAS}._meta.tables ORDER BY name") == [
+    assert query(path, data, f"SELECT name FROM {ALIAS}._fdl.tables ORDER BY name") == [
         ("Orders",),
         ("extra",),
         ("recent",),
     ]
-    comments = f"SELECT comment FROM duckdb_tables() WHERE database_name = '{ALIAS}' AND table_name = 'orders'"
-    assert query(path, data, comments) == [("Upper.",)]
 
 
 def test_a_quote_in_the_path(write, tmp_path):

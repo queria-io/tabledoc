@@ -20,6 +20,7 @@
     "spatial_coverage": { "$ref": "../dataset/v1.json#/$defs/spatialCoverage" },
     "sql": { "type": "string", "description": "The SQL the table is made from, for a table dbt does not build." },
     "depends_on": { "$ref": "../dataset/v1.json#/$defs/strings" },
+    "docs": { "$ref": "../dataset/v1.json#/$defs/paths", "description": "Paths of the table's other documents, relative to the root. They go into the table's folder by file name." },
     "columns": { "type": "array", "items": { "$ref": "#/$defs/column" } },
     "metrics": { "type": "array", "items": { "$ref": "#/$defs/metric" } },
     "queria": { "type": "object", "description": "Keys only Queria reads. Queria checks them." },

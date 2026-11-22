@@ -82,47 +82,90 @@ def normalized(path: str) -> str | None:
 
 @dataclass(frozen=True)
 class File:
+    #: Its path in the dataset (the version), with `/` between folders.
     path: str
     sha256: str
     bytes: int
     media_type: str
+    #: Its path under the root, where the author keeps it.
+    local: str = ""
 
     def entry(self) -> dict[str, Any]:
         return {"path": self.path, "sha256": self.sha256, "bytes": self.bytes, "media_type": self.media_type}
 
 
-def describe(root: Path, path: str) -> File:
-    body = content(root, path)
-    return File(path, hashlib.sha256(body).hexdigest(), len(body), media_type(path))
+def _relink(text: str, local: str, path: str, placed: dict[str, str]) -> str:
+    """``text`` of the Markdown at ``local``, placed at ``path``: each relative link to a file
+    placed elsewhere points at its new place, from ``path``'s folder. Other links stay as written."""
+
+    def swap(target: str) -> str:
+        bare = re.split(r"[?#]", target)[0]
+        if not bare or not _is_relative(target):
+            return target
+        found = normalized(posixpath.join(posixpath.dirname(local), bare))
+        new = placed.get(found or "")
+        if new is None or normalized(posixpath.join(posixpath.dirname(path), bare)) == new:
+            return target
+        return posixpath.relpath(new, posixpath.dirname(path) or ".") + target[len(bare) :]
+
+    def replace(m: re.Match[str]) -> str:
+        if m.group(2) is not None:
+            return m.group(1) + swap(m.group(2))
+        return m.group(3) + swap(m.group(4))
+
+    return _LINK.sub(replace, text)
 
 
-def collect(root: Path, documents: list[tuple[str, Path]], report: Report) -> list[File]:
-    """``documents`` (path, the file that names it) and the files their Markdown links to.
+def body(root: Path, file: File, placed: dict[str, str]) -> bytes:
+    """What goes into the dataset for ``file``: a Markdown document with its links following
+    the files that moved (``placed``: path under the root -> path in the dataset), else the file."""
+    raw = content(root, file.local)
+    if not file.local.lower().endswith(".md") or all(k == v for k, v in placed.items()):
+        return raw
+    text = raw.decode("utf-8", errors="surrogateescape")
+    return _relink(text, file.local, file.path, placed).encode("utf-8", errors="surrogateescape")
 
-    A named document that is missing, or outside the root, is an error. A link
-    to a folder is left alone; a link to a missing file is a warning.
+
+def collect(root: Path, documents: list[tuple[str, str, Path]], report: Report) -> list[File]:
+    """``documents`` (path under the root, path in the dataset, the file that names it) and
+    the files their Markdown links to, each at its path in the dataset.
+
+    A file linked to and not named keeps its path under the root. A Markdown
+    document's links are rewritten to follow the files that moved. A named
+    document that is missing, or outside the root, is an error. A link to a
+    folder is left alone; a link to a missing file is a warning. Two files at
+    the same path in the dataset is an error.
     """
-    seen: dict[str, File] = {}
-    pending = list(documents)
-    named = {path for path, _ in documents}
+    placed: dict[str, str] = {}
+    pending = [(local, where) for local, _, where in documents]
+    named = {local: path for local, path, _ in documents}
     while pending:
-        path, where = pending.pop(0)
-        if path in seen:
+        local, where = pending.pop(0)
+        if local in placed:
             continue
-        file = root / path
+        file = root / local
         if not file.is_file() or not file.resolve().is_relative_to(root.resolve()):
-            if path in named:
-                report.error("file-missing", f"{path} is not a file under {root}", where)
+            if local in named:
+                report.error("file-missing", f"{local} is not a file under {root}", where)
             elif not file.is_dir():
-                report.warning("link-broken", f"links to {path}, which is not here", where)
+                report.warning("link-broken", f"links to {local}, which is not here", where)
             continue
-        seen[path] = describe(root, path)
-        if path.lower().endswith(".md"):
-            text = content(root, path).decode("utf-8", errors="replace")
+        placed[local] = named.get(local, local)
+        if local.lower().endswith(".md"):
+            text = content(root, local).decode("utf-8", errors="replace")
             for target in links(text):
-                linked = normalized(posixpath.join(posixpath.dirname(path), target))
+                linked = normalized(posixpath.join(posixpath.dirname(local), target))
                 if linked is None:
                     report.error("link-outside", f"links to {target}, outside {root}", file)
-                elif linked not in seen:
+                elif linked not in placed:
                     pending.append((linked, file))
-    return [seen[p] for p in sorted(seen)]
+    taken: dict[str, str] = {}
+    for local, path in sorted(placed.items()):
+        if path in taken:
+            report.error("file-clash", f"{local} and {taken[path]} both go to {path} in the dataset", root / local)
+        taken[path] = local
+    found = []
+    for local, path in placed.items():
+        sent = body(root, File(path, "", 0, "", local), placed)
+        found.append(File(path, hashlib.sha256(sent).hexdigest(), len(sent), media_type(path), local))
+    return sorted(found, key=lambda f: f.path)
