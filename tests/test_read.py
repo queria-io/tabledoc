@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 
+import pytest
+
 from tabledoc import Options, read
 from tabledoc.report import Report, SpecError
-
-import pytest
 
 DATASET = "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\n"
 TABLE = "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"
@@ -151,7 +151,7 @@ def test_the_older_format(write):
     ],
 )
 def test_findings(write, files, code):
-    document, report = run(write({"tabledoc.yml": DATASET + "name: d\n", **files}))
+    _, report = run(write({"tabledoc.yml": DATASET + "name: d\n", **files}))
     assert code in codes(report)
 
 
@@ -184,7 +184,7 @@ def model(name, schema="s", materialized="table", **node):
             "original_file_path": f"models/{name}.sql",
             "patch_path": "p://models/schema.yml",
             "config": {"materialized": materialized, "enabled": True, "meta": node.pop("meta", {})},
-            "compiled_code": node.pop("sql", f"select 1 as id from s.base"),
+            "compiled_code": node.pop("sql", "select 1 as id from s.base"),
             "columns": node.pop("columns", {}),
             "description": node.pop("description", ""),
         }

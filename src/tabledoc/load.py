@@ -3,7 +3,8 @@
 The catalog is the one the build wrote (with fdl, the working metadata `fdl clone`
 made). The description's rows (`tables.rows`) go into the tables of a schema
 of it (`_tabledoc` unless told otherwise), and the folder ``out`` gets the files
-of its `files` table (for `fdl commit --assets`).
+of its `files` table (for `fdl commit --assets`). With fdl's working metadata, the
+primary keys, asset columns and dependencies are declared with `fdl declare`.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from . import tables
+from .declare import declare
 from .description import MANIFEST_MISSING, Description, Options, read
 from .report import Finding, Level, Report, SpecError
 
@@ -269,6 +271,7 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
             tables.write(con, ALIAS, tables.rows(description, carried, unlisted, views), schema)
     except duckdb.Error as exc:
         raise SpecError(f"cannot write {schema} in {target.catalog}: {exc}") from exc
+    declare(target.catalog, description, schema)
     if target.out is not None:
         write_out(description, target.out, target.assets)
     return description

@@ -259,7 +259,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - Keys under `annotations:` for readers other than Queria are not written
 - The files are not in the catalog. `files.sha256` holds the sha256 of each, and `fdl commit --assets` uploads each file by its content
 - Rows are added, changed and removed by their primary key, so a load changes only the cells that differ. Without a dbt build (no `sql` in the description), each table keeps the `sql`, `depends_on`, `materialized` and `source_path` the catalog holds
-- Primary keys and asset columns are not written into these tables: FDL takes them as its own declarations
+- Primary keys and asset columns are not written into these tables. When the catalog is the working metadata `fdl clone` made (it noted `<catalog>.fdl.json` beside it), `load` declares them to FDL with `fdl declare`, which has to be on `PATH`: each table's `primary_key`, the asset columns of each table whose columns say `asset`, the other datasets the SQL reads (from dbt's `profiles.yml`) as dependencies, and the keys of these five tables with `files.sha256` as an asset column. It runs only what differs from `fdl declare list`, and leaves what the description does not say as FDL has it
 - tabledoc writes no comments (`COMMENT ON`)
 
 ## Writing the files from a catalog

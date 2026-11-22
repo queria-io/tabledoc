@@ -96,7 +96,7 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
 #: The `id` of the one row of `_tabledoc.dataset`.
 DATASET_ID = "dataset"
 #: Asset columns of `_tabledoc` itself, declared to FDL.
-ASSETS = {("files",): ("sha256",)}
+ASSETS = {"files": ("sha256",)}
 #: What `queria:` may say, as columns: of the dataset, and of a table.
 DATASET_OWN = ("title_kana", "topics", "cover", "ai_context")
 TABLE_OWN = ("topics", "published", "ai_context")
