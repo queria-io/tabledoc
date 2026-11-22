@@ -154,7 +154,7 @@ In the dataset, each folder is one thing described: the root is the dataset, `<s
 
 ## dbt projects
 
-When the root has `dbt_project.yml`, tabledoc reads `target/manifest.json` (`--manifest` changes it). Run `dbt compile` (or a build) first; without a manifest, tabledoc warns and reads only the table files.
+When the root has `dbt_project.yml`, tabledoc reads `target/manifest.json` (`--manifest` changes it). Run `dbt compile` (or a build) first; without a manifest, tabledoc warns and reads only the table files. `load` gives this as info instead when the catalog has a table dbt built (one with the attribute `dbt-source-path`), since it keeps that SQL.
 
 - The tables are the enabled models materialized as `table`, `view` or `incremental`, under the model's `schema` and `alias`. Ephemeral and disabled models, seeds, snapshots and tests make no table, so they are not listed. A model with no description is listed with what dbt fills in only (`materialized`, `sql`, `depends_on`, `source_path`)
 - The description comes from the model's yml. `description` and the columns' `description` as they are; keys dbt does not have (`title`, `primary_key`, `sources`, a column's `title`, `asset` and so on) and `queria` under `config.meta`

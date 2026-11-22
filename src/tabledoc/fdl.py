@@ -197,6 +197,11 @@ def _built(carried: Rows) -> dict[tuple[str, ...], dict[str, Any]]:
     return found
 
 
+def built_by_dbt(carried: Rows) -> bool:
+    """Whether the catalog holds a table dbt built, as its `dbt-source-path` says."""
+    return any(built.get("source_path") for built in _built(carried or {}).values())
+
+
 def published(table: dict[str, Any]) -> bool:
     """Whether Queria lists a described table: unless `published` under `queria:` is false."""
     own = (table.get("annotations") or {}).get(QUERIA) or {}

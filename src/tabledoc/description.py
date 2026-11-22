@@ -53,6 +53,9 @@ class Description:
         return files.body(self.root, file, {f.local: f.path for f in self.files})
 
 
+MANIFEST_MISSING = "manifest-missing"
+
+
 def _profiles(options: Options) -> dict[str, Any]:
     import os
 
@@ -71,7 +74,7 @@ def _dbt_tables(options: Options, report: Report) -> tuple[list[source.Table], d
     path = options.manifest or root / DEFAULT_MANIFEST
     if not path.is_file():
         report.warning(
-            "manifest-missing",
+            MANIFEST_MISSING,
             f"{path} is not here, so dbt's models are not read; run dbt compile first",
             root / "dbt_project.yml",
         )

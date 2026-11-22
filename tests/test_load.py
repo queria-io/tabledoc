@@ -298,3 +298,15 @@ def test_dbt_keys_are_kept_without_a_build(write, catalog):
     load(Options(root, with_source=False), Target(str(path), data), Report())
     dbt = f"SELECT key, value FROM {ALIAS}._fdl.attributes WHERE key LIKE 'dbt-%' ORDER BY key"
     assert query(path, data, dbt) == [("dbt-materialized", '"table"'), ("dbt-source-path", '"models/orders.sql"')]
+
+
+def test_a_missing_manifest_is_info_when_dbt_built_before(write, catalog):
+    path, data = catalog
+    root = project(write)
+    write({"dbt_project.yml": "name: p\n"})
+    load(Options(root, with_source=False), Target(str(path), data), Report())
+    with attached(str(path), data) as con:
+        con.execute(f"INSERT INTO {ALIAS}._fdl.attributes VALUES ('sales', 'orders', '', 'dbt-source-path', '\"m.sql\"')")
+    report = Report()
+    assert load(Options(root, with_source=False), Target(str(path), data), report, strict=True)
+    assert [(f.level.value, f.code) for f in report.findings] == [("info", "manifest-missing")]

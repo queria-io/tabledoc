@@ -17,8 +17,8 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from . import fdl
-from .description import Description, Options, read
-from .report import Level, Report, SpecError
+from .description import MANIFEST_MISSING, Description, Options, read
+from .report import Finding, Level, Report, SpecError
 
 ALIAS = "lake"
 #: Marks a folder load wrote, which the next load may replace.
@@ -182,6 +182,20 @@ def _missing(con: Any, description: Description, report: Report) -> None:
                 report.error("asset-type", f"{where}.{name} holds assets, so it has to be varchar", description.root)
 
 
+def _warned(report: Report, but: str = "") -> bool:
+    return any(f.code != but for f in report.of(Level.WARNING))
+
+
+def _carried_over(report: Report) -> None:
+    """Without dbt's manifest, the catalog's SQL of what dbt built is kept: worth knowing only."""
+    report.findings = [
+        Finding(Level.INFO, f.code, f"{f.message}; the SQL dbt built last time is kept", f.source)
+        if f.code == MANIFEST_MISSING and f.level is Level.WARNING
+        else f
+        for f in report.findings
+    ]
+
+
 def load(options: Options, target: Target, report: Report, *, strict: bool = False) -> Description | None:
     """Read and check the description, then write it.
 
@@ -191,7 +205,7 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
     if not report.failed:
         for where, column, kind in fdl.unfit(fdl.rows(description)):
             report.error("fdl-type", f"{where}: {column} cannot be written as {kind}", description.root)
-    if report.failed or (strict and report.of(Level.WARNING)):
+    if report.failed or (strict and _warned(report, but=MANIFEST_MISSING)):
         return None
     if target.out is not None:
         check_out(target.out)
@@ -204,6 +218,10 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
                 return None
             # Without a dbt build, the SQL and dependencies stay as the catalog has them.
             carried = fdl.read(con, ALIAS) or fdl.read(con, ALIAS, fdl.OLD_SCHEMA)
+            if fdl.built_by_dbt(carried):
+                _carried_over(report)
+            if strict and _warned(report):
+                return None
             tables, views = fdl.relations(con, ALIAS)
             unlisted = tables | views if target.unlisted else None
             fdl.write(con, ALIAS, fdl.rows(description, carried, unlisted, views))
