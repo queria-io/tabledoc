@@ -39,4 +39,4 @@ dev = ["pytest>=8"]
 
 [tool.uv.sources]
 # fdl meta load, dump and objects arrive in fdl-cli 0.34; until it is released.
-fdl-cli = { git = "https://github.com/queria-io/fdl", rev = "41e65a7874f8bcc9bccee4595ad8f89fa39cfff5" }
+fdl-cli = { git = "https://github.com/queria-io/fdl", rev = "a39abe8020b2f4eaf1379c44a57b940cfd4a3e39" }

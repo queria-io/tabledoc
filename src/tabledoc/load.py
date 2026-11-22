@@ -1,6 +1,6 @@
 """tabledoc load: write a description into the `_fdl` schema of fdl's working metadata, and the files `fdl commit` uploads.
 
-The working metadata is the one `fdl clone` made and the build wrote. `fdl meta load`
+The working metadata is the one `fdl clone` made and the build wrote. `fdl meta set --replace --stdin`
 writes the description's rows (`fdl.rows`) into its `_fdl` schema, and the folder
 ``out`` gets the files of `_fdl.files` (for `fdl commit --assets`).
 """
@@ -159,7 +159,7 @@ def _carried_over(report: Report) -> None:
 
 
 def load(options: Options, target: Target, report: Report, *, strict: bool = False) -> Description | None:
-    """Read and check the description, then write it with `fdl meta load`.
+    """Read and check the description, then write it with `fdl meta set --replace --stdin`.
 
     Nothing is written when the check fails: on an error, or with ``strict`` on a warning.
     """

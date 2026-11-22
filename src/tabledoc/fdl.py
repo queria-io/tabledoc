@@ -10,7 +10,7 @@
 
 tabledoc builds the rows; fdl writes and checks them. Every read and write of
 `_fdl` goes through the fdl CLI (`fdl meta dump`, `fdl meta objects`,
-`fdl meta load`), so `_fdl` is defined in one place.
+`fdl meta set --replace --stdin`), so `_fdl` is defined in one place.
 """
 
 from __future__ import annotations
@@ -263,9 +263,9 @@ def objects(working: str) -> tuple[set[Key], set[Key], dict[Key, dict[str, str]]
 
 
 def load(working: str, found: Rows) -> str | None:
-    """Make `_fdl` of ``working`` hold ``found`` and nothing else (`fdl meta load`).
+    """Make `_fdl` of ``working`` hold ``found`` and nothing else (`fdl meta set --replace --stdin`).
 
     None when written; else fdl's reason, and nothing is written.
     """
-    done = _run("load", working, "-", given=json.dumps(found, ensure_ascii=False, default=str))
+    done = _run("set", working, "--replace", "--stdin", given=json.dumps(found, ensure_ascii=False, default=str))
     return None if done.returncode == 0 else _failed(done)

@@ -142,7 +142,7 @@ wheels = [
 [[package]]
 name = "fdl-cli"
 version = "0.33.0"
-source = { git = "https://github.com/queria-io/fdl?rev=41e65a7874f8bcc9bccee4595ad8f89fa39cfff5#41e65a7874f8bcc9bccee4595ad8f89fa39cfff5" }
+source = { git = "https://github.com/queria-io/fdl?rev=a39abe8020b2f4eaf1379c44a57b940cfd4a3e39#a39abe8020b2f4eaf1379c44a57b940cfd4a3e39" }
 dependencies = [
     { name = "duckdb", version = "1.5.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "duckdb", version = "2.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -804,7 +804,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "duckdb", specifier = ">=1.1" },
-    { name = "fdl-cli", git = "https://github.com/queria-io/fdl?rev=41e65a7874f8bcc9bccee4595ad8f89fa39cfff5" },
+    { name = "fdl-cli", git = "https://github.com/queria-io/fdl?rev=a39abe8020b2f4eaf1379c44a57b940cfd4a3e39" },
     { name = "jsonschema", specifier = ">=4.18" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "referencing", specifier = ">=0.30" },

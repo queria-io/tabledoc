@@ -27,7 +27,7 @@ def parser() -> argparse.ArgumentParser:
     commands = p.add_subparsers(dest="command", required=True)
     v = commands.add_parser("validate", help="check the description")
     _common(v)
-    w = commands.add_parser("load", help="check the description and write it into _fdl with fdl meta load")
+    w = commands.add_parser("load", help="check the description and write it into _fdl with fdl meta set --replace --stdin")
     _common(w)
     w.add_argument("--ducklake", default=None, help="fdl's working metadata, from fdl clone (default: FDL_WORKING)")
     w.add_argument("--out", type=Path, default=None, help="also write the files for fdl commit --assets here")

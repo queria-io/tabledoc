@@ -231,7 +231,7 @@ d.content(d.files[0])  # the bytes of that file
 
 `tabledoc load` checks the description as `validate` does, then writes it into a [DuckLake](https://ducklake.select) catalog as the tables of the [`_fdl` schema](https://fdl.queria.io/spec/fdl-schema). FDL defines those tables; any program that reads the catalog reads the description with it, with SQL.
 
-tabledoc reads and writes `_fdl` only through the fdl CLI (fdl-cli, a dependency of tabledoc): `fdl meta objects` lists the tables and views, `fdl meta dump` reads `_fdl`, and `fdl meta load` writes it and runs FDL's checks. The catalog is fdl's working metadata, the `.sqlite` file `fdl clone` makes.
+tabledoc reads and writes `_fdl` only through the fdl CLI (fdl-cli, a dependency of tabledoc): `fdl meta objects` lists the tables and views, `fdl meta dump` reads `_fdl`, and `fdl meta set --replace --stdin` writes it and runs FDL's checks. The catalog is fdl's working metadata, the `.sqlite` file `fdl clone` makes.
 
 ```bash
 tabledoc load --ducklake work.sqlite --out build/assets
@@ -242,7 +242,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - `--out`: also write the folder `fdl commit --assets` takes: each file of `_fdl.files` under `files/<path>`. With `--assets <folder>`, the files below it (those of the build's asset columns) are linked under `data/`. The folder has to be empty or written by an earlier `load`, and outside `.fdl/`, which only fdl writes
 - `--unlisted`: the catalog's tables and views that have no description get a row in `_fdl.tables` with `profile` false, and the attribute `queria-published` false
 - A described table or column, or a primary key column, that is not in the catalog is an error, and so is an `asset` column that is not `varchar`. Names match without regard to case, as in DuckDB
-- What `fdl meta load` refuses (`issued` other than `YYYY-MM-DD`, say) is an error, given with fdl's reason
+- What `fdl meta set --replace --stdin` refuses (`issued` other than `YYYY-MM-DD`, say) is an error, given with fdl's reason
 - On an error (with `--strict`, a warning) nothing is written
 
 | Table | From |
@@ -260,7 +260,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - What `_fdl` has no column for is written as an attribute: a column's `entity` (its `name`) as `queria-entity`; the `commercial_use`, `share_alike` and `attribution_required` of the licenses as `queria-license-terms`, by license id (`{"<id>": {"commercial_use": true}}`), on the dataset or the table; dbt's `materialized` and `source_path` as `dbt-materialized` and `dbt-source-path` on the table or view
 - `licenses` is a list of `{id, spdx, url, title}`; a license written as a string is `{id}`
 - The files are not in the catalog. `_fdl.files.sha256` is an asset column: `fdl commit --assets` uploads each file by its content
-- `fdl meta load` makes `_fdl` hold these rows and no others. Without a dbt build (no `sql` in the description), each table keeps the `sql`, `depends_on`, `dbt-materialized` and `dbt-source-path` the catalog's `_fdl` holds
+- `fdl meta set --replace --stdin` makes `_fdl` hold these rows and no others. Without a dbt build (no `sql` in the description), each table keeps the `sql`, `depends_on`, `dbt-materialized` and `dbt-source-path` the catalog's `_fdl` holds
 - Names are written as the catalog spells them
 - The `_meta` schema tabledoc 0.3 wrote is left as it is; FDL does not read it. Drop it once with DuckDB if you like
 - tabledoc writes no comments (`COMMENT ON`)
