@@ -30,7 +30,7 @@ sales/orders.md           そのガイド
 
 ```yaml
 # tabledoc.yml
-$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json
+$schema: https://tabledoc.queria.io/schemas/dataset/v1.json
 name: shop
 title: 店舗の売上
 language: ja
@@ -39,7 +39,7 @@ licenses: [CC-BY-4.0]
 
 ```yaml
 # sales/orders.yml
-$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
 title: 注文
 description: 1 行が 1 件の注文です。
 primary_key: [order_id]
@@ -66,7 +66,7 @@ dbt のプロジェクトでは先に `dbt compile` を実行し、`dbt_project.
 
 ## 仕様
 
-ドキュメントと仕様は [tabledoc.queria.io/ja](https://tabledoc.queria.io/ja) にあります (元のファイルは [docs/ja/spec.md](docs/ja/spec.md))。JSON Schema は [src/tabledoc/schemas](src/tabledoc/schemas) にあり、`https://queria-io.github.io/tabledoc/schemas/` で配っています。
+ドキュメントと仕様は [tabledoc.queria.io/ja](https://tabledoc.queria.io/ja) にあります (元のファイルは [docs/ja/spec.md](docs/ja/spec.md))。JSON Schema は [src/tabledoc/schemas](src/tabledoc/schemas) にあり、`https://tabledoc.queria.io/schemas/` で配っています。
 
 ## ライセンス
 

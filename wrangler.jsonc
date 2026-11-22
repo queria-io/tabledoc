@@ -1,0 +1,12 @@
+// An assets-only Worker (no main): the docs site built by Blume, and the JSON Schemas under /schemas/.
+// A schema keeps its URL for good: change one by adding v2, never by editing v1's meaning.
+{
+  "name": "tabledoc",
+  "compatibility_date": "2026-07-01",
+  "routes": [{ "pattern": "tabledoc.queria.io", "custom_domain": true }],
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "drop-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "blume dev",
-    "build": "blume build",
+    "build": "blume build --strict && rm -rf dist/schemas && cp -R src/tabledoc/schemas dist/schemas && rm -rf dist/schemas/legacy && cat schemas.headers >> dist/_headers",
     "check": "blume build --strict && blume validate --strict"
   },
   "dependencies": {

@@ -8,8 +8,8 @@ import pytest
 from tabledoc import Options, read
 from tabledoc.report import Report, SpecError
 
-DATASET = "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\n"
-TABLE = "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"
+DATASET = "$schema: https://tabledoc.queria.io/schemas/dataset/v1.json\n"
+TABLE = "$schema: https://tabledoc.queria.io/schemas/table/v1.json\n"
 
 
 def run(root, **kwargs):
@@ -167,13 +167,25 @@ def test_missing_docs_are_errors(write):
     "files",
     [
         {"tabledoc.yml": DATASET + "name: d\n", "queria.yml": "name: d\n"},
-        {"tabledoc.yml": "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v9.json\nname: d\n"},
-        {"tabledoc.yml": DATASET + "name: d\n", "s/a.yml": "$schema: https://queria-io.github.io/tabledoc/schemas/table/v9.json\n"},
+        {"tabledoc.yml": "$schema: https://tabledoc.queria.io/schemas/dataset/v9.json\nname: d\n"},
+        {"tabledoc.yml": DATASET + "name: d\n", "s/a.yml": "$schema: https://tabledoc.queria.io/schemas/table/v9.json\n"},
         {},
     ],
 )
 def test_cannot_read(write, files):
     with pytest.raises(SpecError):
+        run(write(files))
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"tabledoc.yml": "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\nname: d\n"},
+        {"tabledoc.yml": DATASET + "name: d\n", "s/a.yml": "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"},
+    ],
+)
+def test_moved_schema_urls_are_refused_with_the_new_one(write, files):
+    with pytest.raises(SpecError, match="has moved; write https://tabledoc.queria.io/schemas/"):
         run(write(files))
 
 

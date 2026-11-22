@@ -38,7 +38,7 @@ dbt のプロジェクトでは、テーブルの説明を dbt の yml に書き
 データセット 1 つの説明です。
 
 ```yaml
-$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json
+$schema: https://tabledoc.queria.io/schemas/dataset/v1.json
 name: boj
 title: 日本銀行 時系列統計
 description: 日本銀行の時系列統計データ検索サイトの全ての統計です。
@@ -82,10 +82,10 @@ queria:
 
 ## テーブルのファイル
 
-テーブル 1 つの説明です。`$schema` が `https://queria-io.github.io/tabledoc/schemas/table/v1.json` の YAML をテーブルのファイルとして読み、`$schema` の無い YAML (dbt の `schema.yml` など) は読みません。キーは dbt の `models:` の 1 項目と同じで、dbt に無いキー (`title`・`primary_key`・`sources` など) は同じ階層に並べます。
+テーブル 1 つの説明です。`$schema` が `https://tabledoc.queria.io/schemas/table/v1.json` の YAML をテーブルのファイルとして読み、`$schema` の無い YAML (dbt の `schema.yml` など) は読みません。キーは dbt の `models:` の 1 項目と同じで、dbt に無いキー (`title`・`primary_key`・`sources` など) は同じ階層に並べます。
 
 ```yaml
-$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json
+$schema: https://tabledoc.queria.io/schemas/table/v1.json
 name: series
 title: 系列の一覧
 description: |-
@@ -343,6 +343,6 @@ tabledoc export --markdown ai-docs/
 
 ## $schema とバージョン
 
-- JSON Schema は tabledoc に同梱し、`https://queria-io.github.io/tabledoc/schemas/<種類>/v<n>.json` で配ります。種類は `dataset` と `table` です
+- JSON Schema は tabledoc に同梱し、`https://tabledoc.queria.io/schemas/<種類>/v<n>.json` で配ります。種類は `dataset` と `table` です
 - キーを追加するだけなら同じバージョンのままです。キーの意味を変える・消すときは `v2` にし、tabledoc はしばらく両方を読みます
 - 知らない `$schema` のファイルは断り、tabledoc を上げるよう伝えます

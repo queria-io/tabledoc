@@ -9,8 +9,8 @@ from tabledoc.declare import commands, declare, wanted
 from tabledoc.description import read
 from tabledoc.report import Report, SpecError
 
-DATASET = "$schema: https://queria-io.github.io/tabledoc/schemas/dataset/v1.json\nname: shop\n"
-TABLE = "$schema: https://queria-io.github.io/tabledoc/schemas/table/v1.json\n"
+DATASET = "$schema: https://tabledoc.queria.io/schemas/dataset/v1.json\nname: shop\n"
+TABLE = "$schema: https://tabledoc.queria.io/schemas/table/v1.json\n"
 
 
 def described(write):

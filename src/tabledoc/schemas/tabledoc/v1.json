@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://queria-io.github.io/tabledoc/schemas/tabledoc/v1.json",
+  "$id": "https://tabledoc.queria.io/schemas/tabledoc/v1.json",
   "title": "tabledoc.json",
   "description": "What `tabledoc build` writes: the description of one dataset in one file. Documents are referred to by path; `files` lists each one's sha256. Types, nullability and row counts are not here.",
   "type": "object",
   "required": ["$schema", "generator", "dataset", "schemas", "tables", "files"],
   "additionalProperties": false,
   "properties": {
-    "$schema": { "const": "https://queria-io.github.io/tabledoc/schemas/tabledoc/v1.json" },
+    "$schema": { "const": "https://tabledoc.queria.io/schemas/tabledoc/v1.json" },
     "generator": { "type": "string", "description": "tabledoc <version>." },
     "source": {
       "type": "object",
