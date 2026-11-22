@@ -290,7 +290,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - Keys under `annotations:` for readers other than Queria are not written
 - The files are not in the catalog. `files.sha256` holds the sha256 of each, and `fdl commit --assets` uploads each file by its content
 - Rows are added, changed and removed by their primary key, so a load changes only the cells that differ. Without a dbt build (no `sql` in the description), each table keeps the `sql`, `depends_on` and `source_path` the catalog holds
-- Primary keys and asset columns are not written into these tables. When the catalog is the working metadata `fdl clone` made (it noted `<catalog>.fdl.json` beside it), `load` declares them to FDL with `fdl declare`, which has to be on `PATH` (fdl-cli 0.34 or later): each table's `primary_key` and the asset columns of each table whose columns say `asset` (a view has neither), no profile for each table and view whose `published` is false and a profile for each other table described, the other datasets the SQL reads (from dbt's `profiles.yml`) as dependencies, and the keys of these five tables with `files.sha256` as an asset column and no profile. It runs only what differs from `fdl declare list`, and leaves what the description does not say as FDL has it
+- Primary keys and asset columns are not written into these tables. When the catalog is the working metadata `fdl clone` made (it noted `<catalog>.fdl.json` beside it), `load` declares them to FDL with `fdl declare`, which has to be on `PATH` (fdl-cli 0.34 or later): each table's `primary_key` and the asset columns of each table whose columns say `asset` (a view has neither), no profile for each table and view whose `published` is false and a profile for each other table described, the other datasets the SQL reads (from dbt's `profiles.yml`) as dependencies, and the keys of these tables with `files.sha256` as an asset column and no profile. It runs only what differs from `fdl declare list`, and leaves what the description does not say as FDL has it
 - tabledoc writes no comments (`COMMENT ON`)
 
 ## Writing the files from a catalog
@@ -325,6 +325,7 @@ tabledoc export --markdown ai-docs/
 
 - The files are at the [paths in the dataset](#paths-in-the-dataset), and every other file of `files` (documents, images) is written at its path too, so the links in the guides keep working
 - A guide comes after a rule (`---`) as written. Its headings are not changed
+- Text written in more than one language is written in the dataset's `language` (else the undetermined one, else the first by tag)
 - Keys for one reader (`queria:`, `annotations:`) are not written
 - Types, nullability and row counts are not in the description, so they are not written either
 - A file already in the folder is not replaced, and nothing is written, unless `--force`. Files of an earlier export that are no longer written stay in the folder

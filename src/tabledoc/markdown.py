@@ -15,9 +15,11 @@ from __future__ import annotations
 import json
 import posixpath
 from collections.abc import Iterable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from . import languages
 from .description import README, Description
 from .report import SpecError
 
@@ -209,8 +211,31 @@ def _dataset(d: Description, schemas: list[dict[str, Any]], tables: list[Table])
     return _page(lines)
 
 
+def _one(record: dict[str, Any], keys: tuple[str, ...], language: str) -> dict[str, Any]:
+    """``record`` with each text of ``keys`` in ``language`` alone (`languages.one`)."""
+    flat = {k: languages.one(v, language) if k in keys else v for k, v in record.items()}
+    for k in languages.LISTS:
+        if isinstance(flat.get(k), list):
+            flat[k] = [_one(e, languages.ENTRY, language) if isinstance(e, dict) else e for e in flat[k]]
+    for k, inner in (("columns", languages.COLUMN), ("metrics", languages.METRIC)):
+        if isinstance(flat.get(k), list):
+            flat[k] = [_one(e, inner, language) for e in flat[k]]
+    return flat
+
+
+def _in(d: Description, language: str) -> Description:
+    """``d`` with each text in ``language`` alone: one file per table, in the dataset's language."""
+    return replace(
+        d,
+        dataset=_one(d.dataset, languages.DATASET, language),
+        schemas=[_one(s, languages.SCHEMA, language) for s in d.schemas],
+        tables=[_one(t, languages.TABLE, language) for t in d.tables],
+    )
+
+
 def render(d: Description) -> dict[str, bytes]:
-    """Each file to write, by its path in the dataset."""
+    """Each file to write, by its path in the dataset, in the dataset's `language`."""
+    d = _in(d, d.dataset.get("language") or languages.UNDETERMINED)
     tables = d.tables
     keys = {_key(t) for t in tables}
     readers: dict[str, list[str]] = {}
