@@ -59,6 +59,7 @@ metrics:
 tabledoc validate            # check
 tabledoc load --ducklake work.sqlite   # check, then write it into the catalog's _tabledoc schema
 tabledoc dump --ducklake work.sqlite --out description/   # the files again, from the catalog
+tabledoc profile --ducklake lake.sqlite   # count the data into the profile tables (without fdl)
 tabledoc export --markdown ai-docs/   # one Markdown file per table, for AI to read
 ```
 

@@ -1,4 +1,4 @@
-"""tabledoc validate, load, dump and export."""
+"""tabledoc validate, load, dump, profile and export."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ from .description import Options, read
 from .dump import Source, dump
 from .load import Target, load
 from .markdown import export
+from .profile import Target as Counted
+from .profile import profile
 from .report import Level, Report, SpecError
 
 
@@ -47,6 +49,10 @@ def parser() -> argparse.ArgumentParser:
     d.add_argument("--files", default=None, help="where the files are, as <files>/<sha256> (default: the repository's assets)")
     d.add_argument("--name", default=None, help="the dataset's name (default: the repository's)")
     d.add_argument("--force", action="store_true", help="replace the files already there")
+    r = commands.add_parser("profile", help="count the data of a DuckLake catalog into the profile tables")
+    r.add_argument("--ducklake", default=None, help="the DuckLake catalog (default: FDL_WORKING)")
+    r.add_argument("--data-path", default=None, help="where the data files are (default: FDL_DATA_PATH, else the catalog's)")
+    r.add_argument("--schema", default="_tabledoc", help="the schema of the description (default: _tabledoc)")
     e = commands.add_parser("export", help="check the description and write it as Markdown, one file per table")
     _common(e)
     e.add_argument("--markdown", type=Path, required=True, help="the folder to write the Markdown into")
@@ -78,6 +84,18 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         print(f"wrote {len(written)} files in {args.out}", file=sys.stderr)
+        return 0
+    if args.command == "profile":
+        data = args.data_path or os.environ.get("FDL_DATA_PATH")
+        try:
+            found = profile(
+                Counted(_catalog(args.ducklake), data, args.schema),
+                lambda key, why: print(f"warning: {'.'.join(key)} cannot be read and gets no profile: {why}", file=sys.stderr),
+            )
+        except SpecError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        print(f"profiled {len(found['table_profiles'])} tables and views", file=sys.stderr)
         return 0
     report = Report()
     options = Options(args.root, args.manifest, args.profiles, with_source=args.command == "load")

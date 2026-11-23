@@ -18,7 +18,7 @@ a part that does not apply is `''`, so the dataset's rows have all three `''`.
     files               the documents and what they link to
 
 `table_profiles`, `column_profiles` and `column_values` are part of the format too
-(`PROFILES`), but `tabledoc load` does not write them. They are ordinary tables of
+(`PROFILES`), written by `tabledoc profile`, not by `tabledoc load`. They are ordinary tables of
 the catalog, versioned with the data. FDL does not know what they mean;
 `files.sha256` is declared to it as an asset column.
 """
@@ -77,7 +77,7 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
     "files": ({"path": _V, "sha256": _V, "bytes": "BIGINT", "media_type": _V}, ("path",)),
 }
 
-#: The optional profile tables: computed from the data, never merged, and not written by load.
+#: The optional profile tables: computed from the data by `tabledoc profile`, never merged, and not written by load.
 #: They hold what an FDL profile holds, under the same names.
 PROFILES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
     "table_profiles": ({**_ON, "rows": "BIGINT"}, tuple(_ON)),
@@ -551,6 +551,21 @@ def write(con: Any, catalog: str, found: Rows, schema: str = SCHEMA) -> None:
         ).fetchall():
             if table.lower() in _EARLIER:
                 con.execute(f"DROP TABLE {catalog}.{quote(schema)}.{quote(table)}")
+    except BaseException:
+        con.execute("ROLLBACK")
+        raise
+    con.execute("COMMIT")
+
+
+def write_profiles(con: Any, catalog: str, found: Rows, schema: str = SCHEMA) -> None:
+    """Make the profile tables of ``schema`` in ``catalog`` hold ``found`` and no other rows, in one
+    transaction, by their primary key as `write` does. The other tables are left as they are."""
+    con.execute("BEGIN")
+    try:
+        con.execute(f"CREATE SCHEMA IF NOT EXISTS {catalog}.{quote(schema)}")
+        with tempfile.TemporaryDirectory(prefix="tabledoc-") as tmp:
+            for table, (columns, key) in PROFILES.items():
+                _write_table(con, catalog, schema, table, columns, key, found.get(table) or [], Path(tmp))
     except BaseException:
         con.execute("ROLLBACK")
         raise

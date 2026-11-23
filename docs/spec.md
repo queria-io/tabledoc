@@ -20,6 +20,7 @@ The `tabledoc` command is the reference implementation. It checks the files, wri
 - `tabledoc validate`: check the author's files
 - `tabledoc load`: check them and write the description into the tables of a DuckLake catalog ([Writing into a DuckLake catalog](#writing-into-a-ducklake-catalog))
 - `tabledoc dump`: write the files of the description a catalog holds ([Writing the files from a catalog](#writing-the-files-from-a-catalog))
+- `tabledoc profile`: count the data of a DuckLake catalog into the profile tables ([Counting the data](#counting-the-data))
 - `tabledoc export --markdown`: check them and write them as Markdown, one file per table ([Writing Markdown for AI](#writing-markdown-for-ai))
 
 It exits with 1 when there are errors (with `--strict`, warnings too) and 2 when the files or the catalog cannot be read or written at all.
@@ -330,7 +331,7 @@ Three parts of the tables say how a table was built, not what it means: `tables.
 
 ### Profiles
 
-Three more tables hold what was counted in the data, so that readers can search by it. They are optional. People do not write them; a program counts them from the data (the column statistics of DuckLake or Iceberg, or an SQL query) and writes them again when the data changes, without merging. They hold what [an FDL profile](https://fdl.queria.io/spec/versions#profiles) holds, under the same names.
+Three more tables hold what was counted in the data, so that readers can search by it. They are optional. People do not write them; a program counts them from the data (the column statistics of DuckLake or Iceberg, or an SQL query) and writes them again when the data changes, without merging (`tabledoc profile` does this for a DuckLake catalog). They hold what [an FDL profile](https://fdl.queria.io/spec/versions#profiles) holds, under the same names.
 
 | Table | Primary key | Other columns |
 | --- | --- | --- |
@@ -380,6 +381,21 @@ tabledoc dump --ducklake work.sqlite --out description/
 - Text is written as the text alone when there is one language and it is the dataset's `language`, and as a map otherwise
 - A license or source is written in full where it is first used (the dataset first, then the tables by name) and by its `id` alone after that; a license that has only its `id` is written as the `id`
 - What the tables do not hold is not written: asset columns, `annotations`, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--hide-undescribed` wrote gets no table file. `sql` and `depends_on` are written only for a table without `source_path` (one dbt does not build)
+
+## Counting the data
+
+`tabledoc profile` counts the tables and views of a DuckLake catalog by SQL and writes the [profile tables](#profiles) into the description's schema.
+
+```bash
+tabledoc profile --ducklake lake.sqlite
+```
+
+- `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where its data files are (default: `FDL_DATA_PATH`, else the catalog's own). `--schema`: the description's schema (default: `_tabledoc`)
+- Every table and view is counted but those of the description's schema and those whose `hidden` is true in `tables`. A view is counted from the rows its query returns
+- Numbers and dates and times get `min` and `max` (none for NaN or infinity); numbers, text, dates and times get `distinct_count` and `column_values`; every column gets `null_count`. A list, array or struct of them is none of these. Above 1,000,000 rows, `distinct_count` is estimated when it is over 2,000
+- A table or view that cannot be read, such as a view whose query fails, gets no profile and a warning; the others are counted all the same
+- The three tables then hold these counts and no other rows: the rows of a table that is gone are removed
+- The working metadata `fdl clone` made is refused: fdl writes the profiles of each version
 
 ## Writing Markdown for AI
 
