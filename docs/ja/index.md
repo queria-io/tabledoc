@@ -13,7 +13,7 @@ tabledoc は、データセットのテーブルを人と AI が読める形に�
 - dbt のプロジェクトでは、説明・SQL・依存関係を `target/manifest.json` から取ります
 - Python からは `tabledoc.read` で、検査した説明を読めます。ガイドとそこから参照するファイルはパスと sha256 で並べます
 - `tabledoc export --markdown <フォルダ>` は、テーブルごとに Markdown のファイルを 1 つ (列、semantic、主キー、依存関係、SQL、ガイド) と、それらを一覧にするデータセットのファイルを書き出します。AI アシスタントや人がそのまま読めます
-- `tabledoc load` は説明を DuckLake のカタログに、1 つのスキーマ (既定は `_tabledoc`) の普通のテーブルとして書きます。説明はデータと一緒に配布され、[FDL](https://fdl.queria.io) でデータと一緒にバージョン管理されます。`tabledoc dump` はそこからファイルを書き戻します
+- 同じ説明をテーブルでも表せます。スキーマ `_tabledoc` の第三正規形のテーブルで、SQL のデータベースならデータの隣に置けます。`tabledoc load` はそれを DuckLake のカタログに書き、説明はデータと一緒にバージョン管理されます ([FDL](https://fdl.queria.io) など)。`tabledoc dump` はそこからファイルを書き戻します
 
 ## インストール
 

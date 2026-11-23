@@ -38,7 +38,7 @@ class Target:
     out: Path | None = None
     #: Files the build made for its asset columns, linked into ``out/data``.
     assets: Path | None = None
-    #: Write the catalog's tables that have no description, as not published.
+    #: Write the catalog's tables that have no description, with `listed` false.
     unlisted: bool = False
     #: The schema to write into; default tabledoc.yml's `schema`, else `_tabledoc`.
     schema: str | None = None
@@ -239,7 +239,11 @@ def _keeps_dbt_sql(description: Description, carried: tables.Rows, unlisted: set
     """Whether the load keeps the SQL of every table dbt built, as the catalog holds it: there
     is such a table, the description has no `sql` (no build), and each of them keeps its row
     (it is described, or ``unlisted`` holds it)."""
-    built = {tables.fold(t["schema"], t["name"]) for t in carried.get("tables") or [] if t.get("source_path")}
+    built = {
+        tables.fold(t["schema_name"], t["table_name"])
+        for t in carried.get("tables") or []
+        if t.get("source_path") and t.get("schema_name") is not None
+    }
     kept = {tables.fold(t["schema"], t["name"]) for t in description.tables}
     kept |= {tables.fold(*key) for key in unlisted or set()}
     return bool(built) and built <= kept and not any("sql" in t for t in description.tables)
@@ -299,6 +303,10 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
             if strict and _warned(report):
                 return None
             found = tables.rows(description, carried, unlisted, views)
+            for wrong in tables.dangling(found, schema):
+                report.error("dangling-row", wrong, description.root)
+            if report.failed:
+                return None
             tables.write(con, ALIAS, found, schema)
     except duckdb.Error as exc:
         raise SpecError(f"cannot write {schema} in {target.catalog}: {exc}") from exc
@@ -306,7 +314,7 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
         target.catalog,
         description,
         schema,
-        unpublished={f"{t['schema']}.{t['name']}" for t in found["tables"] if not tables.published(t)},
+        unlisted={f"{t['schema_name']}.{t['table_name']}" for t in found["tables"] if not tables.listed(t)},
         views={f"{s}.{n}" for s, n in views},
     )
     if target.out is not None:

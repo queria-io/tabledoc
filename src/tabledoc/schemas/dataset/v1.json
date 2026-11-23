@@ -10,10 +10,12 @@
     "$schema": { "const": "https://tabledoc.queria.io/schemas/dataset/v1.json" },
     "name": { "$ref": "#/$defs/name" },
     "title": { "$ref": "#/$defs/text", "minLength": 1 },
+    "title_reading": { "$ref": "#/$defs/text", "description": "How the title is read, such as its kana in Japanese." },
     "description": { "$ref": "#/$defs/text" },
     "schema": { "type": "string", "minLength": 1, "description": "The schema tabledoc load writes the description into; default _tabledoc." },
     "topics": { "$ref": "#/$defs/texts", "description": "Topics, as a repository's topics on GitHub." },
     "keywords": { "$ref": "#/$defs/texts", "description": "The earlier name of topics, read as topics." },
+    "synonyms": { "$ref": "#/$defs/texts", "description": "Other names people search for it by." },
     "homepage": { "$ref": "#/$defs/text" },
     "repository": { "type": "string", "format": "uri" },
     "language": { "$ref": "#/$defs/language" },
@@ -24,6 +26,7 @@
     "contributors": { "$ref": "#/$defs/contributors" },
     "temporal_coverage": { "$ref": "#/$defs/temporalCoverage" },
     "spatial_coverage": { "$ref": "#/$defs/spatialCoverage" },
+    "image": { "$ref": "#/$defs/path", "description": "Path of an image that stands for the dataset, relative to the root. It is sent with the documents." },
     "schemas": {
       "type": "array",
       "items": {
@@ -33,7 +36,10 @@
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "title": { "$ref": "#/$defs/text" },
+          "title_reading": { "$ref": "#/$defs/text" },
           "description": { "$ref": "#/$defs/text" },
+          "topics": { "$ref": "#/$defs/texts" },
+          "synonyms": { "$ref": "#/$defs/texts" },
           "documents": { "$ref": "#/$defs/paths", "description": "Paths of the schema's documents, relative to the root. They go into the schema's folder by file name; README.md is its guide." }
         }
       }
@@ -42,7 +48,6 @@
       "$ref": "#/$defs/paths",
       "description": "Paths of the dataset's documents, relative to the root. They go into the dataset's root by file name. README.md at the root is one without being listed."
     },
-    "queria": { "type": "object", "description": "Keys only Queria reads. Queria checks them." },
     "annotations": { "$ref": "#/$defs/annotations" }
   },
   "$defs": {
@@ -72,13 +77,13 @@
       "type": "array",
       "items": {
         "oneOf": [
-          { "type": "string", "minLength": 1, "description": "A license id, such as CC-BY-4.0." },
+          { "type": "string", "minLength": 1, "description": "A license's id: one another entry defines, or an id such as CC-BY-4.0." },
           {
             "type": "object",
             "required": ["id"],
             "additionalProperties": false,
             "properties": {
-              "id": { "type": "string", "minLength": 1 },
+              "id": { "type": "string", "minLength": 1, "description": "Short and fixed: the other entries and the tables refer to the license by it." },
               "spdx": { "type": "string" },
               "url": { "$ref": "#/$defs/text" },
               "title": { "$ref": "#/$defs/text" },
@@ -93,17 +98,29 @@
     "sources": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": { "title": { "$ref": "#/$defs/text" }, "path": { "$ref": "#/$defs/text" } }
+        "oneOf": [
+          { "type": "string", "minLength": 1, "description": "The id of a source another entry defines." },
+          {
+            "type": "object",
+            "required": ["id"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "minLength": 1, "description": "Short and fixed: the other entries and the tables refer to the source by it." },
+              "title": { "$ref": "#/$defs/text" },
+              "path": { "$ref": "#/$defs/text" }
+            }
+          }
+        ]
       }
     },
     "contributors": {
       "type": "array",
       "items": {
         "type": "object",
+        "required": ["id"],
         "additionalProperties": false,
         "properties": {
+          "id": { "type": "string", "minLength": 1 },
           "title": { "$ref": "#/$defs/text" },
           "path": { "$ref": "#/$defs/text" },
           "roles": { "$ref": "#/$defs/strings" }

@@ -1,4 +1,4 @@
-"""tabledoc: describe the tables of a dataset in YAML and Markdown, check it, and write it into a DuckLake catalog's tables (_tabledoc by default)."""
+"""tabledoc: describe the tables of a dataset in YAML and Markdown, check it, and write it as the tables of the _tabledoc schema."""
 
 from .description import Description, Options, read
 from .dump import Source, dump

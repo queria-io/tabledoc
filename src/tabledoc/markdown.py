@@ -6,8 +6,8 @@
     every other file of the description at its path in the dataset
 
 The paths are the description's paths in the dataset, so the links in each
-guide and document still point at the files they link to. Keys for one
-reader (`queria:`, `annotations:`) are not written.
+guide and document still point at the files they link to. Keys for other
+readers (`annotations:`) are not written.
 """
 
 from __future__ import annotations
@@ -65,10 +65,12 @@ def _value(value: Any) -> str:
 
 FACTS = (
     ("name", "Name"),
+    ("title_reading", "Reading"),
     ("primary_key", "Primary key"),
     ("materialized", "Materialized"),
     ("language", "Language"),
     ("topics", "Topics"),
+    ("synonyms", "Synonyms"),
     ("homepage", "Homepage"),
     ("repository", "Repository"),
     ("issued", "Issued"),
@@ -79,6 +81,7 @@ FACTS = (
     ("temporal_coverage", "Temporal coverage"),
     ("spatial_coverage", "Spatial coverage"),
     ("source_path", "Built from"),
+    ("image", "Image"),
 )
 CODE = {"name", "primary_key", "materialized", "source_path"}
 

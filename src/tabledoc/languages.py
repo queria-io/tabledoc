@@ -12,10 +12,10 @@ from typing import Any
 UNDETERMINED = "und"
 
 #: Keys whose value is text, of each kind of record.
-DATASET = ("title", "description", "topics", "homepage")
-SCHEMA = ("title", "description")
-TABLE = ("title", "description", "topics")
-COLUMN = ("title", "description")
+DATASET = ("title", "title_reading", "description", "topics", "synonyms", "homepage")
+SCHEMA = ("title", "title_reading", "description", "topics", "synonyms")
+TABLE = ("title", "title_reading", "description", "topics", "synonyms")
+COLUMN = ("title", "title_reading", "description", "topics", "synonyms")
 METRIC = ("description",)
 #: Keys of an entry of `licenses`, `sources` and `contributors`.
 ENTRY = ("title", "url", "path")

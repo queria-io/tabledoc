@@ -27,18 +27,20 @@ MATERIALIZED = ("table", "view", "incremental")
 #: The keys of a table file a model writes under config.meta.
 TABLE_META = (
     "title",
+    "title_reading",
     "topics",
     "keywords",
+    "synonyms",
+    "listed",
     "primary_key",
     "licenses",
     "sources",
     "temporal_coverage",
     "spatial_coverage",
     "documents",
-    "queria",
     "annotations",
 )
-COLUMN_META = ("title", "asset", "annotations")
+COLUMN_META = ("title", "title_reading", "topics", "synonyms", "asset", "annotations")
 
 
 def _meta(node: dict[str, Any]) -> dict[str, Any]:

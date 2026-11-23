@@ -3,15 +3,22 @@ title: 仕様 (v1)
 sidebar:
   label: 仕様
   order: 2
-description: tabledoc が読むファイル、その検査、プログラムに返す値を定めます。
+description: データセットを説明する語彙と、その 2 つの表現 (ファイルとテーブル)、tabledoc の CLI の動作を定めます。
 ---
 
-tabledoc は、人が書くデータセットの説明 (YAML と Markdown、または dbt のプロジェクトの yml) の書き方を定め、検査し、ほかのプログラムのために読むツールです。特定の配信先には依存しません。`tabledoc load` は説明を DuckLake のカタログに、1 つのスキーマ (既定は `_tabledoc`) の普通のテーブルとして書き、`tabledoc dump` はそこからファイルを書き戻します。`tabledoc export --markdown` は、AI アシスタントや人が読む Markdown のファイルとして書き出します。書き手のファイルが正です。
+tabledoc は、データセットを人に向けて説明するための規約です。各テーブルと列の意味、ライセンス・出典・作成者、一緒に読むガイドを書きます。同じ語彙を 2 つの形で表します。
+
+- 書き手が書くファイル: YAML と Markdown、または dbt のプロジェクトの yml ([ファイル](#ファイル))
+- データと同じデータベースに置くテーブル: スキーマ `_tabledoc` のテーブル ([テーブル](#テーブル))
+
+プログラムはどちらの形も読めて、2 つは同じ説明を持ちます。テーブルの列は文字列・真偽値・整数だけなので、SQL のスキーマを持つデータベースならどこにでも置けます。たとえば DuckLake・Iceberg・PostgreSQL・BigQuery です。tabledoc は履歴を持ちません。テーブルを置いたカタログがデータと一緒にバージョン管理します (DuckLake のスナップショット、FDL のバージョン)。カタログにその仕組みが無いときは、ファイルを Git で管理します。
+
+`tabledoc` コマンドは参照実装です。ファイルを検査し、DuckLake のカタログのテーブルに書き (`tabledoc load`)、テーブルからファイルを書き戻し (`tabledoc dump`)、AI アシスタントや人が読む Markdown を書き出します (`tabledoc export --markdown`)。
 
 ## コマンド
 
 - `tabledoc validate`: 書き手のファイルを検査します
-- `tabledoc load`: 検査してから、説明を DuckLake のカタログに書きます ([DuckLake のカタログに書く](#ducklake-のカタログに書く))
+- `tabledoc load`: 検査してから、説明を DuckLake のカタログのテーブルに書きます ([DuckLake のカタログに書く](#ducklake-のカタログに書く))
 - `tabledoc dump`: カタログが持つ説明のファイルを書きます ([カタログからファイルを書く](#カタログからファイルを書く))
 - `tabledoc export --markdown`: 検査してから、テーブルごとに 1 つの Markdown として書き出します ([AI のために Markdown を書き出す](#ai-のために-markdown-を書き出す))
 
@@ -42,9 +49,11 @@ dbt のプロジェクトでは、テーブルのファイルをモデルの `.s
 $schema: https://tabledoc.queria.io/schemas/dataset/v1.json
 name: boj
 title: 日本銀行 時系列統計
+title_reading: ニチギンジケイレツトウケイ
 description: 日本銀行の時系列統計データ検索サイトの全ての統計です。
 language: ja
 topics: [日本銀行, 金利, 物価]
+synonyms: [日銀統計]
 homepage: https://github.com/queria-io/dataset-boj
 update_frequency: irregular
 licenses:
@@ -52,20 +61,21 @@ licenses:
     title: 日本銀行 著作権・免責事項
     url: https://www.boj.or.jp/about/copyright.htm
 sources:
-  - title: 日本銀行 時系列統計データ検索サイト
+  - id: search-site
+    title: 日本銀行 時系列統計データ検索サイト
     path: https://www.stat-search.boj.or.jp/
 contributors:
-  - title: 日本銀行
+  - id: boj
+    title: 日本銀行
     path: https://www.boj.or.jp/
     roles: [rightsHolder]
 spatial_coverage: [JP]
+image: docs/cover.png
 schemas:
   - name: timeseries
     title: 時系列統計
 documents:
   - docs/methodology.md
-queria:
-  title_kana: ニチギンジケイレツトウケイ
 ```
 
 | キー | 必須 | 内容 |
@@ -73,13 +83,13 @@ queria:
 | `$schema` | 必須 | 書式とバージョン |
 | `name` | 必須 | データセットの名前。`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
 | `schema` | | `tabledoc load` が説明を書くスキーマ。既定は `_tabledoc` |
-| `title`・`description`・`topics`・`homepage`・`language`・`issued`・`update_frequency` | | `language` は BCP 47 のタグで、言語を付けずに書いた文字列の言語です ([言語](#言語))。`issued` は `YYYY-MM-DD` |
+| `title`・`title_reading`・`description`・`topics`・`synonyms`・`homepage`・`language`・`issued`・`update_frequency` | | `title_reading` はタイトルの読み (日本語ならカタカナなど) です。`synonyms` は検索に使う別名です。`language` は BCP 47 のタグで、言語を付けずに書いた文字列の言語です ([言語](#言語))。`issued` は `YYYY-MM-DD` です |
 | `repository` | | データセットのソースコードのリポジトリの URL。例: `https://github.com/queria-io/dataset-boj`。省くと `tabledoc load` は Git の `origin` を使います |
-| `licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` | | テーブルのファイルに書くと、そのテーブルだけの値になります |
-| `schemas` | | `name`・`title`・`description`・`documents` (スキーマの文書) |
+| `licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` | | [ライセンス・出典・作成者](#ライセンス出典作成者)。`licenses`・`sources` と期間・地域は、テーブルのファイルに書くとそのテーブルだけの値になります |
+| `image` | | データセットを表す画像のパス。文書と一緒に送り、ルートからのパスのまま置きます |
+| `schemas` | | `name`・`title`・`title_reading`・`description`・`topics`・`synonyms`・`documents` (スキーマの文書) |
 | `documents` | | データセットの文書のパス |
-| `queria` | | Queria だけが読むキー ([読み手ごとのキー](#読み手ごとのキー)) |
-| `annotations` | | ほかの読み手のキー。読み手の名前ごとに書きます |
+| `annotations` | | ほかの読み手のキー。読み手の名前ごとに書きます ([ほかの読み手のキー](#ほかの読み手のキー)) |
 
 ## テーブルのファイル
 
@@ -92,8 +102,7 @@ title: 系列の一覧
 description: |-
   検索サイトの全 DB の系列の一覧です。1 行が 1 系列です。
 primary_key: [db, series_code]
-sources:
-  - path: https://www.stat-search.boj.or.jp/
+sources: [search-site]
 columns:
   - name: db
     title: DB 名
@@ -110,14 +119,15 @@ columns:
 | キー | 内容 |
 | --- | --- |
 | `name` | テーブル名。書くときはファイル名と同じにします ([テーブルとの対応](#テーブルとの対応)) |
-| `title`・`description`・`topics` | `topics` は GitHub のリポジトリのトピックと同じものです。以前の名前の `keywords` も `topics` として読みます。Queria が読むので、`queria:` の `topics` として書き出します |
+| `title`・`title_reading`・`description`・`topics`・`synonyms` | `topics` は GitHub のリポジトリのトピックと同じものです。以前の名前の `keywords` も `topics` として読みます |
+| `listed` | `false` にすると、一覧と検索に出しません。ほかのテーブルが読むだけのテーブルなどに使います。既定は `true` です |
 | `primary_key` | 1 行を識別する列の並び |
 | `licenses`・`sources`・`temporal_coverage`・`spatial_coverage` | データセットと違うときだけ書きます |
 | `sql`・`depends_on` | dbt で作らないテーブルの、元の SQL と元のテーブル |
 | `documents` | テーブルの文書のパス |
-| `columns` | `name`・`title`・`description`・`asset` と、semantic のキー (`entity`・`dimension`・`granularity`) |
+| `columns` | `name`・`title`・`title_reading`・`description`・`topics`・`synonyms`・`asset` と、semantic のキー (`entity`・`dimension`・`granularity`) |
 | `metrics` | 集計のしかた ([semantic](#semantic)) |
-| `queria`・`annotations` | 読み手ごとのキー |
+| `annotations` | ほかの読み手のキー |
 
 型・NULL・行数は書きません。構造はデータの置き場が持ちます。
 
@@ -129,6 +139,27 @@ columns:
 - dbt のプロジェクトでは、`<model>.sql` の隣の `<model>.tabledoc.yml` がそのモデルのテーブルを説明します。テーブル名はモデルの `schema` と `alias` で決まります。隣にモデルの無いテーブルのファイルはエラーです
 - それ以外の場所に置いたテーブルのファイルと、ファイル名と違う `name` はエラーです
 - dbt はモデルのパスの下の yml をすべて構文解析し、テーブルのファイルの `sources` を dbt の `sources:` として読もうとします。テーブルのファイルを置く dbt のプロジェクトは、`.dbtignore` に `*.tabledoc.yml` を書きます。書いていないと tabledoc はエラーにします
+
+## ライセンス・出典・作成者
+
+ライセンス・出典・作成者には、それぞれ `id` を付けます。短く、変えず、データセットの中で重複しない値にします。テーブルは `id` で参照するので、タイトルを直しても参照する側は変わりません。
+
+```yaml
+licenses:
+  - CC-BY-4.0                       # id だけ
+  - id: boj-copyright
+    title: 日本銀行 著作権・免責事項
+    url: https://www.boj.or.jp/about/copyright.htm
+sources:
+  - id: search-site
+    title: 日本銀行 時系列統計データ検索サイト
+    path: https://www.stat-search.boj.or.jp/
+```
+
+- 1 つの項目は `tabledoc.yml` かいずれかのテーブルのファイルに 1 回だけ全部書き、ほかの場所では `id` だけを書きます (`sources: [search-site]`)
+- 同じ `id` の項目とキーがすべて一致する項目 (`{id, title, path}` に対する `{id, path}` など) は、その項目を参照します。同じ `id` でキーの値が違う項目を書くとエラーです
+- `id` だけを書いたライセンスで、どこにも定義が無いものは、その `id` (`CC-BY-4.0` などの SPDX の識別子) として扱います。どこにも定義の無い出典の `id` はエラーです
+- ライセンスは `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`、出典は `{id, title, path}`、作成者は `{id, title, path, roles}` です。作成者はデータセットにだけ書きます
 
 ## 言語
 
@@ -148,9 +179,10 @@ columns:
     description: databases の db と同じ
 ```
 
-- tabledoc のキーのうち、値が文字列か文字列の一覧のものは、どちらの形でも書けます。たとえば `title`・`description`・`topics`・`homepage` と、ライセンス・出典・作成者の `title`・`url`・`path` です。一覧はタグから一覧への対応にします
-- 何かを指す値と、決まった語彙から選ぶ値は、値を 1 つだけ持ちます。`name`・`table`・`schema`・`repository`・`primary_key`・entity の `name`・`language`・`$schema`・`issued`・`update_frequency`・`dimension`・`granularity`・`agg`・`expr`・`sql`・`depends_on`・`spdx`・`id`・`roles`・`spatial_coverage`・`temporal_coverage` と、`documents` のパスです。言語ごとに変えると、同じテーブル・列・ファイルを指せなくなるためです
-- `queria:` と `annotations:` の下のキーは、それぞれの読み手が決めます
+- tabledoc のキーのうち、値が文字列か文字列の一覧のものは、どちらの形でも書けます。たとえば `title`・`title_reading`・`description`・`topics`・`synonyms`・`homepage` と、ライセンス・出典・作成者の `title`・`url`・`path` です。一覧はタグから一覧への対応にします
+- 何かを指す値と、決まった語彙から選ぶ値は、値を 1 つだけ持ちます。`name`・`table`・`schema`・`repository`・`primary_key`・entity の `name`・`language`・`$schema`・`issued`・`update_frequency`・`dimension`・`granularity`・`agg`・`expr`・`sql`・`depends_on`・`spdx`・`id`・`roles`・`listed`・`image`・`spatial_coverage`・`temporal_coverage` と、`documents` のパスです。言語ごとに変えると、同じテーブル・列・ファイルを指せなくなるためです
+- テーブルには `title`・`title_reading`・`description`・`topics`・`synonyms` をすべての言語で書きます。ほかの文字列 (`homepage`、ライセンス・出典・作成者、metric の `description`) は `language` の言語の値だけを書き、複数の言語で書いたときは警告を出します
+- `annotations:` の下のキーは、それぞれの読み手が決めます
 - タグは BCP 47 として検査します。文字列が 1 つも無い対応はエラーです
 - dbt のプロジェクトの yml では、`description` は文字列だけで、`language` の言語として読みます。dbt はそこに対応を受け付けません
 - `tabledoc.read` はこれらの値を常に対応で返します。文字列だけの値は `{<language>: 文字列}`、`language` が無ければ `{und: 文字列}` になります
@@ -187,10 +219,10 @@ columns:
 
 - テーブルは、有効なモデルのうち `materialized` が `table`・`view`・`incremental` のものです。モデルの `schema` と `alias` で名前を決めます。`ephemeral` と無効なモデル、seed・snapshot・テストはテーブルにならないので並べません。説明の無いモデルは dbt が埋める値 (`materialized`・`sql`・`depends_on`・`source_path`) だけで並べます
 - dbt にキーがあるものは dbt から読みます。モデルと列の `description`、`constraints` の主キー (`type: primary_key`。モデルか 1 つの列に書いたもの)、列の `entity`・`dimension`・`granularity` とセマンティックレイヤーの simple の `metrics` です
-- dbt にキーが無いもの (`title`・`topics`・`sources`・`licenses`・`documents`・列の `title` と `asset`・`queria` など) は、2 つの場所のどちらかに書きます。dbt の yml のモデルと列の `config.meta` か、モデルの `.sql` の隣のテーブルのファイル `<model>.tabledoc.yml` です。テーブルのファイルに書くと、テーブルごとの説明が 1 つのファイルにまとまり、dbt の yml はビルドのことだけになります。`config.meta` は、すでにそこに書いているチームのために読みます
+- dbt にキーが無いもの (`title`・`title_reading`・`topics`・`synonyms`・`listed`・`sources`・`licenses`・`documents`・列の `title` と `asset` など) は、2 つの場所のどちらかに書きます。dbt の yml のモデルと列の `config.meta` か、モデルの `.sql` の隣のテーブルのファイル `<model>.tabledoc.yml` です。テーブルのファイルに書くと、テーブルごとの説明が 1 つのファイルにまとまり、dbt の yml はビルドのことだけになります。`config.meta` は、すでにそこに書いているチームのために読みます
 - dbt のキー・`config.meta`・テーブルのファイルは、キーごとに (列はさらに列ごとに) 合わせて読みます。同じキーが 2 か所にあるとエラーです。dbt の空の `description` は書いていないものとして扱います。dbt の `constraints` があるときに `config.meta` やテーブルのファイルに `primary_key` を書いても、エラーです
 - 説明を書き換えるプログラムは、そのキーが今ある場所に書きます。まだどこにも無いキーはテーブルのファイルに書き、dbt の yml は書き換えません
-- `materialized` はモデルの materialization、`source_path` は `original_file_path`、`sql` は `compiled_code` です。`depends_on` は DuckDB の構文解析で SQL から読みます。ほかのデータセットのテーブルは `<リポジトリの URL>#<schema>.<table>` と書き、URL は `profiles.yml` (`--profiles`、無ければ `DBT_PROFILES_DIR`、無ければルート) の DuckLake の ATTACH から引きます
+- `materialized` はモデルの materialization、`source_path` は `original_file_path`、`sql` は `compiled_code` です。`depends_on` は DuckDB の構文解析で SQL から読みます。ほかのデータセットのテーブルは `<dataset>.<schema>.<table>` と書きます。`<dataset>` は SQL がそのデータセットを ATTACH した名前で、URL は `profiles.yml` (`--profiles`、無ければ `DBT_PROFILES_DIR`、無ければルート) の DuckLake の ATTACH から引きます
 - ガイドはモデルの `.sql` の隣の同じ名前の `.md` (dbt は docs ブロックの無い `.md` を無視します) か、テーブルの `documents` に並べた `README.md` です
 
 ```yaml
@@ -226,12 +258,9 @@ dbt で作らないテーブル (Python で作るものなど) は、同じプ�
 
 dbt で `metrics` を書くにはセマンティックレイヤー (`semantic_model: true` と time spine) が要ります。セマンティックレイヤーを使わないプロジェクトでも、列の `entity`・`dimension` は書けます。
 
-## 読み手ごとのキー
+## ほかの読み手のキー
 
-特定の読み手だけが使うキーは、その読み手の名前の下に書きます。tabledoc は中身を検査せず、`annotations.<読み手>` にそのまま入れて返します。
-
-- Queria のキーは `queria:` に書きます。tabledoc が名前を知っている唯一の読み手で、中身は Queria が検査します
-- ほかの読み手は `annotations: {<読み手>: {...}}` に書きます
+特定の読み手だけが使うキーは、`tabledoc.yml`・テーブルのファイル・列の `annotations: {<読み手>: {...}}` に書きます。tabledoc は中身を検査せず、書いたとおりに返し、テーブルには書きません。どの読み手も使えるキーは、tabledoc の語彙に入れます。
 
 ## Python から読む
 
@@ -244,7 +273,7 @@ report = tabledoc.Report()
 d = tabledoc.read(tabledoc.Options(root), report)  # root: tabledoc.yml のフォルダ
 if report.failed:
     print(report.render())
-d.dataset   # {"name": "boj", "title": …, "documents": ["README.md", "methodology.md"], "annotations": {…}}
+d.dataset   # {"name": "boj", "title": …, "documents": ["README.md", "methodology.md"], "image": "docs/cover.png"}
 d.schemas   # [{"name": "timeseries", "title": "Time series"}]
 d.tables    # [{"schema": "timeseries", "name": "series", "sql": …, "depends_on": […], "documents": ["timeseries/series/README.md"], "columns": […]}]
 d.files     # [File(path="README.md", sha256="…", bytes=1234, media_type="text/markdown", local="README.md"), …]
@@ -256,12 +285,60 @@ d.content(d.files[0])  # そのファイルの中身
 - `source` は Git の作業コピーから取ります。`repository` は `origin` の URL を https に直したもの (認証情報と `.git` を外す)、`commit` は HEAD、`path` はリポジトリのルートから tabledoc.yml のフォルダまでのパス、`dirty` はコミットしていない変更があるかです。Git の外と `Options(with_source=False)` では None です
 - 文書はパスで参照します。`files` に、説明と一緒に送るファイル (文書とそれらが指すファイル) を[データセットの中のパス](#データセットの中のパス)・sha256・大きさ・メディアタイプと、ルートからのパス `local` で並べます。`documents` (`schemas[].documents` も) の値は `files` のパスで、ファイル名が `README.md` のものがガイドです。`content` はデータセットに入れる中身を返します。Markdown の文書はリンクを書き換えた本文、以前の形式の Markdown のテーブルのファイルはフロントマターを外した本文です
 - semantic は書き方によらず `{type, name}` の形にします (`dimension: categorical` は `{"type": "categorical"}`)
+- `id` だけで書いたライセンスと出典は、それを定義した項目にして返します
 - テーブルは `schema`・`name` の順に並べ、キーの順も決まっています。同じファイルからは同じ値を返します
 - 構造 (型・NULL・行数・ビューかどうか) は入れません
 
+## テーブル
+
+説明をテーブルで表したものです。データと同じデータベースの、スキーマ `_tabledoc` のテーブルに置きます。テーブルは第三正規形です。どのセルも値を 1 つだけ持ち (一覧・STRUCT・JSON を持たない)、1 つの事実は 1 つのテーブルの 1 行にだけあります。
+
+- 行が何についてのものかは `schema_name`・`table_name`・`column_name` で表します。当たらない段は `''` です。データセットの行は 3 つとも `''`、スキーマの行は `table_name` と `column_name` が `''`、テーブルの行は `column_name` が `''` です
+- ほかのテーブルの行を指す列の名前は「指す先のテーブルの単数形_その主キー」にします (`license_id`・`source_id`・`contributor_id`)
+- テーブル名は複数形です。キーごとに 1 行を持つ `dataset` だけは単数形です
+- データベースの外部キーは使いません。書き手は、各行が指す行のあることを確認してから書きます
+- テーブルは今の説明だけを持ちます。過去のバージョンはカタログが持ちます
+
+| テーブル | 主キー | ほかの列 |
+| --- | --- | --- |
+| `dataset` | `key` | `value`。キーは `language`・`homepage`・`repository`・`issued` (`YYYY-MM-DD`)・`update_frequency`・`image` (`files` の `path`)・`temporal_start`・`temporal_end` です |
+| `schemas` | `schema_name` | |
+| `tables` | `schema_name`・`table_name` | `listed` (説明に `false` と書かない限り `true`)・`temporal_start`・`temporal_end`・`sql`・`source_path` |
+| `columns` | `schema_name`・`table_name`・`column_name` | `entity` (値のコード体系の名前。`lg_code` など)・`dimension` (`categorical` か `time`)・`granularity` |
+| `metrics` | `schema_name`・`table_name`・`metric_name` | `agg`・`expr`・`description` |
+| `descriptions` | `schema_name`・`table_name`・`column_name`・`language` | `title`・`title_reading`・`description` |
+| `topics` | `schema_name`・`table_name`・`column_name`・`language`・`topic` | |
+| `synonyms` | `schema_name`・`table_name`・`column_name`・`language`・`synonym` | |
+| `licenses` | `id` | `spdx`・`url`・`title`・`commercial_use`・`share_alike`・`attribution_required` |
+| `table_licenses` | `schema_name`・`table_name`・`license_id` | `position` |
+| `sources` | `id` | `title`・`path` |
+| `table_sources` | `schema_name`・`table_name`・`source_id` | `position` |
+| `contributors` | `id` | `title`・`path`・`position` |
+| `contributor_roles` | `contributor_id`・`role` | |
+| `table_areas` | `schema_name`・`table_name`・`area` | `position` (`spatial_coverage` の地域) |
+| `table_dependencies` | `schema_name`・`table_name`・`depends_on` | (このデータセットのテーブルは `<schema>.<table>`、ほかのデータセットのテーブルは `<dataset>.<schema>.<table>`) |
+| `files` | `path` | `sha256`・`bytes`・`media_type` ([データセットの中のファイル](#データセットの中のパス)) |
+
+- `descriptions`・`topics`・`synonyms` は、データセット・スキーマ・テーブル・列のどれかについての行です。`table_licenses`・`table_sources`・`table_areas` は、データセットかテーブルについての行です
+- `position` は書いた順番で、0 から数えます
+- ファイルで日付や数値で書いた値 (`issued`・`temporal_start`) は文字列で持ちます
+- `files` は、文書とそれが指すファイルを sha256 で示します。ファイルそのものは、カタログかその横に置きます (FDL ではデータセットの asset)
+
+### プロファイル
+
+データから数えた値を持つテーブルが 3 つあります。読み手がその値で検索するためのもので、置くかどうかは任意です。人は書きません。プログラムがデータ (DuckLake や Iceberg の列の統計、または SQL の集計) から数えて書き、データが変わったらマージせずに書き直します。
+
+| テーブル | 主キー | ほかの列 |
+| --- | --- | --- |
+| `table_profiles` | `schema_name`・`table_name` | `row_count` |
+| `column_profiles` | `schema_name`・`table_name`・`column_name` | `null_count`・`distinct_count`・`min_value`・`max_value` (文字列) |
+| `column_values` | `schema_name`・`table_name`・`column_name`・`value` | `row_count`。異なる値が 100 個以下の列だけ |
+
+FDL では、各バージョンのプロファイルを FDL 自身がこの形で持ち、これらのテーブルには書きません。複数のデータセットをまたぐ検索は読み手が行います。読み手は各データセットのテーブルを集めて、自分の索引を作ります。
+
 ## DuckLake のカタログに書く
 
-`tabledoc load` は `validate` と同じ検査をしてから、説明を [DuckLake](https://ducklake.select) のカタログの 1 つのスキーマに、普通のテーブルとして書きます。スキーマは `tabledoc.yml` の `schema` か `--schema` で指定し、指定が無ければ `_tabledoc` です。テーブルはデータと一緒にバージョン管理され、カタログを読むプログラムは説明も SQL で読めます。fdl では、カタログは `fdl clone` が作る作業用メタデータで、`fdl commit` でバージョンにします。
+`tabledoc load` は `validate` と同じ検査をしてから、説明を [DuckLake](https://ducklake.select) のカタログの[テーブル](#テーブル)に書きます。スキーマは `_tabledoc` で、`tabledoc.yml` の `schema` か `--schema` で変えられます。fdl では、カタログは `fdl clone` が作る作業用メタデータで、`fdl commit` でバージョンにします。
 
 ```bash
 tabledoc load --ducklake work.sqlite --out build/assets
@@ -269,32 +346,18 @@ fdl commit work.sqlite -m "..." --assets build/assets
 ```
 
 - `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ `fdl clone` がカタログの横に記録したフォルダ)。HTTP のデータファイルは DuckDB の secret で読みます。カタログが fdl の作業用メタデータで `FDL_TOKEN` があるときは、`fdl clone` が記録した remote にそのトークンを送るので、非公開データセットのファイルも読めます
-- `--schema`: 書くスキーマ (既定は `tabledoc.yml` の `schema`、無ければ `_tabledoc`)。Queria は `_queria` を読みます。Queria で公開するデータセットでは `--schema _queria` (か `schema: _queria`) を指定します
+- `--schema`: 書くスキーマ (既定は `tabledoc.yml` の `schema`、無ければ `_tabledoc`)
 - `--out`: `fdl commit --assets` に渡すフォルダも書きます。`files` テーブルの各ファイルを `files/<path>` に置きます。`--assets <フォルダ>` を付けると、その下のファイル (ビルドが作った asset の列のファイル) を `data/` にリンクします。フォルダは空か前の `load` が書いたもので、fdl だけが書く `.fdl/` の外でなければなりません
-- `--unlisted`: 説明の無いテーブルとビューにも `tables` の行を作り、`published` を false にします。dbt が作ったテーブルで、SQL のほかに説明がどこにも書かれていないものも `published` を false にします。書き込むスキーマと、`dataset`・`schemas`・`tables`・`columns`・`files` のテーブルをすべて持つスキーマ (以前の load が書いたスキーマなど) のテーブルには行を作りません
+- `--unlisted`: 説明の無いテーブルとビューにも `tables` の行を作り、`listed` を false にします。dbt が作ったテーブルで、SQL のほかに説明がどこにも書かれていないものも `listed` を false にします。書き込むスキーマと、`dataset`・`schemas`・`tables`・`columns`・`files` のテーブルをすべて持つスキーマ (以前の load が書いたスキーマなど) のテーブルには行を作りません
 - 説明や主キーにあってカタログに無いテーブルと列、`varchar` でない `asset` の列はエラーです。名前は DuckDB と同じく大文字と小文字を区別せずに照合し、カタログの表記で書きます
-- 列に入らない値 (`YYYY-MM-DD` 以外の `issued` など) はエラーです
+- 列に入らない値 (`YYYY-MM-DD` 以外の `issued` など) と、指す先の行が無い行はエラーです
 - エラー (`--strict` では警告も) があると何も書きません
-
-| テーブル | 主キー | 元の値 |
-| --- | --- | --- |
-| `dataset` | `id` (常に `dataset`) | `tabledoc.yml` の `language`・`homepage`・`repository` (無ければ Git の `origin` を https で)・`issued`・`update_frequency`・`licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage`、`queria:` の `title_kana`・`cover`・`ai_context` |
-| `schemas` | `schema` | `title` か `description` のある `schemas[]` |
-| `tables` | `schema`・`name` | 説明のあるテーブルとビュー: `licenses`・`sources`・`temporal_coverage`・`spatial_coverage`・`sql`・`depends_on`・`source_path`、`queria:` の `published`・`ai_context` |
-| `columns` | `schema`・`table`・`name` | `title`・`description`・`entity` のどれかがある列。`entity` は entity の `name` (`lg_code` などのコード体系) です |
-| `texts` | `schema`・`table`・`column`・`language` | データセット・スキーマ・テーブル・列の `title`・`description`・`topics`。書いた言語ごとに 1 行です。対象に当たらない段は `''` にします。データセットの行は 3 つとも `''`、スキーマの行は `table` と `column` が `''`、テーブルの行は `column` が `''` です |
-| `files` | `path` | [データセットの中のファイル](#データセットの中のパス): `path`・`sha256`・`bytes`・`media_type` |
-
-- 複数の言語で書いた文字列 ([言語](#言語)) は、言語ごとに 1 行として `texts` に書きます。1 つの言語で書いたデータセットは、説明する対象ごとに 1 行です。言語を追加すると行が増え、ほかのテーブルは変わりません
-- ほかのテーブルは各キーに値を 1 つだけ持ちます。`texts` に入らないキー (ライセンスの `title` など) を複数の言語で書いたときは、`language` の言語の値を書き、警告を出します
-- `topics` (以前の名前の `keywords`) は、`queria:` に `topics` が無ければ書きます。`queria:` の `themes` は書きません
-- `licenses` は `{id, spdx, url, title, commercial_use, share_alike, attribution_required}` のリストです。文字列で書いたライセンスは `{id}` になります
-- `source_path` はそのテーブルを定義しているファイルの、`repository` のルートからのパス (dbt の `original_file_path` に、Git の作業コピーの中での `tabledoc.yml` のフォルダを前に付けたもの)、`sql` はそのテーブルを作った SQL です。分からないときはどちらも NULL です。テーブルかビューかは書きません (カタログが持っています)
-- ビューの行には `sql` と `depends_on` を書きません。ビューの SQL はメタデータが持ちます
-- `annotations:` のうち Queria 以外の読み手のキーは書きません
-- ファイルの中身はカタログに入れません。`files.sha256` に各ファイルの sha256 を書き、`fdl commit --assets` が中身ごとにファイルをアップロードします
-- 行は主キーごとに追加・更新・削除するので、`load` は値の違うセルだけを変えます。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql`・`depends_on`・`source_path` をカタログから引き継ぎます
-- 主キーと asset の列はこれらのテーブルに書きません。カタログが `fdl clone` の作った作業用メタデータのとき (横に `<catalog>.fdl/state.json`、fdl-cli 0.34 では `<catalog>.fdl.json` があるとき)、`load` は `fdl declare` で FDL に宣言します (fdl-cli 0.34 以降の `fdl` が `PATH` にあることが必要です)。宣言するのは、各テーブルの `primary_key` と、列に `asset` があるテーブルの asset の列 (ビューにはどちらも宣言しません)、`published` が false のテーブルとビューにプロファイルを作らないことと、説明したほかのテーブルにプロファイルを作ること、SQL が読むほかのデータセット (dbt の `profiles.yml` から) の依存先、それにこれらのテーブルの主キーと asset の列 `files.sha256` とプロファイルを作らないことです。`fdl declare list` と違うものだけを実行し、説明に無いものは FDL の宣言のまま残します
+- 行は主キーごとに追加・更新・削除するので、`load` は値の違うセルだけを変えます。dbt のビルドが無いとき (説明に `sql` が無いとき) は、各テーブルの `sql`・`source_path`・`table_dependencies` をカタログから引き継ぎます
+- `source_path` はそのテーブルを定義しているファイルの、`repository` のルートからのパス (dbt の `original_file_path` に、Git の作業コピーの中での `tabledoc.yml` のフォルダを前に付けたもの)、`sql` はそのテーブルを作った SQL です。判定できないときはどちらも NULL です。テーブルかビューかは書きません (カタログが持っています)
+- ビューの行には `sql` と `table_dependencies` を書きません。ビューの SQL はメタデータが持ちます
+- `repository` は `tabledoc.yml` の `repository`、無ければ Git の `origin` を https にしたものです
+- 以前の tabledoc が書いた、この規約のものでないテーブル (`texts`) と、この規約のテーブルにある規約のものでない列は削除します。スキーマのほかのテーブルはそのまま残します。プロファイルのテーブルは書かず、そのまま残します
+- 主キーと asset の列はこれらのテーブルに書きません。カタログが `fdl clone` の作った作業用メタデータのとき (横に `<catalog>.fdl/state.json`、fdl-cli 0.34 では `<catalog>.fdl.json` があるとき)、`load` は `fdl declare` で FDL に宣言します (fdl-cli 0.34 以降の `fdl` が `PATH` にあることが必要です)。宣言するのは、各テーブルの `primary_key` と、列に `asset` があるテーブルの asset の列 (ビューにはどちらも宣言しません)、`listed` が false のテーブルとビューにプロファイルを作らないことと、説明したほかのテーブルにプロファイルを作ること、SQL が読むほかのデータセット (dbt の `profiles.yml` から) の依存先、それにこれらのテーブルの主キーと asset の列 `files.sha256` とプロファイルを作らないことです。`fdl declare list` と違うものだけを実行し、説明に無いものは FDL の宣言のまま残します
 - コメント (`COMMENT ON`) は書きません
 
 ## カタログからファイルを書く
@@ -310,8 +373,9 @@ tabledoc dump --ducklake work.sqlite --out description/
 - `--name`: `tabledoc.yml` の `name`。既定はリポジトリの URL の最後の部分です
 - フォルダに同じファイルがあると、`--force` を付けない限り何も書きません。カタログのパスがフォルダの外を指すときはエラーです
 - テーブルのファイルは `<schema>/<table>.tabledoc.yml` に書きます。ファイルはデータセットの中のパスのまま書き、フォルダの Markdown (`README.md` を先頭に) を、そのフォルダが説明する対象の `documents` に並べます。ルートの `README.md` は並べなくてもデータセットの説明です
-- `texts` の行は、1 つの言語だけでそれがデータセットの `language` なら文字列だけで、それ以外は対応で書きます
-- テーブルに無いものは書きません。主キー、asset の列、entity の種類 (`foreign` と書きます)・dimension・granularity・metrics、ほかの読み手のキーと、dbt の `profiles.yml` から取る SQL が読むほかのデータセットです。`--unlisted` だけが書いたテーブルにはテーブルのファイルを作りません。`sql` と `depends_on` は `source_path` の無いテーブル (dbt で作らないテーブル) にだけ書きます
+- 文字列は、1 つの言語だけでそれがデータセットの `language` なら文字列だけで、それ以外は対応で書きます
+- ライセンスと出典は、最初に使う場所 (データセット、次にテーブルを名前の順) に全部書き、その後は `id` だけを書きます。`id` しか持たないライセンスは `id` だけを書きます
+- テーブルに無いものは書きません。主キー、asset の列、entity の種類 (`foreign` と書きます)、dimension の名前、`annotations` と、dbt の `profiles.yml` から取る SQL が読むほかのデータセットです。`--unlisted` だけが書いたテーブルにはテーブルのファイルを作りません。`sql` と `depends_on` は `source_path` の無いテーブル (dbt で作らないテーブル) にだけ書きます
 
 ## AI のために Markdown を書き出す
 
@@ -330,7 +394,7 @@ tabledoc export --markdown ai-docs/
 - ファイルは [データセットの中のパス](#データセットの中のパス) に書きます。`files` のほかのファイル (文書、画像) もそれぞれのパスに書くので、ガイドの中のリンクはそのまま使えます
 - ガイドは区切り線 (`---`) の後に、書かれたとおりに置きます。見出しのレベルは変えません
 - 複数の言語で書いた値は、データセットの `language` のもの (無ければ und、それも無ければタグの順で最初のもの) を書きます
-- 読み手ごとのキー (`queria:`、`annotations:`) は書きません
+- ほかの読み手のキー (`annotations:`) は書きません
 - 型・NULL の可否・行数は説明に含まれないので、書きません
 - フォルダに同じパスのファイルがあると、`--force` を付けない限り何も書きません。前の書き出しにあって今回書かないファイルは、フォルダに残ります
 - フォルダには `.tabledoc-export` というファイルも書きます。tabledoc はこのファイルがあるフォルダの中のファイルを読まないので、書き出すフォルダをルートの中に置けます
@@ -340,8 +404,9 @@ tabledoc export --markdown ai-docs/
 
 すべてのデータセットを一度に書き換えずに済むように、tabledoc は置き換える前の形式も読みます。新しく書くのは tabledoc の形式だけです。
 
-- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。最上位の `title_kana`・`themes`・`cover`・`ai_context` は `queria:` の下にあるものとして扱います。`catalogs` は `depends_on` に使い、`dependencies` として返します
-- フロントマターに `$schema: https://queria.io/schemas/table/v1.json` を持つ Markdown は、フロントマターをテーブルのファイル、本文をガイドとして読みます。`table:` で対応を決め、`fields` は `columns`、`published`・`themes`・`ai_context` は `queria:` の下として扱います。ガイドはその Markdown のパスで、送る本文はフロントマターを外したものです
+- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。`title_kana` は `title_reading`、`cover` はファイルのパス (拡張子のあるもの) のときだけ `image`、`ai_context` の `synonyms` は `synonyms` として読みます。`themes` と `ai_context` のほかの値は読みません。`catalogs` は `depends_on` に使い、`dependencies` として返します
+- 以前の形式のファイルで `id` の無い出典と作成者は、`path` (無ければ `title`) を `id` にします
+- フロントマターに `$schema: https://queria.io/schemas/table/v1.json` を持つ Markdown は、フロントマターをテーブルのファイル、本文をガイドとして読みます。`table:` で対応を決め、`fields` は `columns`、`published` は `listed` として読みます。`ai_context` と `themes` は `queria.yml` と同じく扱います。ガイドはその Markdown のパスで、送る本文はフロントマターを外したものです
 - 列の `semantic: {role, name, agg}` は次のように読み替えます。`role: entity` → `entity: {type: foreign, name}`、その列だけで `primary_key` になっていれば `type: primary`。`role: dimension` → `dimension: categorical`。`role: measure` → テーブルの metrics に `{name: <列名>, agg, expr: <列名>}` (`agg` が無ければ警告)
 - `docs` (`schemas[].docs` も) は `documents`、スキーマの `guide` はそのスキーマの `documents` の 1 つとして読みます
 - 同じフォルダに `tabledoc.yml` と `queria.yml` があるとエラーになります

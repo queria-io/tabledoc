@@ -269,6 +269,10 @@ def read(options: Options, report: Report) -> Description:
         report,
         named,
     )
+    image = _local(record["image"], root, dataset.path, report) if shape.present(record.get("image")) else None
+    if image:
+        # An image keeps its path under the root, as a file a document links to does.
+        named.append((image, image, dataset.path))
     schema_list = [_place(s, s["name"], root, dataset.path, report, named) for s in _schemas(record, tables)]
     shaped = lineage.fill([_table(t) for t in tables], {**attached, **dataset.dependencies}, report)
     by_key = {t.key: t for t in tables}
@@ -286,22 +290,82 @@ def read(options: Options, report: Report) -> Description:
     _warn_unlisted(root, [s["name"] for s in schema_list], tables, {local for local, _, _ in named}, report)
     sent = files.collect(root, named, report)
     language = str(record.get("language") or languages.UNDETERMINED)
-    return Description(
-        root=root,
-        dataset=languages.dataset(
+    described, listed = _by_id(
+        languages.dataset(
             {
                 **shape.pick(record, shape.DATASET_KEYS),
+                **({"image": image} if image else {}),
                 **top,
                 **shape.annotations(record),
             },
             language,
         ),
+        [languages.table(_ordered(t), language) for t in placed_tables],
+        [dataset.path, *(by_key[(t["schema"], t["name"])].path for t in placed_tables)],
+        report,
+    )
+    return Description(
+        root=root,
+        dataset=described,
         schemas=[languages.schema(s, language) for s in schema_list if set(s) - {"name"}],
-        tables=[languages.table(_ordered(t), language) for t in placed_tables],
+        tables=listed,
         files=sent,
         source=git.source(root) if options.with_source else None,
         dependencies={name: {"url": url} for name, url in sorted({**attached, **dataset.dependencies}.items())} or None,
     )
+
+
+def _part_of(entry: dict[str, Any], other: dict[str, Any]) -> bool:
+    """Whether every key of ``entry`` is in ``other`` with the same value."""
+    return all(k in other and other[k] == v for k, v in entry.items())
+
+
+def _by_id(
+    dataset: dict[str, Any], tables: list[dict[str, Any]], paths: list[Path], report: Report
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """The dataset and its tables with each license and source written as its id alone, or
+    as part of the entry that defines it, replaced by that entry. ``paths`` are the files the
+    dataset and each table are described in, for the findings.
+
+    An entry whose keys all match another with the same id (`{id, path}` beside
+    `{id, title, path}`, say) is a reference to it; two entries with the same id that
+    differ in a key are an error. A license id nothing defines stays `{id}` (such as
+    CC-BY-4.0); a source id nothing defines is an error. Two contributors with the same
+    id are an error.
+    """
+    seen: set[str] = set()
+    for c in dataset.get("contributors") or []:
+        if isinstance(c, dict) and c.get("id") in seen:
+            report.error("defined-twice", f"contributor {c['id']} is written twice", paths[0])
+        seen.add(c.get("id") if isinstance(c, dict) else None)
+    records = [dataset, *tables]
+    for key, single in (("licenses", "license"), ("sources", "source")):
+        defined: dict[str, dict[str, Any]] = {}
+        for record, where in zip(records, paths):
+            for entry in record.get(key) or []:
+                # An entry without an id is a schema error already reported.
+                if not isinstance(entry, dict) or "id" not in entry:
+                    continue
+                held = defined.setdefault(entry["id"], entry)
+                if _part_of(held, entry):
+                    defined[entry["id"]] = entry
+                elif not _part_of(entry, held):
+                    report.error("defined-twice", f"{single} {entry['id']} is defined twice, differently", where)
+
+        def resolved(entry: Any, where: Path, key: str = key, defined: dict = defined) -> Any:
+            if isinstance(entry, dict):
+                return defined.get(entry.get("id"), entry)
+            if entry in defined:
+                return defined[entry]
+            if key == "sources":
+                report.error("undefined-id", f"source {entry} is not defined; write it with its title and path", where)
+            return {"id": entry}
+
+        records = [
+            {**r, key: [resolved(e, where) for e in r[key]]} if isinstance(r.get(key), list) else r
+            for r, where in zip(records, paths)
+        ]
+    return records[0], records[1:]
 
 
 def _ordered(table: dict[str, Any]) -> dict[str, Any]:
