@@ -44,8 +44,8 @@ title: 注文
 description: 1 行が 1 件の注文です。
 primary_key: [order_id]
 columns:
-  - name: order_id
-    entity: primary
+  - name: city_code
+    entity: city
   - name: ordered_at
     dimension: time
     granularity: day

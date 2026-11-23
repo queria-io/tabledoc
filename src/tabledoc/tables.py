@@ -6,8 +6,8 @@ a part that does not apply is `''`, so the dataset's rows have all three `''`.
 
     dataset             key, value: the dataset's one-valued keys
     schemas             each schema
-    tables              each table and view: listed, temporal coverage, sql, source_path
-    columns             each column described: entity, dimension, granularity
+    tables              each table and view: hidden, temporal coverage, sql, source_path
+    columns             each column described or in the primary key: key_position, entity, dimension, granularity
     metrics             each metric of a table
     descriptions        title, title_reading and description, one row per language
     topics, synonyms    one row per word and language
@@ -48,10 +48,10 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
     "dataset": ({"key": _V, "value": _V}, ("key",)),
     "schemas": ({"schema_name": _V}, ("schema_name",)),
     "tables": (
-        {**_ON, "listed": "BOOLEAN", "temporal_start": _V, "temporal_end": _V, "sql": _V, "source_path": _V},
+        {**_ON, "hidden": "BOOLEAN", "temporal_start": _V, "temporal_end": _V, "sql": _V, "source_path": _V},
         tuple(_ON),
     ),
-    "columns": ({**_WHERE, "entity": _V, "dimension": _V, "granularity": _V}, _AT),
+    "columns": ({**_WHERE, "key_position": "INTEGER", "entity": _V, "dimension": _V, "granularity": _V}, _AT),
     "metrics": ({**_ON, "metric_name": _V, "agg": _V, "expr": _V, "description": _V}, (*_ON, "metric_name")),
     "descriptions": ({**_WHERE, "language": _V, "title": _V, "title_reading": _V, "description": _V}, (*_AT, "language")),
     "topics": ({**_WHERE, "language": _V, "topic": _V}, (*_AT, "language", "topic")),
@@ -59,7 +59,6 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
     "licenses": (
         {
             "id": _V,
-            "spdx": _V,
             "url": _V,
             "title": _V,
             "commercial_use": "BOOLEAN",
@@ -69,9 +68,9 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
         ("id",),
     ),
     "table_licenses": ({**_ON, "license_id": _V, "position": "INTEGER"}, (*_ON, "license_id")),
-    "sources": ({"id": _V, "title": _V, "path": _V}, ("id",)),
+    "sources": ({"id": _V, "title": _V, "url": _V}, ("id",)),
     "table_sources": ({**_ON, "source_id": _V, "position": "INTEGER"}, (*_ON, "source_id")),
-    "contributors": ({"id": _V, "title": _V, "path": _V, "position": "INTEGER"}, ("id",)),
+    "contributors": ({"id": _V, "title": _V, "url": _V, "position": "INTEGER"}, ("id",)),
     "contributor_roles": ({"contributor_id": _V, "role": _V}, ("contributor_id", "role")),
     "table_areas": ({**_ON, "area": _V, "position": "INTEGER"}, (*_ON, "area")),
     "table_dependencies": ({**_ON, "depends_on": _V}, (*_ON, "depends_on")),
@@ -79,17 +78,19 @@ TABLES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
 }
 
 #: The optional profile tables: computed from the data, never merged, and not written by load.
+#: They hold what an FDL profile holds, under the same names.
 PROFILES: dict[str, tuple[dict[str, str], tuple[str, ...]]] = {
-    "table_profiles": ({**_ON, "row_count": "BIGINT"}, tuple(_ON)),
+    "table_profiles": ({**_ON, "rows": "BIGINT"}, tuple(_ON)),
     "column_profiles": (
-        {**_WHERE, "null_count": "BIGINT", "distinct_count": "BIGINT", "min_value": _V, "max_value": _V},
+        {**_WHERE, "null_count": "BIGINT", "distinct_count": "BIGINT", "min": _V, "max": _V},
         _AT,
     ),
-    "column_values": ({**_WHERE, "value": _V, "row_count": "BIGINT"}, (*_AT, "value")),
+    "column_values": ({**_WHERE, "value": _V, "count": "BIGINT"}, (*_AT, "value")),
 }
 
 #: The keys of the `dataset` table.
 DATASET_KEYS = (
+    "name",
     "language",
     "homepage",
     "repository",
@@ -220,20 +221,19 @@ def _on(record: dict[str, Any], on: tuple[str, str], language: str) -> Rows:
 
 
 def _column(t: dict[str, Any], c: dict[str, Any]) -> dict[str, Any] | None:
-    """The `columns` row of ``c``, when it says anything."""
-    said = {k for k in (*TEXTS, "topics", "synonyms", "entity", "dimension", "granularity") if _present(c.get(k))}
-    if not said or not c.get("name"):
+    """The `columns` row of ``c``, when it says anything or is part of the primary key."""
+    key = [str(k).lower() for k in t.get("primary_key") or []]
+    name = c.get("name")
+    position = key.index(str(name).lower()) if name and str(name).lower() in key else None
+    picked = {k: c.get(k) for k in ("entity", "dimension", "granularity")}
+    said = {k for k in (*TEXTS, "topics", "synonyms") if _present(c.get(k))} | {k for k, v in picked.items() if v}
+    if not name or (not said and position is None):
         return None
-    entity, dimension = c.get("entity") or {}, c.get("dimension") or {}
-    picked = {
-        "entity": entity.get("name"),
-        "dimension": dimension.get("type"),
-        "granularity": c.get("granularity"),
-    }
     return {
         "schema_name": t["schema"],
         "table_name": t["name"],
-        "column_name": c["name"],
+        "column_name": name,
+        **({"key_position": position} if position is not None else {}),
         **{k: v for k, v in picked.items() if v},
     }
 
@@ -246,16 +246,16 @@ def _merge(into: Rows, more: Rows) -> None:
 def rows(
     description: Description,
     carried: Rows | None = None,
-    unlisted: set[Key] | None = None,
+    undescribed: set[Key] | None = None,
     views: set[Key] | None = None,
 ) -> Rows:
     """The rows of each table for ``description``.
 
     ``carried`` is what the catalog held: without a dbt build (no `sql` in the
     description), each table keeps its `sql`, `source_path` and dependencies from
-    it. ``unlisted`` are the catalog's tables and views: those with no
+    it. ``undescribed`` are the catalog's tables and views: those with no
     description, and those dbt built that say nothing but their SQL, are written
-    with `listed` false. ``views`` are the catalog's views, whose SQL the metadata
+    with `hidden` true. ``views`` are the catalog's views, whose SQL the metadata
     already holds.
     """
     built = not carried or any("sql" in t for t in description.tables)
@@ -278,12 +278,12 @@ def rows(
         if t.get("source_path") and folder:
             t = {**t, "source_path": f"{folder}/{t['source_path']}"}
         t = {**kept.get(key, {}), **t}
-        listed = t.get("listed")
-        if listed is None:
-            listed = not (unlisted is not None and not _said(t))
+        hidden = t.get("hidden")
+        if hidden is None:
+            hidden = undescribed is not None and not _said(t)
         coverage = t.get("temporal_coverage") or {}
         record = {
-            "listed": listed,
+            "hidden": hidden,
             "temporal_start": _text(coverage.get("start")),
             "temporal_end": _text(coverage.get("end")),
             "sql": None if key in viewed else t.get("sql"),
@@ -298,7 +298,10 @@ def rows(
             ]
         _merge(found, _about(t, (*on, "")))
         _merge(found, _on(t, on, language))
-        for c in t.get("columns") or []:
+        written = t.get("columns") or []
+        named = {str(c.get("name")).lower() for c in written}
+        keyed = [{"name": k} for k in t.get("primary_key") or [] if str(k).lower() not in named]
+        for c in [*written, *keyed]:
             row = _column(t, c)
             if row is not None:
                 found["columns"].append(row)
@@ -315,7 +318,7 @@ def rows(
 
     for t in description.tables:
         table(t)
-    for s, n in sorted(unlisted or set()):
+    for s, n in sorted(undescribed or set()):
         if fold(s, n) not in described:
             table({"schema": s, "name": n})
 
@@ -337,14 +340,14 @@ def rows(
     records = [dataset, *description.tables]
     licenses = {e["id"]: e for r in records for e in r.get("licenses") or []}
     found["licenses"] = [
-        {"id": i, **_entry(e, ("spdx", "url", "title", "commercial_use", "share_alike", "attribution_required"), language)}
+        {"id": i, **_entry(e, ("url", "title", "commercial_use", "share_alike", "attribution_required"), language)}
         for i, e in sorted(licenses.items())
     ]
     sources = {e["id"]: e for r in records for e in r.get("sources") or []}
-    found["sources"] = [{"id": i, **_entry(e, ("title", "path"), language)} for i, e in sorted(sources.items())]
+    found["sources"] = [{"id": i, **_entry(e, ("title", "url"), language)} for i, e in sorted(sources.items())]
     contributors = dataset.get("contributors") or []
     found["contributors"] = [
-        {"id": c["id"], **_entry(c, ("title", "path"), language), "position": i} for i, c in enumerate(contributors)
+        {"id": c["id"], **_entry(c, ("title", "url"), language), "position": i} for i, c in enumerate(contributors)
     ]
     found["contributor_roles"] = [
         {"contributor_id": c["id"], "role": r} for c in contributors for r in dict.fromkeys(c.get("roles") or [])
@@ -359,9 +362,9 @@ def _said(table: dict[str, Any]) -> bool:
     return bool(table.get("documents")) or shape.described(record)
 
 
-def listed(table: dict[str, Any]) -> bool:
-    """Whether a row of `tables` is listed: unless `listed` is false."""
-    return table.get("listed") is not False
+def hidden(table: dict[str, Any]) -> bool:
+    """Whether a row of `tables` is hidden from lists and search."""
+    return table.get("hidden") is True
 
 
 # -- checking the rows -------------------------------------------------------------------

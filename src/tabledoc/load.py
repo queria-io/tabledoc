@@ -37,9 +37,9 @@ class Target:
     out: Path | None = None
     #: Files the build made for its asset columns, linked into ``out/data``.
     assets: Path | None = None
-    #: Write the catalog's tables that have no description, with `listed` false.
-    unlisted: bool = False
-    #: The schema to write into; default tabledoc.yml's `schema`, else `_tabledoc`.
+    #: Write the catalog's tables that have no description, with `hidden` true.
+    hide_undescribed: bool = False
+    #: The schema to write into; default `_tabledoc`.
     schema: str | None = None
 
 
@@ -214,17 +214,17 @@ def _warned(report: Report, but: str = "") -> bool:
     return any(f.code != but for f in report.of(Level.WARNING))
 
 
-def _keeps_dbt_sql(description: Description, carried: tables.Rows, unlisted: set[tables.Key] | None) -> bool:
+def _keeps_dbt_sql(description: Description, carried: tables.Rows, undescribed: set[tables.Key] | None) -> bool:
     """Whether the load keeps the SQL of every table dbt built, as the catalog holds it: there
     is such a table, the description has no `sql` (no build), and each of them keeps its row
-    (it is described, or ``unlisted`` holds it)."""
+    (it is described, or ``undescribed`` holds it)."""
     built = {
         tables.fold(t["schema_name"], t["table_name"])
         for t in carried.get("tables") or []
         if t.get("source_path") and t.get("schema_name") is not None
     }
     kept = {tables.fold(t["schema"], t["name"]) for t in description.tables}
-    kept |= {tables.fold(*key) for key in unlisted or set()}
+    kept |= {tables.fold(*key) for key in undescribed or set()}
     return bool(built) and built <= kept and not any("sql" in t for t in description.tables)
 
 
@@ -239,8 +239,8 @@ def _carried_over(report: Report) -> None:
 
 
 def schema_of(target: Target, description: Description) -> str:
-    """``target.schema``, else tabledoc.yml's `schema`, else `_tabledoc`."""
-    return target.schema or description.dataset.get("schema") or tables.SCHEMA
+    """``target.schema``, else `_tabledoc`."""
+    return target.schema or tables.SCHEMA
 
 
 def load(options: Options, target: Target, report: Report, *, strict: bool = False) -> Description | None:
@@ -276,12 +276,12 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
             description = _spelled(description, columns)
             # Without a dbt build, the SQL and dependencies stay as the catalog has them.
             carried = tables.read(con, ALIAS, schema)
-            unlisted = in_catalog | views if target.unlisted else None
-            if _keeps_dbt_sql(description, carried, unlisted):
+            undescribed = in_catalog | views if target.hide_undescribed else None
+            if _keeps_dbt_sql(description, carried, undescribed):
                 _carried_over(report)
             if strict and _warned(report):
                 return None
-            found = tables.rows(description, carried, unlisted, views)
+            found = tables.rows(description, carried, undescribed, views)
             for wrong in tables.dangling(found, schema):
                 report.error("dangling-row", wrong, description.root)
             if report.failed:
@@ -293,7 +293,7 @@ def load(options: Options, target: Target, report: Report, *, strict: bool = Fal
         target.catalog,
         description,
         schema,
-        unlisted={f"{t['schema_name']}.{t['table_name']}" for t in found["tables"] if not tables.listed(t)},
+        hidden={f"{t['schema_name']}.{t['table_name']}" for t in found["tables"] if tables.hidden(t)},
         views={f"{s}.{n}" for s, n in views},
     )
     if target.out is not None:

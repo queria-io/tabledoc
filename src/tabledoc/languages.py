@@ -18,7 +18,7 @@ TABLE = ("title", "title_reading", "description", "topics", "synonyms")
 COLUMN = ("title", "title_reading", "description", "topics", "synonyms")
 METRIC = ("description",)
 #: Keys of an entry of `licenses`, `sources` and `contributors`.
-ENTRY = ("title", "url", "path")
+ENTRY = ("title", "url")
 LISTS = ("licenses", "sources", "contributors")
 
 

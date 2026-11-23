@@ -63,11 +63,11 @@ licenses:
 sources:
   - id: search-site
     title: Bank of Japan time-series data search site
-    path: https://www.stat-search.boj.or.jp/
+    url: https://www.stat-search.boj.or.jp/
 contributors:
   - id: boj
     title: Bank of Japan
-    path: https://www.boj.or.jp/
+    url: https://www.boj.or.jp/
     roles: [rightsHolder]
 spatial_coverage: [JP]
 image: docs/cover.png
@@ -82,8 +82,7 @@ documents:
 | --- | --- | --- |
 | `$schema` | yes | The format and its version |
 | `name` | yes | The dataset's name: `^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
-| `schema` | | The schema `tabledoc load` writes the description into; default `_tabledoc` |
-| `title`, `title_reading`, `description`, `topics`, `synonyms`, `homepage`, `language`, `issued`, `update_frequency` | | `title_reading` is how the title is read (its kana in Japanese, say); `synonyms` are other names people search for it by; `language` is a BCP 47 tag, the language of the text written without one ([languages](#languages)); `issued` is `YYYY-MM-DD` |
+| `title`, `title_reading`, `description`, `topics`, `synonyms`, `homepage`, `language`, `issued`, `update_frequency` | | `title_reading` is how the title is read (its kana in Japanese, say); `synonyms` are other names people search for it by; `language` is a BCP 47 tag, the language of the text written without one ([languages](#languages)); `issued` is `YYYY-MM-DD`; `update_frequency` is `continuous`, `daily`, `weekly`, `monthly`, `quarterly`, `yearly` or `irregular` |
 | `repository` | | The URL of the repository of the dataset's source code, such as `https://github.com/queria-io/dataset-boj`. `tabledoc load` takes Git's `origin` when it is left out |
 | `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` | | [Licenses, sources and contributors](#licenses-sources-and-contributors). Written in a table file, `licenses`, `sources` and the coverage are that table's alone |
 | `image` | | The path of an image that stands for the dataset. It is sent with the documents and keeps its path under the root |
@@ -119,8 +118,8 @@ columns:
 | Key | Meaning |
 | --- | --- |
 | `name` | The table's name. The same as the file name when written ([which table](#which-table)) |
-| `title`, `title_reading`, `description`, `topics`, `synonyms` | `topics` as a repository's topics on GitHub. `keywords`, the earlier name, is read as `topics` |
-| `listed` | `false` keeps the table out of lists and search, such as a table only other tables read. Default `true` |
+| `title`, `title_reading`, `description`, `topics`, `synonyms` | `topics` as a repository's topics on GitHub |
+| `hidden` | `true` keeps the table out of lists and search, such as a table only other tables read. Default `false` |
 | `primary_key` | The columns that identify a row |
 | `licenses`, `sources`, `temporal_coverage`, `spatial_coverage` | Only when they differ from the dataset's |
 | `sql`, `depends_on` | For a table dbt does not build: the SQL it is made from and the tables it reads |
@@ -153,13 +152,13 @@ licenses:
 sources:
   - id: search-site
     title: Bank of Japan time-series data search site
-    path: https://www.stat-search.boj.or.jp/
+    url: https://www.stat-search.boj.or.jp/
 ```
 
 - An entry is written in full once, in `tabledoc.yml` or in any table file, and by its `id` alone anywhere else (`sources: [search-site]`)
 - An entry whose keys all match the entry with the same `id` (`{id, path}` beside `{id, title, path}`, say) refers to it. Two entries with the same `id` that differ in a key are an error
-- A license whose `id` is written alone and defined nowhere is that `id` (an SPDX identifier such as `CC-BY-4.0`, say). A source whose `id` is defined nowhere is an error
-- A license is `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`, a source `{id, title, path}`, and a contributor `{id, title, path, roles}`. Contributors are the dataset's only
+- A license whose `id` is written alone and defined nowhere is that `id` (an SPDX identifier such as `CC-BY-4.0`, say). A license that has an SPDX identifier takes it as its `id`. A source whose `id` is defined nowhere is an error
+- A license is `{id, url, title, commercial_use, share_alike, attribution_required}`, a source `{id, title, url}`, and a contributor `{id, title, url, roles}`. Contributors are the dataset's only
 
 ## Languages
 
@@ -179,8 +178,8 @@ columns:
     description: databases の db と同じ
 ```
 
-- Any of tabledoc's keys whose value is text, or a list of text, takes either form: `title`, `title_reading`, `description`, `topics`, `synonyms`, `homepage`, and the `title`, `url` and `path` of licenses, sources and contributors, say. A list becomes a map from a tag to a list
-- Values that point at something, or come from a fixed set, hold one value: `name`, `table`, `schema`, `repository`, `primary_key`, an entity's `name`, `language`, `$schema`, `issued`, `update_frequency`, `dimension`, `granularity`, `agg`, `expr`, `sql`, `depends_on`, `spdx`, `id`, `roles`, `listed`, `image`, `spatial_coverage`, `temporal_coverage`, and the paths in `documents`. Written in other languages, they would no longer point at the same table, column or file
+- Any of tabledoc's keys whose value is text, or a list of text, takes either form: `title`, `title_reading`, `description`, `topics`, `synonyms`, `homepage`, and the `title` and `url` of licenses, sources and contributors, say. A list becomes a map from a tag to a list
+- Values that point at something, or come from a fixed set, hold one value: `name`, `table`, `repository`, `primary_key`, `entity`, `language`, `$schema`, `issued`, `update_frequency`, `dimension`, `granularity`, `agg`, `expr`, `sql`, `depends_on`, `id`, `roles`, `hidden`, `image`, `spatial_coverage`, `temporal_coverage`, and the paths in `documents`. Written in other languages, they would no longer point at the same table, column or file
 - The tables hold the text of `title`, `title_reading`, `description`, `topics` and `synonyms` in every language. Of the other text (`homepage`, licenses, sources, contributors and a metric's `description`) they hold the one in `language`, and tabledoc warns when it is written in more
 - Keys under `annotations:` are the reader's own
 - A tag is checked as BCP 47. A map with no text is an error
@@ -218,8 +217,8 @@ In the dataset, each folder is one thing described: the root is the dataset, `<s
 When the root has `dbt_project.yml`, tabledoc reads `target/manifest.json` (`--manifest` changes it). Run `dbt compile` (or a build) first; without a manifest, tabledoc warns and reads only the table files. `load` gives this as info instead when the catalog has a table dbt built (one with a `source_path`), the description has no `sql`, and it describes each such table, since it keeps their SQL.
 
 - The tables are the enabled models materialized as `table`, `view` or `incremental`, under the model's `schema` and `alias`. Ephemeral and disabled models, seeds, snapshots and tests make no table, so they are not listed. A model with no description is listed with what dbt fills in only (`materialized`, `sql`, `depends_on`, `source_path`)
-- What dbt has a key for is read from dbt: the model's and the columns' `description`, the primary key from `constraints` (`type: primary_key`, on the model or on one column), and semantics from the columns' `entity`, `dimension` and `granularity` and the semantic layer's simple `metrics`
-- What dbt has no key for (`title`, `title_reading`, `topics`, `synonyms`, `listed`, `sources`, `licenses`, `documents`, a column's `title` and `asset`, and so on) is added in either of two places: `config.meta` of the model and of each column in dbt's yml, or the table file `<model>.tabledoc.yml` next to the model's `.sql`. The table file keeps each table's description in a file of its own and dbt's yml to the build; `config.meta` is read for teams that already write there
+- What dbt has a key for is read from dbt: the model's and the columns' `description`, the primary key from `constraints` (`type: primary_key`, on the model or on one column), and semantics from the columns' `entity` (its `name`), `dimension` (its `type`) and `granularity` and the semantic layer's simple `metrics`
+- What dbt has no key for (`title`, `title_reading`, `topics`, `synonyms`, `hidden`, `sources`, `licenses`, `documents`, a column's `title` and `asset`, and so on) is added in either of two places: `config.meta` of the model and of each column in dbt's yml, or the table file `<model>.tabledoc.yml` next to the model's `.sql`. The table file keeps each table's description in a file of its own and dbt's yml to the build; `config.meta` is read for teams that already write there
 - dbt's own keys, `config.meta` and the table file are read together, key by key (and column by column, key by key). A key written in two of them is an error: an empty `description` in dbt counts as not written, and `primary_key` in `config.meta` or a table file beside dbt's `constraints` is an error too
 - A program that changes the description writes each key where it is now, and a key that is not written yet into the table file, so it never rewrites dbt's yml
 - `materialized` is the model's materialization, `source_path` its `original_file_path`, and `sql` its `compiled_code`. `depends_on` is read from it by DuckDB's parser. A table of another dataset is written `<dataset>.<schema>.<table>`, where `<dataset>` is the name the SQL attaches it under; its URL comes from the DuckLake ATTACHes in `profiles.yml` (`--profiles`, else `DBT_PROFILES_DIR`, else the root)
@@ -251,8 +250,8 @@ What a column means follows dbt's semantic layer as written from dbt-core 1.12 (
 
 | Key | Value | Meaning |
 | --- | --- | --- |
-| `entity` | `{type, name}`, or the type alone | A join key. `type` is `primary`, `unique`, `foreign` or `natural`. `name` is the vocabulary the values come from (`corporate_number`, `lg_code`) |
-| `dimension` | `categorical` or `time`, or `{type, name}` | A column to filter and group by |
+| `entity` | the name of a code system, such as `corporate_number` or `city` | The column is an identifier: its values come from that code system, so it joins with the columns of other tables and datasets that name the same one. Whether it identifies the row is the primary key's to say |
+| `dimension` | `categorical` or `time` | A column to filter and group by |
 | `granularity` | `day`, `month`, `year`, ... | How fine a `dimension: time` column is |
 | `metrics` (table) | `[{name, agg, expr, description}]` | How to aggregate. `agg` is `sum`, `max`, `count_distinct`, ... |
 
@@ -284,7 +283,6 @@ d.content(d.files[0])  # the bytes of that file
 
 - `source` is the Git working copy: `repository` is the `origin` remote as an https URL (without credentials or `.git`), `commit` is HEAD, `path` goes from the repository's root to the folder of `tabledoc.yml`, and `dirty` says whether there were changes not committed. It is None outside Git, or with `Options(with_source=False)`
 - Documents are referred to by their [paths in the dataset](#paths-in-the-dataset). `files` lists every file whose content is meant to go with the description (the documents and what they link to) with that path, its sha256, size and media type, and `local`, its path under the root. Each `documents`, `schemas[].documents` included, lists paths in `files`; the one whose name is `README.md` is the guide. `content` gives what goes into the dataset for a file: its bytes, a Markdown document with its links rewritten, and for an older-format Markdown table file, the text without its front matter
-- Semantics always come out as `{type, name}` (`dimension: categorical` is `{"type": "categorical"}`)
 - Licenses and sources written by their `id` alone come out as the entry that defines them
 - Tables are sorted by `schema`, then `name`, and keys come in a fixed order. The same files give the same records
 - The structure (types, nullability, row counts, whether a table is a view) is not in it
@@ -301,19 +299,19 @@ The description as tables: those of one schema, `_tabledoc`, in the database tha
 
 | Table | Primary key | Other columns |
 | --- | --- | --- |
-| `dataset` | `key` | `value`. The keys are `language`, `homepage`, `repository`, `issued` (`YYYY-MM-DD`), `update_frequency`, `image` (a `path` of `files`), `temporal_start` and `temporal_end` |
+| `dataset` | `key` | `value`. The keys are `name`, `language`, `homepage`, `repository`, `issued` (`YYYY-MM-DD`), `update_frequency`, `image` (a `path` of `files`), `temporal_start` and `temporal_end` |
 | `schemas` | `schema_name` | |
-| `tables` | `schema_name`, `table_name` | `listed` (`true` unless the description says `false`), `temporal_start`, `temporal_end`, `sql`, `source_path` |
-| `columns` | `schema_name`, `table_name`, `column_name` | `entity` (the name of the code system its values come from, such as `lg_code`), `dimension` (`categorical` or `time`), `granularity` |
+| `tables` | `schema_name`, `table_name` | `hidden` (`false` unless the description says `true`), `temporal_start`, `temporal_end`, `sql`, `source_path` |
+| `columns` | `schema_name`, `table_name`, `column_name` | `key_position` (the column's place in the primary key, from 0; NULL when it is not in it), `entity` (the name of the code system its values come from, such as `city`), `dimension` (`categorical` or `time`), `granularity` |
 | `metrics` | `schema_name`, `table_name`, `metric_name` | `agg`, `expr`, `description` |
 | `descriptions` | `schema_name`, `table_name`, `column_name`, `language` | `title`, `title_reading`, `description` |
 | `topics` | `schema_name`, `table_name`, `column_name`, `language`, `topic` | |
 | `synonyms` | `schema_name`, `table_name`, `column_name`, `language`, `synonym` | |
-| `licenses` | `id` | `spdx`, `url`, `title`, `commercial_use`, `share_alike`, `attribution_required` |
+| `licenses` | `id` | `url`, `title`, `commercial_use`, `share_alike`, `attribution_required` |
 | `table_licenses` | `schema_name`, `table_name`, `license_id` | `position` |
-| `sources` | `id` | `title`, `path` |
+| `sources` | `id` | `title`, `url` |
 | `table_sources` | `schema_name`, `table_name`, `source_id` | `position` |
-| `contributors` | `id` | `title`, `path`, `position` |
+| `contributors` | `id` | `title`, `url`, `position` |
 | `contributor_roles` | `contributor_id`, `role` | |
 | `table_areas` | `schema_name`, `table_name`, `area` | `position` (the areas of `spatial_coverage`) |
 | `table_dependencies` | `schema_name`, `table_name`, `depends_on` | (a table this dataset holds is `<schema>.<table>`, one of another `<dataset>.<schema>.<table>`) |
@@ -323,22 +321,28 @@ The description as tables: those of one schema, `_tabledoc`, in the database tha
 - `position` keeps the order they are written in, from 0
 - A column that holds a date or a number in the files (`issued`, `temporal_start`) holds it as text
 - `files` names each document and what it links to by its sha256. The files themselves are stored by the catalog or beside it (with FDL, as the dataset's assets)
+- A table has a row in `columns` for each column described and each column of its primary key
+- Whether a column holds the path of a file (`asset`) is not in these tables. The catalog holds it (with FDL, as a declaration)
+
+### How each table was built
+
+Three parts of the tables say how a table was built, not what it means: `tables.sql`, `tables.source_path` and `table_dependencies`. People do not write them; a tool fills them in from the build (from dbt's manifest, by `tabledoc load`). A reader shows them as a table's lineage, and a build can compare `sql` with the last version's to skip a table whose SQL did not change.
 
 ### Profiles
 
-Three more tables hold what was counted in the data, so that readers can search by it. They are optional. People do not write them; a program counts them from the data (the column statistics of DuckLake or Iceberg, or an SQL query) and writes them again when the data changes, without merging.
+Three more tables hold what was counted in the data, so that readers can search by it. They are optional. People do not write them; a program counts them from the data (the column statistics of DuckLake or Iceberg, or an SQL query) and writes them again when the data changes, without merging. They hold what [an FDL profile](https://fdl.queria.io/spec/versions#profiles) holds, under the same names.
 
 | Table | Primary key | Other columns |
 | --- | --- | --- |
-| `table_profiles` | `schema_name`, `table_name` | `row_count` |
-| `column_profiles` | `schema_name`, `table_name`, `column_name` | `null_count`, `distinct_count`, `min_value`, `max_value` (as text) |
-| `column_values` | `schema_name`, `table_name`, `column_name`, `value` | `row_count`. Only for a column with 100 distinct values or fewer |
+| `table_profiles` | `schema_name`, `table_name` | `rows` |
+| `column_profiles` | `schema_name`, `table_name`, `column_name` | `null_count`, `distinct_count`, `min`, `max` (as text) |
+| `column_values` | `schema_name`, `table_name`, `column_name`, `value` | `count`: the rows that hold the value. Every value of a column with 2,000 distinct values or fewer, else its 10 most common |
 
-With FDL, the profile of each version is FDL's own, in this shape, and these tables are not written. Searching across datasets is the reader's work: it gathers the tables of each dataset into an index of its own.
+With FDL, each version has these profiles as FDL's own files, and these tables are not written. Searching across datasets is the reader's work: it gathers the tables of each dataset into an index of its own.
 
 ## Writing into a DuckLake catalog
 
-`tabledoc load` checks the description as `validate` does, then writes it into the [tables](#the-tables) of a [DuckLake](https://ducklake.select) catalog: those of the schema `_tabledoc`, unless `schema` in `tabledoc.yml` or `--schema` names another. With fdl, the catalog is the working metadata `fdl clone` makes, and `fdl commit` makes a version of it.
+`tabledoc load` checks the description as `validate` does, then writes it into the [tables](#the-tables) of a [DuckLake](https://ducklake.select) catalog: those of the schema `_tabledoc`, unless `--schema` names another. With fdl, the catalog is the working metadata `fdl clone` makes, and `fdl commit` makes a version of it.
 
 ```bash
 tabledoc load --ducklake work.sqlite --out build/assets
@@ -346,9 +350,9 @@ fdl commit work.sqlite -m "..." --assets build/assets
 ```
 
 - `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where new data files go (default: `FDL_DATA_PATH`, else the `data_path` that `fdl status --json` gives for fdl's working metadata). Data files over HTTP are read with DuckDB's secrets; when the catalog is fdl's working metadata and `FDL_TOKEN` is set, the token is sent to the `remote` that `fdl status --json` gives, so a private dataset's files can be read
-- `--schema`: the schema to write into (default: `schema` in `tabledoc.yml`, else `_tabledoc`)
+- `--schema`: the schema to write into (default: `_tabledoc`)
 - `--out`: also write the folder `fdl commit --assets` takes: each file of the `files` table under `files/<path>`. With `--assets <folder>`, the files below it (those of the build's asset columns) are linked under `data/`. The folder has to be empty or written by an earlier `load`, and outside `.fdl/`, which only fdl writes
-- `--unlisted`: the catalog's tables and views that have no description get a row in `tables` with `listed` false, and so does a table dbt built that the author described nowhere (only its SQL is known). The tables of the schema written into, and of each schema that holds the tables `dataset`, `schemas`, `tables`, `columns` and `files` (one an earlier load wrote into), get none
+- `--hide-undescribed`: the catalog's tables and views that have no description get a row in `tables` with `hidden` true, and so does a table dbt built that the author described nowhere (only its SQL is known). The tables of the schema written into, and of each schema that holds the tables `dataset`, `schemas`, `tables`, `columns` and `files` (one an earlier load wrote into), get none
 - A described table or column, or a primary key column, that is not in the catalog is an error, and so is an `asset` column that is not `varchar`. Names match without regard to case, as in DuckDB, and are written as the catalog spells them
 - A value its column cannot hold (`issued` other than `YYYY-MM-DD`, say), and a row that refers to a row that is not there, are errors
 - On an error (with `--strict`, a warning) nothing is written
@@ -357,7 +361,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - A view's row has no `sql` and no `table_dependencies`: the metadata holds the view's SQL
 - `repository` is `repository` in `tabledoc.yml`, else Git's `origin` as https
 - The tables an earlier tabledoc wrote that are not of the format (`texts`) are dropped, and so are the columns of the format's tables that are not. Other tables of the schema are left as they are. `load` does not write the profile tables, and leaves them as they are
-- Primary keys and asset columns are not written into these tables. When the catalog is the working metadata `fdl clone` made (the folder `<catalog>.fdl` is beside it), `load` declares them to FDL with `fdl declare`, which has to be on `PATH` (fdl-cli 0.35 or later): each table's `primary_key` and the asset columns of each table whose columns say `asset` (a view has neither), no profile for each table and view whose `listed` is false and a profile for each other table described, the other datasets the SQL reads (from dbt's `profiles.yml`) as dependencies, and the keys of these tables with `files.sha256` as an asset column and no profile. It runs only what differs from `fdl declare list`, and leaves what the description does not say as FDL has it
+- Asset columns are not written into these tables. When the catalog is the working metadata `fdl clone` made (the folder `<catalog>.fdl` is beside it), `load` declares them to FDL with `fdl declare`, which has to be on `PATH` (fdl-cli 0.35 or later): each table's `primary_key` and the asset columns of each table whose columns say `asset` (a view has neither), no profile for each table and view whose `hidden` is true and a profile for each other table described, the other datasets the SQL reads (from dbt's `profiles.yml`) as dependencies, and the keys of these tables with `files.sha256` as an asset column and no profile. It runs only what differs from `fdl declare list`, and leaves what the description does not say as FDL has it
 - tabledoc writes no comments (`COMMENT ON`)
 
 ## Writing the files from a catalog
@@ -368,14 +372,14 @@ fdl commit work.sqlite -m "..." --assets build/assets
 tabledoc dump --ducklake work.sqlite --out description/
 ```
 
-- `--ducklake`: the catalog (default: `FDL_WORKING`). `--schema`: the schema the description is in (default: `_tabledoc`); another schema is written as `schema` in `tabledoc.yml`, so `load` writes back into it. `--out`: the folder (default: here), outside `.fdl/`
+- `--ducklake`: the catalog (default: `FDL_WORKING`). `--schema`: the schema the description is in (default: `_tabledoc`). `--out`: the folder (default: here), outside `.fdl/`
 - `--files`: where the files of the `files` table are, as `<files>/<sha256>`: a folder or an http(s) URL. Default: `assets/` of the `remote` that `fdl status --json` gives for fdl's working metadata. Each file is checked against its sha256
-- `--name`: the dataset's `name` in `tabledoc.yml`. Default: the last part of the repository's URL
+- `--name`: the dataset's `name` in `tabledoc.yml`. Default: the `name` the `dataset` table holds, else the last part of the repository's URL
 - A file already in the folder is not replaced, and nothing is written, unless `--force`. A path in the catalog that would leave the folder is an error
 - Each table file is at `<schema>/<table>.tabledoc.yml`. Every file stays at its path in the dataset, and the Markdown files of a folder (its `README.md` first) are listed in the `documents` of what the folder describes; the root's `README.md` is the dataset's without being listed
 - Text is written as the text alone when there is one language and it is the dataset's `language`, and as a map otherwise
 - A license or source is written in full where it is first used (the dataset first, then the tables by name) and by its `id` alone after that; a license that has only its `id` is written as the `id`
-- What the tables do not hold is not written: primary keys, asset columns, an entity's type (written `foreign`), a dimension's name, `annotations`, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--unlisted` wrote gets no table file. `sql` and `depends_on` are written only for a table without `source_path` (one dbt does not build)
+- What the tables do not hold is not written: asset columns, `annotations`, and the other datasets the SQL reads, which come from dbt's `profiles.yml`. A table that only `--hide-undescribed` wrote gets no table file. `sql` and `depends_on` are written only for a table without `source_path` (one dbt does not build)
 
 ## Writing Markdown for AI
 
@@ -405,14 +409,14 @@ tabledoc export --markdown ai-docs/
 So that every dataset need not be rewritten at once, tabledoc also reads the format it replaces. Only tabledoc's format is written anew.
 
 - Without `tabledoc.yml`, `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) is read as `tabledoc.yml`. `title_kana` is read as `title_reading`, `cover` as `image` when it is a file's path (one with an extension; an emoji is not read), and `synonyms` under `ai_context` as `synonyms`; `themes` and the rest of `ai_context` are not read. `catalogs` is used for `depends_on` and returned as `dependencies`
-- A source or contributor without an `id`, in either older file, gets its `path` (else its `title`) as its `id`
-- Markdown whose front matter has `$schema: https://queria.io/schemas/table/v1.json` is read as a table file (the front matter) and its guide (the text below). `table:` says which table, `fields` is `columns`, `published` is `listed`, and `ai_context` and `themes` are read as in `queria.yml`. The guide is that Markdown's path, and what is sent is the text without the front matter
-- A field's `semantic: {role, name, agg}` is read as: `role: entity` → `entity: {type: foreign, name}`, or `type: primary` when the column alone is the `primary_key`; `role: dimension` → `dimension: categorical`; `role: measure` → a metric `{name: <column>, agg, expr: <column>}` on the table (without `agg`, a warning)
+- A source's or contributor's `path`, in either older file, is read as its `url`. One without an `id` gets its `path` (else its `title`) as its `id`
+- Markdown whose front matter has `$schema: https://queria.io/schemas/table/v1.json` is read as a table file (the front matter) and its guide (the text below). `table:` says which table, `fields` is `columns`, `published: false` is `hidden: true`, and `ai_context` and `themes` are read as in `queria.yml`. The guide is that Markdown's path, and what is sent is the text without the front matter
+- A field's `semantic: {role, name, agg}` is read as: `role: entity` → `entity: <name>`; `role: dimension` → `dimension: categorical`; `role: measure` → a metric `{name: <column>, agg, expr: <column>}` on the table (without `agg`, a warning)
 - `docs` (and `schemas[].docs`) is read as `documents`, and a schema's `guide` as one of its `documents`
 - `tabledoc.yml` and `queria.yml` in the same folder is an error
 
 ## $schema and versions
 
 - tabledoc ships its JSON Schemas and serves them at `https://tabledoc.queria.io/schemas/<kind>/v<n>.json`. The kinds are `dataset` and `table`
-- Adding keys keeps the version. Changing what a key means, or removing one, makes `v2`, and tabledoc reads both for a while
+- Adding keys keeps the version. Until `v1` is fixed, its keys may still be renamed or removed; tabledoc then reads only the keys of this page. Once it is fixed, changing what a key means, or removing one, makes `v2`, and tabledoc reads both for a while
 - A file with a `$schema` this tabledoc does not know is refused, with a request to upgrade tabledoc

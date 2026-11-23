@@ -5,9 +5,8 @@
     every file of the files table at its path: README.md and the other documents of each folder
 
 Loading the files dump wrote gives the same tables again, but for what they do
-not keep: an entity's type (written `foreign`), a dimension's name, `dependencies`
-(from dbt's profiles.yml), primary keys and asset columns (declared to FDL),
-and `annotations`.
+not keep: `dependencies` (from dbt's profiles.yml), asset columns (declared to
+FDL), and `annotations`.
 """
 
 from __future__ import annotations
@@ -59,10 +58,11 @@ def files_base(source: Source) -> str | None:
     return f"{str(remote).rstrip('/')}/assets" if remote else None
 
 
-def dataset_name(source: Source) -> str:
-    """``source.name``, else the last part of the repository's URL, else the catalog's file name."""
-    if source.name:
-        return source.name
+def dataset_name(source: Source, held: str | None = None) -> str:
+    """``source.name``, else ``held`` (the `name` the dataset table holds), else the last part of
+    the repository's URL, else the catalog's file name."""
+    if source.name or held:
+        return str(source.name or held)
     remote = _remote(source.catalog)
     if remote:
         return posixpath.basename(str(remote).rstrip("/"))
@@ -194,7 +194,7 @@ def _column(row: dict[str, Any], text: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": row["column_name"],
         **text,
-        **({"entity": {"type": "foreign", "name": row["entity"]}} if row.get("entity") else {}),
+        **({"entity": row["entity"]} if row.get("entity") else {}),
         **({"dimension": row["dimension"]} if row.get("dimension") else {}),
         **({"granularity": row["granularity"]} if row.get("granularity") else {}),
     }
@@ -204,9 +204,8 @@ def _metric(row: dict[str, Any]) -> dict[str, Any]:
     return {"name": row["metric_name"], **{k: row[k] for k in ("agg", "expr", "description") if row.get(k)}}
 
 
-def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> dict[str, dict[str, Any]]:
-    """The YAML files of the description in ``found``, by path. ``held_in``, the schema the
-    description is in, is written into tabledoc.yml unless it is `_tabledoc`."""
+def documents(found: tables.Rows, name: str) -> dict[str, dict[str, Any]]:
+    """The YAML files of the description in ``found``, by path."""
     values = {r["key"]: r["value"] for r in found.get("dataset") or []}
     language = str(values.get("language") or languages.UNDETERMINED)
     texts = _texts(found, language)
@@ -220,7 +219,7 @@ def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> di
     for r in sorted(found.get("contributor_roles") or [], key=lambda r: (r["contributor_id"], r["role"])):
         roles.setdefault(r["contributor_id"], []).append(r["role"])
     contributors = [
-        {**_plain({k: c.get(k) for k in ("id", "title", "path")}), **({"roles": roles[c["id"]]} if c["id"] in roles else {})}
+        {**_plain({k: c.get(k) for k in ("id", "title", "url")}), **({"roles": roles[c["id"]]} if c["id"] in roles else {})}
         for c in sorted(found.get("contributors") or [], key=lambda c: c.get("position", 0))
     ]
     dataset = {
@@ -238,17 +237,20 @@ def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> di
         own = [c for c in columns if (c["schema_name"], c["table_name"]) == (schema, table_name)]
         own_metrics = [m for m in metrics if (m["schema_name"], m["table_name"]) == (schema, table_name)]
         authored = not table.get("source_path")
+        keyed = sorted((c for c in own if c.get("key_position") is not None), key=lambda c: c["key_position"])
+        own = [c for c in own if set(c) - {"schema_name", "table_name", "column_name", "key_position"} or _at(c) in texts]
         record = {
             **texts.get((schema, table_name, ""), {}),
-            **({"listed": False} if table.get("listed") is False else {}),
+            **({"hidden": True} if table.get("hidden") is True else {}),
+            **({"primary_key": [c["column_name"] for c in keyed]} if keyed else {}),
             **_on((schema, table_name), found, licenses, sources),
             **_temporal(table.get("temporal_start"), table.get("temporal_end")),
             **({"sql": table["sql"]} if authored and table.get("sql") else {}),
             **({"depends_on": depends[(schema, table_name)]} if authored and (schema, table_name) in depends else {}),
         }
         docs = _documents(paths, f"{schema}/{table_name}")
-        if set(record) == {"listed"} and not (own or own_metrics or docs):
-            continue  # a row `load --unlisted` wrote for a table with no description
+        if set(record) <= {"hidden"} and not (own or own_metrics or docs):
+            continue  # a row `load --hide-undescribed` wrote for a table with no description
         written[f"{schema}/{table_name}{TABLE_SUFFIX}"] = {
             "$schema": schemas.TABLE,
             **record,
@@ -267,13 +269,16 @@ def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> di
         DATASET_FILE: {
             "$schema": schemas.DATASET,
             "name": name,
-            **({"schema": held_in} if held_in != tables.SCHEMA else {}),
             **dataset,
             **({"schemas": schema_list} if schema_list else {}),
             **({"documents": docs} if docs else {}),
         },
         **written,
     }
+
+
+def _held_name(found: tables.Rows) -> str | None:
+    return next((r["value"] for r in found.get("dataset") or [] if r.get("key") == "name"), None)
 
 
 class _Dumper(yaml.SafeDumper):
@@ -318,7 +323,7 @@ def dump(source: Source, out: Path, *, force: bool = False) -> list[str]:
         )
     texts = {
         path: render(record).encode("utf-8")
-        for path, record in documents(found, dataset_name(source), held_in).items()
+        for path, record in documents(found, dataset_name(source, _held_name(found))).items()
     }
     entries = sorted(found.get("files") or [], key=lambda f: f["path"])
     for path in [*texts, *(f["path"] for f in entries)]:

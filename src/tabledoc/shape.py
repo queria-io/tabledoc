@@ -13,7 +13,6 @@ from typing import Any
 
 DATASET_KEYS = (
     "name",
-    "schema",
     "title",
     "title_reading",
     "description",
@@ -38,7 +37,7 @@ TABLE_KEYS = (
     "description",
     "topics",
     "synonyms",
-    "listed",
+    "hidden",
     "primary_key",
     "licenses",
     "sources",
@@ -71,9 +70,7 @@ def plain(value: Any) -> Any:
 
 
 def pick(record: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
-    """``keys`` of ``record``. `keywords`, the earlier name, is read as `topics` when `topics` is not written."""
-    if "topics" in keys and "topics" not in record and present(record.get("keywords")):
-        record = {**record, "topics": record["keywords"]}
+    """``keys`` of ``record``."""
     return {k: plain(record[k]) for k in keys if k in record and present(record[k])}
 
 
@@ -83,23 +80,9 @@ def annotations(record: dict[str, Any]) -> dict[str, Any]:
     return {"annotations": plain(written)} if isinstance(written, dict) and written else {}
 
 
-def typed(value: Any) -> dict[str, Any] | None:
-    """An entity or dimension as {type, name}: `categorical` becomes {"type": "categorical"}."""
-    if isinstance(value, str) and value:
-        return {"type": value}
-    if isinstance(value, dict) and value.get("type"):
-        return {"type": value["type"], **({"name": value["name"]} if value.get("name") else {})}
-    return None
-
-
 def column(record: dict[str, Any]) -> dict[str, Any]:
-    semantic = {
-        key: shaped
-        for key in ("entity", "dimension")
-        if (shaped := typed(record.get(key))) is not None
-    }
-    granularity = {"granularity": record["granularity"]} if present(record.get("granularity")) else {}
-    return {**pick(record, COLUMN_KEYS), **semantic, **granularity, **annotations(record)}
+    semantic = {k: record[k] for k in ("entity", "dimension", "granularity") if present(record.get(k))}
+    return {**pick(record, COLUMN_KEYS), **semantic, **annotations(record)}
 
 
 def table(record: dict[str, Any]) -> dict[str, Any]:

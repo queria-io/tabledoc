@@ -17,8 +17,8 @@ FILES = {
     "docs/chart.png": b"\x89PNG",
     "sales/orders.tabledoc.yml": TABLE
     + "title: Orders\ndescription: |-\n  One row is one order.\n\n  More.\nprimary_key: [id]\n"
-    + "columns:\n  - {name: id, title: ID, entity: primary}\n"
-    + "  - {name: shop, description: 'a | b', entity: {type: foreign, name: shop_id}}\n"
+    + "columns:\n  - {name: id, title: ID}\n"
+    + "  - {name: shop, description: 'a | b', entity: shop_id}\n"
     + "  - {name: day, dimension: time, granularity: day}\n"
     + "  - {name: receipt, asset: true}\n"
     + "metrics: [{name: total, agg: sum, expr: amount}]\n",
@@ -58,8 +58,8 @@ def test_table_has_columns_semantics_lineage_and_its_guide(write):
     pages = rendered(write)
     orders = pages["sales/orders/README.md"]
     assert orders.startswith("# Orders (`sales.orders`)\n\nOne row is one order.\n\nMore.\n\n- Primary key: `id`\n")
-    assert "| `id` | ID |  | entity: primary |" in orders
-    assert "| `shop` |  | a \\| b | entity: foreign (shop_id) |" in orders
+    assert "| `id` | ID |  |  |" in orders
+    assert "| `shop` |  | a \\| b | identifier: shop_id |" in orders
     assert "| `day` |  |  | dimension: time; granularity: day |" in orders
     assert "| `receipt` |  |  | asset: a file of the row |" in orders
     assert "| `total` | sum | `amount` |  |" in orders

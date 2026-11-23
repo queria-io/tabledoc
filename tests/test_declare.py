@@ -58,7 +58,7 @@ def test_runs_fdl_declare_only_for_a_working_metadata(write, tmp_path):
 
 
 def test_a_view_gets_no_key_and_a_table_not_listed_no_profile(write):
-    want = wanted(described(write), "_tabledoc", unlisted={"sales.extra"}, views={"sales.orders"})
+    want = wanted(described(write), "_tabledoc", hidden={"sales.extra"}, views={"sales.orders"})
     assert "sales.orders" not in want["primary_keys"]
     assert "sales.orders" not in want["assets"]
     assert want["unprofiled"] == sorted([*(f"_tabledoc.{t}" for t in tables.TABLES), "sales.extra"])

@@ -57,7 +57,7 @@ def _value(value: Any) -> str:
     if isinstance(value, dict):
         if "start" in value or "end" in value:
             return f"{value.get('start') or ''} – {value.get('end') or ''}".strip()
-        named = _link(value.get("title") or value.get("id"), value.get("url") or value.get("path"))
+        named = _link(value.get("title") or value.get("id"), value.get("url"))
         roles = f" ({', '.join(value['roles'])})" if value.get("roles") else ""
         return named + roles if named else json.dumps(value, ensure_ascii=False)
     return str(value)
@@ -121,16 +121,11 @@ def _summary(description: Any) -> str:
 
 
 def _semantics(column: dict[str, Any]) -> str:
-    def typed(key: str) -> str | None:
-        value = column.get(key)
-        if not value:
-            return None
-        named = f" ({value['name']})" if value.get("name") else ""
-        return f"{key}: {value.get('type')}{named}"
-
+    entity = f"identifier: {column['entity']}" if column.get("entity") else None
+    dimension = f"dimension: {column['dimension']}" if column.get("dimension") else None
     grain = f"granularity: {column['granularity']}" if column.get("granularity") else None
     asset = "asset: a file of the row" if column.get("asset") else None
-    return "; ".join(s for s in (typed("entity"), typed("dimension"), grain, asset) if s)
+    return "; ".join(s for s in (entity, dimension, grain, asset) if s)
 
 
 def _path(schema: str, name: str | None = None) -> str:

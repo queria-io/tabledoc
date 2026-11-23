@@ -44,8 +44,8 @@ title: Orders
 description: One row is one order.
 primary_key: [order_id]
 columns:
-  - name: order_id
-    entity: primary
+  - name: city_code
+    entity: city
   - name: ordered_at
     dimension: time
     granularity: day
