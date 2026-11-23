@@ -35,8 +35,8 @@ def test_tables_by_place_with_guides_and_linked_files(write):
             "docs/method.md": "[back](../README.md)\n",
             "docs/chart.png": b"\x89PNG",
             "sales/orders.tabledoc.yml": TABLE
-            + "title: Orders\ntitle_reading: オーダーズ\nlisted: false\nprimary_key: [id]\n"
-            + "columns:\n  - {name: id, entity: primary}\n  - {name: shop, entity: {type: foreign, name: shop_id}}\n"
+            + "title: Orders\ntitle_reading: オーダーズ\nhidden: true\nprimary_key: [id]\n"
+            + "columns:\n  - {name: id}\n  - {name: shop, entity: shop_id}\n"
             + "  - {name: day, dimension: time, granularity: day}\n"
             + "metrics: [{name: total, agg: sum, expr: amount}]\n",
             "sales/orders.md": "Guide.\n",
@@ -69,13 +69,13 @@ def test_tables_by_place_with_guides_and_linked_files(write):
         "name": "orders",
         "title": {"en": "Orders"},
         "title_reading": {"en": "オーダーズ"},
-        "listed": False,
+        "hidden": True,
         "primary_key": ["id"],
         "documents": ["sales/orders/README.md"],
         "columns": [
-            {"name": "id", "entity": {"type": "primary"}},
-            {"name": "shop", "entity": {"type": "foreign", "name": "shop_id"}},
-            {"name": "day", "dimension": {"type": "time"}, "granularity": "day"},
+            {"name": "id"},
+            {"name": "shop", "entity": "shop_id"},
+            {"name": "day", "dimension": "time", "granularity": "day"},
         ],
         "metrics": [{"name": "total", "agg": "sum", "expr": "amount"}],
     }
@@ -103,6 +103,7 @@ def test_the_older_format(write):
         {
             "queria.yml": "$schema: https://queria.io/schemas/dataset/v1.json\n"
             + "name: old\ntitle: Old\ntitle_kana: オールド\nlanguage: ja\nthemes: [economy]\ncover: cover.png\n"
+            + "keywords: [money]\n"
             + "sources: [{title: Site, path: https://site.example}]\n"
             + "catalogs: {other: https://data.example/datasets/o/other/}\n",
             "models/a.md": "---\n$schema: https://queria.io/schemas/table/v1.json\ntable: s.a\n"
@@ -113,7 +114,8 @@ def test_the_older_format(write):
             + "  - {name: value, semantic: {role: measure, agg: sum}}\n"
             + "  - {name: count, semantic: {role: measure}}\n"
             + "sql: select * from other.x.y join s.b using (id)\n---\n\nThe guide.\n",
-            "models/b.md": "---\n$schema: https://queria.io/schemas/table/v1.json\ntable: s.b\n---\n",
+            "models/b.md": "---\n$schema: https://queria.io/schemas/table/v1.json\ntable: s.b\n"
+            + "keywords: [rates]\npublished: true\n---\n",
             "cover.png": b"PNG",
         }
     )
@@ -122,9 +124,10 @@ def test_the_older_format(write):
     assert "metric-without-agg" in codes(report)
     assert document["dataset"]["title_reading"] == {"ja": "オールド"}
     assert document["dataset"]["image"] == "cover.png"
+    assert document["dataset"]["topics"] == {"ja": ["money"]}
     assert "annotations" not in document["dataset"]
     assert document["dataset"]["sources"] == [
-        {"id": "https://site.example", "title": {"ja": "Site"}, "path": {"ja": "https://site.example"}}
+        {"id": "https://site.example", "title": {"ja": "Site"}, "url": {"ja": "https://site.example"}}
     ]
     assert "catalogs" not in document["dataset"]
     assert read(Options(root, with_source=False), Report()).dependencies == {
@@ -132,9 +135,9 @@ def test_the_older_format(write):
     }
     a = document["tables"][0]
     assert a["columns"] == [
-        {"name": "id", "entity": {"type": "primary", "name": "code"}},
-        {"name": "pref", "entity": {"type": "foreign", "name": "lg_code"}},
-        {"name": "kind", "dimension": {"type": "categorical"}},
+        {"name": "id", "entity": "code"},
+        {"name": "pref", "entity": "lg_code"},
+        {"name": "kind", "dimension": "categorical"},
         {"name": "value"},
         {"name": "count"},
     ]
@@ -144,10 +147,12 @@ def test_the_older_format(write):
     ]
     assert a["depends_on"] == ["other.x.y", "s.b"]
     assert a["documents"] == ["s/a/README.md"]
-    assert a["listed"] is False
+    assert a["hidden"] is True
     sent = next(f for f in document["files"] if f["path"] == "s/a/README.md")
     assert sent["sha256"] == hashlib.sha256(b"The guide.\n").hexdigest()
     assert "documents" not in document["tables"][1]
+    assert document["tables"][1]["topics"] == {"ja": ["rates"]}
+    assert document["tables"][1]["hidden"] is False
     d = read(Options(root, with_source=False), Report())
     assert d.content(next(f for f in d.files if f.path == "s/a/README.md")) == b"The guide.\n"
 
@@ -161,7 +166,7 @@ def test_the_older_format(write):
         ({"s/a.tabledoc.yml": TABLE + "table: s.a\n"}, "schema-violation"),
         ({"README.md": "[x](../outside.md)\n"}, "link-outside"),
         ({"README.md": "[x](missing.md)\n"}, "link-broken"),
-        ({"s/a.tabledoc.yml": TABLE + "columns: [{name: a, entity: wrong}]\n"}, "schema-violation"),
+        ({"s/a.tabledoc.yml": TABLE + "columns: [{name: a, dimension: wrong}]\n"}, "schema-violation"),
     ],
 )
 def test_findings(write, files, code):
@@ -239,7 +244,7 @@ def test_dbt_models(write):
         orders=model(
             "orders",
             description="One row per order",
-            meta={"title": "Orders", "primary_key": ["id"], "listed": False},
+            meta={"title": "Orders", "primary_key": ["id"], "hidden": True},
             columns={
                 "id": {"name": "id", "description": "", "meta": {}, "config": {"meta": {"title": "ID"}},
                        "entity": {"type": "primary", "name": "order", "description": "", "label": None, "config": {}},
@@ -279,7 +284,7 @@ def test_dbt_models(write):
         "name": "orders",
         "title": {"und": "Orders"},
         "description": {"und": "One row per order"},
-        "listed": False,
+        "hidden": True,
         "primary_key": ["id"],
         "materialized": "table",
         "sql": "select 1 as id from s.base",
@@ -287,11 +292,21 @@ def test_dbt_models(write):
         "source_path": "models/orders.sql",
         "documents": ["s/orders/README.md"],
         "columns": [
-            {"name": "id", "title": {"und": "ID"}, "entity": {"type": "primary", "name": "order"}},
-            {"name": "day", "description": {"und": "Day"}, "dimension": {"type": "time"}, "granularity": "day"},
+            {"name": "id", "title": {"und": "ID"}, "entity": "order"},
+            {"name": "day", "description": {"und": "Day"}, "dimension": "time", "granularity": "day"},
         ],
         "metrics": [{"name": "total", "agg": "sum", "expr": "amount", "description": {"und": "Sum"}}],
     }
+
+
+def test_earlier_config_meta_keys_are_read_as_the_new_ones(write):
+    nodes = manifest(base=model("base", sql="select 1 as id", meta={"listed": False, "keywords": ["a"]}))
+    root = write({"tabledoc.yml": DATASET + "name: d\n", "dbt_project.yml": "name: p\n", "target/manifest.json": nodes})
+    document, report = run(root)
+    assert not report.failed, report.render()
+    table = document["tables"][0]
+    assert (table["hidden"], table["topics"]) == (True, {"und": ["a"]})
+    assert "config.meta.listed is read as hidden" in report.render()
 
 
 def dbt_columns(**columns):
@@ -447,7 +462,7 @@ def test_text_in_more_than_one_language(write):
         {
             "tabledoc.yml": DATASET
             + "name: shop\nlanguage: ja\ntitle: {ja: 店, en: Shop}\ndescription: 店の注文\n"
-            + "topics: {ja: [小売], en: [retail]}\nsources: [{id: s, title: {ja: 出典, en: Source}, path: https://x.example}]\n",
+            + "topics: {ja: [小売], en: [retail]}\nsources: [{id: s, title: {ja: 出典, en: Source}, url: https://x.example}]\n",
             "sales/orders.tabledoc.yml": TABLE + "columns: [{name: id, title: {en: Order ID}}]\n",
         }
     )
@@ -457,7 +472,7 @@ def test_text_in_more_than_one_language(write):
     assert dataset["title"] == {"ja": "店", "en": "Shop"}
     assert dataset["description"] == {"ja": "店の注文"}
     assert dataset["topics"] == {"ja": ["小売"], "en": ["retail"]}
-    assert dataset["sources"] == [{"id": "s", "title": {"ja": "出典", "en": "Source"}, "path": {"ja": "https://x.example"}}]
+    assert dataset["sources"] == [{"id": "s", "title": {"ja": "出典", "en": "Source"}, "url": {"ja": "https://x.example"}}]
     assert document["tables"][0]["columns"] == [{"name": "id", "title": {"en": "Order ID"}}]
 
 
@@ -505,6 +520,6 @@ def test_a_cover_that_is_not_a_path_is_not_an_image(write):
 
 
 def test_a_source_without_an_id_is_a_finding_not_a_crash(write):
-    root = write({"tabledoc.yml": DATASET + "name: d\ntitle: D\nsources: [{title: Site, path: https://site.example}]\n"})
+    root = write({"tabledoc.yml": DATASET + "name: d\ntitle: D\nsources: [{title: Site, url: https://site.example}]\n"})
     _, report = run(root)
     assert report.failed

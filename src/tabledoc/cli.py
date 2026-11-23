@@ -34,10 +34,12 @@ def parser() -> argparse.ArgumentParser:
     w.add_argument(
         "--data-path", default=None, help="where new data files go (default: FDL_DATA_PATH, else fdl clone's note)"
     )
-    w.add_argument("--schema", default=None, help="the schema to write into (default: tabledoc.yml's schema, else _tabledoc)")
+    w.add_argument("--schema", default=None, help="the schema to write into (default: _tabledoc)")
     w.add_argument("--out", type=Path, default=None, help="also write the files for fdl commit --assets here")
     w.add_argument("--assets", type=Path, default=None, help="files of the asset columns, linked into --out")
-    w.add_argument("--unlisted", action="store_true", help="write the tables with no description, with listed false")
+    w.add_argument(
+        "--hide-undescribed", action="store_true", help="write the tables with no description, with hidden true"
+    )
     d = commands.add_parser("dump", help="write the files of the description a DuckLake catalog holds")
     d.add_argument("--ducklake", default=None, help="the DuckLake catalog, such as fdl's working metadata (default: FDL_WORKING)")
     d.add_argument("--schema", default="_tabledoc", help="the schema the description is in (default: _tabledoc)")
@@ -92,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
             data = args.data_path or os.environ.get("FDL_DATA_PATH")
             if args.assets and not args.out:
                 raise SpecError("--assets links its files into --out's assets/; give --out too")
-            target = Target(catalog, data, args.out, args.assets, args.unlisted, args.schema)
+            target = Target(catalog, data, args.out, args.assets, args.hide_undescribed, args.schema)
             if load(options, target, report, strict=args.strict) is not None:
                 print(f"wrote {target.catalog}" + (f" and {target.out}" if target.out else ""), file=sys.stderr)
     except SpecError as exc:

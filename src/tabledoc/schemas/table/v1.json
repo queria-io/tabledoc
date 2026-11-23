@@ -13,9 +13,8 @@
     "title_reading": { "$ref": "../dataset/v1.json#/$defs/text" },
     "description": { "$ref": "../dataset/v1.json#/$defs/text" },
     "topics": { "$ref": "../dataset/v1.json#/$defs/texts" },
-    "keywords": { "$ref": "../dataset/v1.json#/$defs/texts", "description": "The earlier name of topics, read as topics." },
     "synonyms": { "$ref": "../dataset/v1.json#/$defs/texts" },
-    "listed": { "type": "boolean", "description": "false keeps the table out of lists and search; default true." },
+    "hidden": { "type": "boolean", "description": "true keeps the table out of lists and search, such as a table only other tables read; default false." },
     "primary_key": { "$ref": "#/$defs/columnNames" },
     "licenses": { "$ref": "../dataset/v1.json#/$defs/licenses" },
     "sources": { "$ref": "../dataset/v1.json#/$defs/sources" },
@@ -30,32 +29,12 @@
   },
   "$defs": {
     "columnNames": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "uniqueItems": true },
-    "entityType": { "enum": ["primary", "unique", "foreign", "natural"] },
     "entity": {
-      "description": "A join key. `name` is the vocabulary the values come from, such as corporate_number.",
-      "oneOf": [
-        { "$ref": "#/$defs/entityType" },
-        {
-          "type": "object",
-          "required": ["type"],
-          "additionalProperties": false,
-          "properties": { "type": { "$ref": "#/$defs/entityType" }, "name": { "type": "string", "minLength": 1 } }
-        }
-      ]
+      "type": "string",
+      "minLength": 1,
+      "description": "The column is an identifier: its values come from this code system, such as corporate_number or city, so it joins with other columns of the same name."
     },
-    "dimensionType": { "enum": ["categorical", "time"] },
-    "dimension": {
-      "description": "A column to filter and group by.",
-      "oneOf": [
-        { "$ref": "#/$defs/dimensionType" },
-        {
-          "type": "object",
-          "required": ["type"],
-          "additionalProperties": false,
-          "properties": { "type": { "$ref": "#/$defs/dimensionType" }, "name": { "type": "string", "minLength": 1 } }
-        }
-      ]
-    },
+    "dimension": { "enum": ["categorical", "time"], "description": "A column to filter and group by." },
     "granularity": { "type": "string", "minLength": 1, "description": "How fine a time dimension is: day, month, year, ..." },
     "column": {
       "type": "object",

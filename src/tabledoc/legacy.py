@@ -1,9 +1,11 @@
 """The formats before tabledoc, read as tabledoc's.
 
 - queria.yml (https://queria.io/schemas/dataset/v1.json) as tabledoc.yml:
-  `title_kana` is `title_reading`, and `cover` is `image` when it is a file's path
+  `title_kana` is `title_reading`, `keywords` is `topics`, and `cover` is `image` when it is a file's path
 - Markdown whose front matter is https://queria.io/schemas/table/v1.json, as a
-  table file (the front matter) and its guide (the text below): `published` is `listed`
+  table file (the front matter) and its guide (the text below): `keywords` is `topics`,
+  and `published` is `hidden` negated
+- A source's or contributor's `path` is its `url`
 """
 
 from __future__ import annotations
@@ -17,8 +19,8 @@ DATASET_FILE = "queria.yml"
 #: `themes` and the rest of `ai_context` are not read; `synonyms` is the one part of
 #: `ai_context` tabledoc has a key for.
 RENAMED = {
-    "dataset": {"title_kana": "title_reading", "cover": "image"},
-    "table": {"published": "listed"},
+    "dataset": {"title_kana": "title_reading", "keywords": "topics", "cover": "image"},
+    "table": {"keywords": "topics"},
 }
 DROPPED = ("themes", "ai_context")
 
@@ -40,8 +42,11 @@ def _renamed(record: dict[str, Any], level: str) -> dict[str, Any]:
     others = {k: v for k, v in written.items() if k != "queria"}
     # A cover was often an emoji, not a file: only a file's path is an image.
     skipped = {*DROPPED, "annotations", *(("cover",) if not _a_path(record.get("cover")) else ())}
-    rest = {renamed.get(k, k): v for k, v in record.items() if k not in skipped}
+    rest = {renamed.get(k, k): v for k, v in record.items() if k not in skipped and k != "published"}
+    published = record.get("published")
+    hidden = {"hidden": not published} if isinstance(published, bool) else {}
     return {
+        **hidden,
         **rest,
         **({"synonyms": synonyms} if synonyms and "synonyms" not in rest else {}),
         **({"annotations": others} if others else {}),
@@ -54,13 +59,16 @@ def _a_path(value: Any) -> bool:
 
 
 def _ids(record: dict[str, Any]) -> dict[str, Any]:
-    """``record`` with an `id` on each source and contributor, which the older format did not
-    have: its `path`, else its `title`."""
+    """``record`` with `path` as `url` and an `id` on each source and contributor, which the
+    older format did not have: its `path`, else its `title`."""
 
     def with_id(entry: Any) -> Any:
-        if not isinstance(entry, dict) or "id" in entry:
+        if not isinstance(entry, dict):
             return entry
-        named = entry.get("path") or entry.get("title")
+        entry = {("url" if k == "path" else k): v for k, v in entry.items()}
+        if "id" in entry:
+            return entry
+        named = entry.get("url") or entry.get("title")
         return {"id": str(named), **entry} if isinstance(named, str) else entry
 
     return {
@@ -86,19 +94,17 @@ def dataset(record: dict[str, Any]) -> dict[str, Any]:
     return converted
 
 
-def _semantic(field: dict[str, Any], primary_key: list[str]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+def _semantic(field: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """A field's `semantic` as the column's entity or dimension, or as a metric."""
     semantic = field.get("semantic")
     rest = {k: v for k, v in field.items() if k != "semantic"}
     if not isinstance(semantic, dict):
         return rest, None
     role, name = semantic.get("role"), semantic.get("name")
-    named = {"name": name} if name else {}
     if role == "entity":
-        kind = "primary" if primary_key == [field.get("name")] else "foreign"
-        return {**rest, "entity": {"type": kind, **named}}, None
+        return {**rest, **({"entity": name} if name else {})}, None
     if role == "dimension":
-        return {**rest, "dimension": {"type": "categorical", **named}}, None
+        return {**rest, "dimension": "categorical"}, None
     if role == "measure":
         agg = {"agg": semantic["agg"]} if semantic.get("agg") else {}
         return rest, {"name": field.get("name"), **agg, "expr": field.get("name")}
@@ -109,9 +115,8 @@ def table(record: dict[str, Any]) -> dict[str, Any]:
     """A table front matter as a table file. `fields` is `columns`, `semantic` is read as dbt's."""
     own = _documents(_ids(_renamed(record, "table")))
     fields = own.pop("fields", None)
-    primary_key = own.get("primary_key") if isinstance(own.get("primary_key"), list) else []
     converted = [
-        _semantic(f, primary_key) if isinstance(f, dict) else (f, None)
+        _semantic(f) if isinstance(f, dict) else (f, None)
         for f in (fields if isinstance(fields, list) else [])
     ]
     metrics = [m for _, m in converted if m is not None]

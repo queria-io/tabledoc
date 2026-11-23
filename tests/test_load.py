@@ -32,7 +32,7 @@ def project(write):
             "README.md": "Overview.\n",
             "sales/orders.tabledoc.yml": TABLE
             + "title: Orders\ndescription: One row is one order.\nprimary_key: [id]\n"
-            + "columns:\n  - {name: id, description: The order, entity: {type: primary, name: order}}\n"
+            + "columns:\n  - {name: id, description: The order, entity: order}\n"
             + "  - {name: file, asset: true}\n",
             "sales/orders.md": "Guide.\n",
             "sales/recent.tabledoc.yml": TABLE + "description: The last orders.\n",
@@ -60,12 +60,12 @@ def test_writes_the_tables_and_the_folder_for_fdl_commit(write, catalog, tmp_pat
     root = project(write)
     out = tmp_path / "pack"
     report = Report()
-    assert run(root, catalog, report, out=out, unlisted=True) is not None, report.render()
-    assert held(catalog, "dataset", "key", "value") == []
+    assert run(root, catalog, report, out=out, hide_undescribed=True) is not None, report.render()
+    assert held(catalog, "dataset", "key", "value") == [("name", "shop")]
     assert held(catalog, "licenses", "id") == [("CC-BY-4.0",)]
     assert held(catalog, "table_licenses", "schema_name", "table_name", "license_id", "position") == [("", "", "CC-BY-4.0", 0)]
     assert held(catalog, "schemas", "schema_name") == [("sales",)]
-    assert held(catalog, "tables", "table_name", "listed") == [("extra", False), ("orders", True), ("recent", True)]
+    assert held(catalog, "tables", "table_name", "hidden") == [("extra", True), ("orders", False), ("recent", False)]
     assert held(catalog, "columns", "column_name", "entity") == [("id", "order")]
     assert held(catalog, "descriptions", "schema_name", "table_name", "column_name", "language", "title", "title_reading", "description") == [
         ("", "", "", "und", "Shop", "ショップ", None),
@@ -89,10 +89,10 @@ def test_every_key_has_its_row(write, catalog):
             + "name: shop\nlanguage: en\nissued: 2026-10-30\nhomepage: https://shop.example\nimage: cover.png\n"
             + "topics: [retail, trade]\nsynonyms: [store]\nspatial_coverage: [JP]\n"
             + "temporal_coverage: {start: 2020}\n"
-            + "sources: [{id: site, title: Site, path: https://site.example}]\n"
+            + "sources: [{id: site, title: Site, url: https://site.example}]\n"
             + "contributors: [{id: city, title: City, roles: [publisher, rightsHolder]}]\n",
             "cover.png": b"PNG",
-            "sales/recent.tabledoc.yml": TABLE + "description: x\nkeywords: [latest]\nlisted: false\nsources: [site]\n"
+            "sales/recent.tabledoc.yml": TABLE + "description: x\ntopics: [latest]\nhidden: true\nsources: [site]\n"
             + "columns: [{name: id, title_reading: アイディー, dimension: categorical}]\n"
             + "metrics: [{name: n, agg: count, expr: id, description: Orders}]\n",
         }
@@ -104,6 +104,7 @@ def test_every_key_has_its_row(write, catalog):
         ("image", "cover.png"),
         ("issued", "2026-10-30"),
         ("language", "en"),
+        ("name", "shop"),
         ("temporal_start", "2020"),
     ]
     assert held(catalog, "topics", "table_name", "language", "topic") == [
@@ -111,11 +112,11 @@ def test_every_key_has_its_row(write, catalog):
     ]
     assert held(catalog, "synonyms", "table_name", "synonym") == [("", "store")]
     assert held(catalog, "table_areas", "table_name", "area") == [("", "JP")]
-    assert held(catalog, "sources", "id", "title", "path") == [("site", "Site", "https://site.example")]
+    assert held(catalog, "sources", "id", "title", "url") == [("site", "Site", "https://site.example")]
     assert held(catalog, "table_sources", "table_name", "source_id") == [("", "site"), ("recent", "site")]
     assert held(catalog, "contributors", "id", "title", "position") == [("city", "City", 0)]
     assert held(catalog, "contributor_roles", "contributor_id", "role") == [("city", "publisher"), ("city", "rightsHolder")]
-    assert held(catalog, "tables", "table_name", "listed") == [("orders", True), ("recent", False)]
+    assert held(catalog, "tables", "table_name", "hidden") == [("orders", False), ("recent", True)]
     assert held(catalog, "columns", "table_name", "column_name", "dimension") == [
         ("orders", "id", None), ("recent", "id", "categorical"),
     ]
@@ -153,11 +154,11 @@ def test_an_id_defined_twice_differently_is_an_error(write, catalog):
 
 def test_a_part_of_an_entry_refers_to_it(write, catalog):
     root = project(write)
-    (root / "tabledoc.yml").write_text(DATASET + "name: shop\nsources: [{id: s, title: A, path: https://a.example}]\n")
-    (root / "sales" / "recent.tabledoc.yml").write_text(TABLE + "sources: [{id: s, path: https://a.example}]\n")
+    (root / "tabledoc.yml").write_text(DATASET + "name: shop\nsources: [{id: s, title: A, url: https://a.example}]\n")
+    (root / "sales" / "recent.tabledoc.yml").write_text(TABLE + "sources: [{id: s, url: https://a.example}]\n")
     report = Report()
     assert run(root, catalog, report) is not None, report.render()
-    assert held(catalog, "sources", "id", "title", "path") == [("s", "A", "https://a.example")]
+    assert held(catalog, "sources", "id", "title", "url") == [("s", "A", "https://a.example")]
 
 
 def test_a_view_gets_no_sql(write, catalog):
@@ -215,8 +216,9 @@ def test_writes_into_the_schema_it_is_told(write, catalog):
     assert run(root, catalog, schema="docs") is not None
     assert held(catalog, "descriptions", "table_name", "column_name", "title", schema="docs")[:1] == [("", "", "Shop")]
     (root / "tabledoc.yml").write_text(DATASET + "name: shop\nschema: notes\ntitle: Notes\n")
-    assert run(root, catalog) is not None
-    assert held(catalog, "descriptions", "table_name", "column_name", "title", schema="notes")[:1] == [("", "", "Notes")]
+    report = Report()
+    assert run(root, catalog, report) is None
+    assert "schema-violation" in [f.code for f in report.findings]
 
 
 def test_a_schema_named_in_another_case_is_the_one_the_catalog_holds(write, catalog):
@@ -304,7 +306,7 @@ def test_text_in_more_than_one_language_is_a_row_for_each(write, catalog):
         ("recent", "", "ja", None),
     ]
     assert held(catalog, "topics", "language", "topic") == [("en", "retail"), ("ja", "小売")]
-    assert held(catalog, "dataset", "key", "value") == [("homepage", "https://example.jp"), ("language", "ja")]
+    assert held(catalog, "dataset", "key", "value") == [("homepage", "https://example.jp"), ("language", "ja"), ("name", "shop")]
     assert [f.code for f in report.findings] == ["one-language"]
 
 
@@ -327,7 +329,7 @@ def test_names_are_written_as_the_catalog_spells_them(write, catalog):
     (root / "sales" / "orders.tabledoc.yml").unlink()
     (root / "sales" / "orders.md").unlink()
     report = Report()
-    assert run(root, catalog, report, unlisted=True) is not None, report.render()
+    assert run(root, catalog, report, hide_undescribed=True) is not None, report.render()
     assert held(catalog, "tables", "table_name") == [("extra",), ("orders",), ("recent",)]
     assert held(catalog, "columns", "column_name") == [("id",)]
 
@@ -359,7 +361,7 @@ def test_an_fdl_whose_status_gives_no_data_path_is_an_error(tmp_path, monkeypatc
 def test_a_missing_manifest_stays_a_warning_when_a_table_dbt_built_is_not_described(write, catalog):
     root = project(write)
     write({"dbt_project.yml": "name: p\n"})
-    run(root, catalog, unlisted=True)
+    run(root, catalog, hide_undescribed=True)
     sql(catalog, "UPDATE lake._tabledoc.tables SET source_path = 'm.sql' WHERE table_name = 'extra'")
     report = Report()
     assert load(Options(root, with_source=False), Target(*catalog), report, strict=True) is None
@@ -369,7 +371,7 @@ def test_a_missing_manifest_stays_a_warning_when_a_table_dbt_built_is_not_descri
 def test_unlisted_leaves_out_the_schemas_of_a_description(write, catalog):
     root = project(write)
     assert run(root, catalog, schema="docs") is not None
-    assert run(root, catalog, unlisted=True) is not None
+    assert run(root, catalog, hide_undescribed=True) is not None
     assert held(catalog, "tables", "schema_name", "table_name") == [("sales", "extra"), ("sales", "orders"), ("sales", "recent")]
 
 
@@ -397,21 +399,21 @@ def test_unlisted_covers_a_table_dbt_built_that_says_only_its_sql(write, catalog
         }
     )
     report = Report()
-    assert run(root, catalog, report, unlisted=True) is not None, report.render()
-    assert held(catalog, "tables", "table_name", "listed", "sql") == [
-        ("extra", False, "select 1 as x"),
-        ("orders", True, "select 1 as x"),
-        ("recent", False, None),
+    assert run(root, catalog, report, hide_undescribed=True) is not None, report.render()
+    assert held(catalog, "tables", "table_name", "hidden", "sql") == [
+        ("extra", True, "select 1 as x"),
+        ("orders", False, "select 1 as x"),
+        ("recent", True, None),
     ]
     # Without a build, each keeps its SQL, and the missing manifest is only worth knowing.
     (root / "target" / "manifest.json").unlink()
     report = Report()
-    assert run(root, catalog, report, unlisted=True) is not None, report.render()
+    assert run(root, catalog, report, hide_undescribed=True) is not None, report.render()
     assert [(f.level.value, f.code) for f in report.findings] == [("info", "manifest-missing")]
-    assert held(catalog, "tables", "table_name", "listed", "sql") == [
-        ("extra", False, "select 1 as x"),
-        ("orders", True, "select 1 as x"),
-        ("recent", False, None),
+    assert held(catalog, "tables", "table_name", "hidden", "sql") == [
+        ("extra", True, "select 1 as x"),
+        ("orders", False, "select 1 as x"),
+        ("recent", True, None),
     ]
 
 
@@ -447,7 +449,7 @@ def test_repository_comes_from_git_and_source_path_from_its_root(write, catalog)
     subprocess.run(["git", "-C", str(top), "-c", "user.name=t", "-c", "user.email=t@example.com",
                     "commit", "-q", "--allow-empty", "-m", "x"], check=True)
     load(Options(top / "ds"), Target(*catalog), Report())
-    assert held(catalog, "dataset", "key", "value") == [("repository", "https://github.com/example/shop")]
+    assert held(catalog, "dataset", "key", "value")[-1] == ("repository", "https://github.com/example/shop")
     assert held(catalog, "tables", "table_name", "source_path") == [("extra", "ds/models/extra.sql")]
 
 
@@ -472,7 +474,7 @@ def test_unlisted_leaves_out_a_description_an_earlier_tabledoc_wrote(write, cata
     sql(catalog, "CREATE SCHEMA lake._queria; CREATE TABLE lake._queria.dataset (id VARCHAR);"
         "CREATE TABLE lake._queria.schemas (schema VARCHAR); CREATE TABLE lake._queria.tables (schema VARCHAR);"
         "CREATE TABLE lake._queria.columns (schema VARCHAR); CREATE TABLE lake._queria.files (path VARCHAR)")
-    assert run(root, catalog, unlisted=True) is not None
+    assert run(root, catalog, hide_undescribed=True) is not None
     assert held(catalog, "tables", "schema_name", "table_name") == [("sales", "extra"), ("sales", "orders"), ("sales", "recent")]
 
 
@@ -482,10 +484,10 @@ def test_replaces_the_tables_of_an_earlier_tabledoc(write, catalog):
         "CREATE TABLE lake._tabledoc.tables (schema VARCHAR, name VARCHAR, published BOOLEAN);"
         "INSERT INTO lake._tabledoc.tables VALUES ('sales', 'orders', false);"
         "CREATE TABLE lake._tabledoc.texts (schema VARCHAR, title VARCHAR);"
-        "CREATE TABLE lake._tabledoc.table_profiles (schema_name VARCHAR, table_name VARCHAR, row_count BIGINT)")
+        "CREATE TABLE lake._tabledoc.table_profiles (schema_name VARCHAR, table_name VARCHAR, rows BIGINT)")
     report = Report()
     assert run(root, catalog, report) is not None, report.render()
-    assert held(catalog, "tables", "table_name", "listed") == [("orders", True), ("recent", True)]
+    assert held(catalog, "tables", "table_name", "hidden") == [("orders", False), ("recent", False)]
     found = sql(catalog, "SELECT table_name FROM duckdb_tables() WHERE schema_name = '_tabledoc' ORDER BY 1")
     assert ("texts",) not in found
     assert ("table_profiles",) in found
@@ -497,3 +499,16 @@ def test_keeps_the_other_tables_of_the_schema_written_into(write, catalog):
     report = Report()
     assert run(root, catalog, report, schema="docs") is not None, report.render()
     assert sql(catalog, "SELECT count(*) FROM lake.docs.notes") == [(1,)]
+
+
+def test_the_primary_key_is_the_key_position_of_its_columns(write, lake):
+    catalog = lake("CREATE SCHEMA lake.s; CREATE TABLE lake.s.t AS SELECT 1 AS a, 2 AS b, 3 AS c")
+    root = write(
+        {
+            "tabledoc.yml": DATASET + "name: d\n",
+            "s/t.tabledoc.yml": TABLE + "primary_key: [b, a]\ncolumns:\n  - {name: a, title: A}\n  - {name: c, title: C}\n",
+        }
+    )
+    report = Report()
+    assert run(root, catalog, report) is not None, report.render()
+    assert held(catalog, "columns", "column_name", "key_position") == [("a", 1), ("b", 0), ("c", None)]

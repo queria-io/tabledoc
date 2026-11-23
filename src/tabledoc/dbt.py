@@ -29,9 +29,8 @@ TABLE_META = (
     "title",
     "title_reading",
     "topics",
-    "keywords",
     "synonyms",
-    "listed",
+    "hidden",
     "primary_key",
     "licenses",
     "sources",
@@ -48,22 +47,24 @@ def _meta(node: dict[str, Any]) -> dict[str, Any]:
     return meta if isinstance(meta, dict) else {}
 
 
-def _typed(value: Any) -> Any:
-    """dbt's entity or dimension as a table file writes it: its type, or {type, name}."""
-    if isinstance(value, dict):
-        return {k: value[k] for k in ("type", "name") if value.get(k)}
-    return value or None
+def _semantic(column: dict[str, Any]) -> dict[str, Any]:
+    """dbt's `entity` as the name of its code system, `dimension` as its type, and `granularity`."""
+    entity, dimension = column.get("entity"), column.get("dimension")
+    found = {
+        "entity": entity.get("name") if isinstance(entity, dict) else None,
+        "dimension": dimension.get("type") if isinstance(dimension, dict) else dimension,
+        "granularity": column.get("granularity"),
+    }
+    return {k: v for k, v in found.items() if v}
 
 
 def _column(column: dict[str, Any]) -> dict[str, Any]:
     meta = _meta(column)
-    semantic = {k: v for k in ("entity", "dimension") if (v := _typed(column.get(k))) is not None}
     return {
         "name": column.get("name"),
         **({"description": column["description"]} if column.get("description") else {}),
         **{k: meta[k] for k in COLUMN_META if k in meta},
-        **semantic,
-        **({"granularity": column["granularity"]} if column.get("granularity") else {}),
+        **_semantic(column),
     }
 
 
@@ -126,6 +127,12 @@ def tables(manifest: dict[str, Any], root: Path, report: Report) -> list[Table]:
             # The earlier name of `documents`, read as it (the older format).
             report.info("legacy-format", f"{node.get('name')}: config.meta.docs is read as documents; rename it", _yml_path(root, node))
             meta = {**{k: v for k, v in meta.items() if k != "docs"}, "documents": meta.get("documents", meta["docs"])}
+        if "listed" in meta:
+            report.info("legacy-format", f"{node.get('name')}: config.meta.listed is read as hidden; rename it", _yml_path(root, node))
+            meta = {**{k: v for k, v in meta.items() if k != "listed"}, "hidden": meta.get("hidden", meta["listed"] is False)}
+        if "keywords" in meta:
+            report.info("legacy-format", f"{node.get('name')}: config.meta.keywords is read as topics; rename it", _yml_path(root, node))
+            meta = {**{k: v for k, v in meta.items() if k != "keywords"}, "topics": meta.get("topics", meta["keywords"])}
         columns = [_column(c) for c in (node.get("columns") or {}).values() if isinstance(c, dict)]
         primary_key = _primary_key(node)
         if primary_key and "primary_key" in meta:
