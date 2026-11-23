@@ -9,7 +9,6 @@ primary keys, asset columns and dependencies are declared with `fdl declare`.
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 from collections.abc import Iterator
@@ -32,7 +31,7 @@ ALIAS = "lake"
 class Target:
     #: The DuckLake catalog: a .sqlite or .duckdb file, or a ducklake: path.
     catalog: str
-    #: Where new data files go; default the note `fdl clone` wrote beside the catalog.
+    #: Where new data files go; default where `fdl status` says, for fdl's working metadata.
     data_path: str | None = None
     #: The folder for `fdl commit --assets`; None writes the catalog only.
     out: Path | None = None
@@ -45,27 +44,12 @@ class Target:
 
 
 def data_path(catalog: str, given: str | None) -> str | None:
-    """``given``, else where `fdl clone` noted beside the catalog that new data files go.
-
-    As fdl reads the note: the storage's data folder (``--storage``), else the
-    local folder (``--data``), else None (the catalog's own data path).
-    """
+    """``given``, else where new data files go as `fdl status` says, when `fdl clone`
+    made the catalog; else None (the catalog's own data path)."""
     if given:
         return given
-    note = fdl_state.note(catalog)
-    if note is None:
-        return None
-    try:
-        state = json.loads(note.read_text(encoding="utf-8"))
-        storage, data, data_dir = state.get("storage"), state.get("data"), state.get("data_dir")
-    except (OSError, ValueError, AttributeError) as exc:
-        raise SpecError(f"cannot read {note}: {exc}") from exc
-    if storage:
-        if not data_dir:
-            raise SpecError(f"{note} names a storage but no data_dir; give --data-path")
-        base = storage if "://" in storage else Path(storage).resolve().as_posix()
-        return base.rstrip("/") + "/" + data_dir
-    return Path(data).resolve().as_posix() + "/" if data else None
+    found = fdl_state.status(catalog)
+    return found["data_path"] if found else None
 
 
 def _string(value: str) -> str:
@@ -74,16 +58,11 @@ def _string(value: str) -> str:
 
 
 def remote_secret(catalog: str) -> str | None:
-    """The DuckDB secret that sends `FDL_TOKEN` to the HTTP remote `fdl clone` noted beside
-    ``catalog``, so the data files of a private dataset can be read; None without both."""
+    """The DuckDB secret that sends `FDL_TOKEN` to the HTTP remote `fdl clone` made
+    ``catalog`` from, so the data files of a private dataset can be read; None without both."""
     token = os.environ.get("FDL_TOKEN")
-    note = fdl_state.note(catalog)
-    if not token or note is None:
-        return None
-    try:
-        remote = json.loads(note.read_text(encoding="utf-8")).get("remote")
-    except (OSError, ValueError, AttributeError) as exc:
-        raise SpecError(f"cannot read {note}: {exc}") from exc
+    found = fdl_state.status(catalog) if token else None
+    remote = found.get("remote") if found else None
     if not isinstance(remote, str) or not remote.startswith(("http://", "https://")):
         return None
     return f"CREATE SECRET tabledoc_remote (TYPE http, BEARER_TOKEN {_string(token)}, SCOPE {_string(remote)})"

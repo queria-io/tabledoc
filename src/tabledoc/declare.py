@@ -1,7 +1,6 @@
 """Declare to FDL what it reads of the tables: primary keys, asset columns and dependencies.
 
-When the catalog is FDL's working metadata (`fdl clone` noted its state beside
-it), `tabledoc load` runs `fdl declare` for what the description says:
+When the catalog is FDL's working metadata (`fdl clone` made it), `tabledoc load` runs `fdl declare` for what the description says:
 
 - each described table's `primary_key` (a view has none)
 - each described table's asset columns, when its columns say `asset` (a view has none)
@@ -18,23 +17,11 @@ say is left as FDL has it.
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
-from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 from . import fdl_state, tables
 from .description import Description
 from .report import SpecError
-
-#: Runs fdl with these arguments and gives what it printed.
-Run = Callable[[list[str]], str]
-
-
-def working(catalog: str) -> Path | None:
-    """The working metadata ``catalog`` is, when `fdl clone` made it; else None."""
-    return Path(catalog.removeprefix("ducklake:")) if fdl_state.note(catalog) else None
 
 
 def wanted(
@@ -94,21 +81,11 @@ def commands(have: dict[str, Any], want: dict[str, Any]) -> list[list[str]]:
     return out
 
 
-def _run(args: list[str]) -> str:
-    fdl = shutil.which("fdl")
-    if fdl is None:
-        raise SpecError("the catalog is fdl's working metadata, but fdl is not on PATH to declare its keys")
-    done = subprocess.run([fdl, *args], capture_output=True, text=True, check=False)
-    if done.returncode != 0:
-        raise SpecError(f"fdl {' '.join(args)} failed: {done.stderr.strip() or done.stdout.strip()}")
-    return done.stdout
-
-
 def declare(
     catalog: str,
     description: Description,
     schema: str,
-    run: Run = _run,
+    run: fdl_state.Run | None = None,
     *,
     unlisted: set[str] | frozenset[str] = frozenset(),
     views: set[str] | frozenset[str] = frozenset(),
@@ -117,9 +94,10 @@ def declare(
 
     Gives the commands run (each without `fdl declare <working>`).
     """
-    path = working(catalog)
+    path = fdl_state.working(catalog)
     if path is None:
         return []
+    run = run or fdl_state.call
     printed = run(["declare", "list", str(path), "--json"])
     try:
         have = json.loads(printed)

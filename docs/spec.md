@@ -345,7 +345,7 @@ tabledoc load --ducklake work.sqlite --out build/assets
 fdl commit work.sqlite -m "..." --assets build/assets
 ```
 
-- `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where new data files go (default: `FDL_DATA_PATH`, else the folder `fdl clone` noted beside the catalog). Data files over HTTP are read with DuckDB's secrets; when the catalog is fdl's working metadata and `FDL_TOKEN` is set, the token is sent to the remote `fdl clone` noted, so a private dataset's files can be read
+- `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where new data files go (default: `FDL_DATA_PATH`, else the `data_path` that `fdl status --json` gives for fdl's working metadata). Data files over HTTP are read with DuckDB's secrets; when the catalog is fdl's working metadata and `FDL_TOKEN` is set, the token is sent to the `remote` that `fdl status --json` gives, so a private dataset's files can be read
 - `--schema`: the schema to write into (default: `schema` in `tabledoc.yml`, else `_tabledoc`)
 - `--out`: also write the folder `fdl commit --assets` takes: each file of the `files` table under `files/<path>`. With `--assets <folder>`, the files below it (those of the build's asset columns) are linked under `data/`. The folder has to be empty or written by an earlier `load`, and outside `.fdl/`, which only fdl writes
 - `--unlisted`: the catalog's tables and views that have no description get a row in `tables` with `listed` false, and so does a table dbt built that the author described nowhere (only its SQL is known). The tables of the schema written into, and of each schema that holds the tables `dataset`, `schemas`, `tables`, `columns` and `files` (one an earlier load wrote into), get none
@@ -357,7 +357,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - A view's row has no `sql` and no `table_dependencies`: the metadata holds the view's SQL
 - `repository` is `repository` in `tabledoc.yml`, else Git's `origin` as https
 - The tables an earlier tabledoc wrote that are not of the format (`texts`) are dropped, and so are the columns of the format's tables that are not. Other tables of the schema are left as they are. `load` does not write the profile tables, and leaves them as they are
-- Primary keys and asset columns are not written into these tables. When the catalog is the working metadata `fdl clone` made (it noted its state in `<catalog>.fdl/state.json`, or `<catalog>.fdl.json` with fdl-cli 0.34), `load` declares them to FDL with `fdl declare`, which has to be on `PATH` (fdl-cli 0.34 or later): each table's `primary_key` and the asset columns of each table whose columns say `asset` (a view has neither), no profile for each table and view whose `listed` is false and a profile for each other table described, the other datasets the SQL reads (from dbt's `profiles.yml`) as dependencies, and the keys of these tables with `files.sha256` as an asset column and no profile. It runs only what differs from `fdl declare list`, and leaves what the description does not say as FDL has it
+- Primary keys and asset columns are not written into these tables. When the catalog is the working metadata `fdl clone` made (the folder `<catalog>.fdl` is beside it), `load` declares them to FDL with `fdl declare`, which has to be on `PATH` (fdl-cli 0.35 or later): each table's `primary_key` and the asset columns of each table whose columns say `asset` (a view has neither), no profile for each table and view whose `listed` is false and a profile for each other table described, the other datasets the SQL reads (from dbt's `profiles.yml`) as dependencies, and the keys of these tables with `files.sha256` as an asset column and no profile. It runs only what differs from `fdl declare list`, and leaves what the description does not say as FDL has it
 - tabledoc writes no comments (`COMMENT ON`)
 
 ## Writing the files from a catalog
@@ -369,7 +369,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 ```
 
 - `--ducklake`: the catalog (default: `FDL_WORKING`). `--schema`: the schema the description is in (default: `_tabledoc`); another schema is written as `schema` in `tabledoc.yml`, so `load` writes back into it. `--out`: the folder (default: here), outside `.fdl/`
-- `--files`: where the files of the `files` table are, as `<files>/<sha256>`: a folder or an http(s) URL. Default: `assets/` of the repository `fdl clone` noted beside the catalog. Each file is checked against its sha256
+- `--files`: where the files of the `files` table are, as `<files>/<sha256>`: a folder or an http(s) URL. Default: `assets/` of the `remote` that `fdl status --json` gives for fdl's working metadata. Each file is checked against its sha256
 - `--name`: the dataset's `name` in `tabledoc.yml`. Default: the last part of the repository's URL
 - A file already in the folder is not replaced, and nothing is written, unless `--force`. A path in the catalog that would leave the folder is an error
 - Each table file is at `<schema>/<table>.tabledoc.yml`. Every file stays at its path in the dataset, and the Markdown files of a folder (its `README.md` first) are listed in the `documents` of what the folder describes; the root's `README.md` is the dataset's without being listed

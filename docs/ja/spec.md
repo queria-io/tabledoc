@@ -345,7 +345,7 @@ tabledoc load --ducklake work.sqlite --out build/assets
 fdl commit work.sqlite -m "..." --assets build/assets
 ```
 
-- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ `fdl clone` がカタログの横に記録したフォルダ)。HTTP のデータファイルは DuckDB の secret で読みます。カタログが fdl の作業用メタデータで `FDL_TOKEN` があるときは、`fdl clone` が記録した remote にそのトークンを送るので、非公開データセットのファイルも読めます
+- `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--data-path`: 新しいデータファイルを置く場所 (既定は `FDL_DATA_PATH`、無ければ fdl の作業用メタデータについて `fdl status --json` が返す `data_path`)。HTTP のデータファイルは DuckDB の secret で読みます。カタログが fdl の作業用メタデータで `FDL_TOKEN` があるときは、`fdl status --json` が返す `remote` にそのトークンを送るので、非公開データセットのファイルも読めます
 - `--schema`: 書くスキーマ (既定は `tabledoc.yml` の `schema`、無ければ `_tabledoc`)
 - `--out`: `fdl commit --assets` に渡すフォルダも書きます。`files` テーブルの各ファイルを `files/<path>` に置きます。`--assets <フォルダ>` を付けると、その下のファイル (ビルドが作った asset の列のファイル) を `data/` にリンクします。フォルダは空か前の `load` が書いたもので、fdl だけが書く `.fdl/` の外でなければなりません
 - `--unlisted`: 説明の無いテーブルとビューにも `tables` の行を作り、`listed` を false にします。dbt が作ったテーブルで、SQL のほかに説明がどこにも書かれていないものも `listed` を false にします。書き込むスキーマと、`dataset`・`schemas`・`tables`・`columns`・`files` のテーブルをすべて持つスキーマ (以前の load が書いたスキーマなど) のテーブルには行を作りません
@@ -357,7 +357,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - ビューの行には `sql` と `table_dependencies` を書きません。ビューの SQL はメタデータが持ちます
 - `repository` は `tabledoc.yml` の `repository`、無ければ Git の `origin` を https にしたものです
 - 以前の tabledoc が書いた、この規約のものでないテーブル (`texts`) と、この規約のテーブルにある規約のものでない列は削除します。スキーマのほかのテーブルはそのまま残します。プロファイルのテーブルは書かず、そのまま残します
-- 主キーと asset の列はこれらのテーブルに書きません。カタログが `fdl clone` の作った作業用メタデータのとき (横に `<catalog>.fdl/state.json`、fdl-cli 0.34 では `<catalog>.fdl.json` があるとき)、`load` は `fdl declare` で FDL に宣言します (fdl-cli 0.34 以降の `fdl` が `PATH` にあることが必要です)。宣言するのは、各テーブルの `primary_key` と、列に `asset` があるテーブルの asset の列 (ビューにはどちらも宣言しません)、`listed` が false のテーブルとビューにプロファイルを作らないことと、説明したほかのテーブルにプロファイルを作ること、SQL が読むほかのデータセット (dbt の `profiles.yml` から) の依存先、それにこれらのテーブルの主キーと asset の列 `files.sha256` とプロファイルを作らないことです。`fdl declare list` と違うものだけを実行し、説明に無いものは FDL の宣言のまま残します
+- 主キーと asset の列はこれらのテーブルに書きません。カタログが `fdl clone` の作った作業用メタデータのとき (横に `<catalog>.fdl` フォルダがあるとき)、`load` は `fdl declare` で FDL に宣言します (fdl-cli 0.35 以降の `fdl` が `PATH` にあることが必要です)。宣言するのは、各テーブルの `primary_key` と、列に `asset` があるテーブルの asset の列 (ビューにはどちらも宣言しません)、`listed` が false のテーブルとビューにプロファイルを作らないことと、説明したほかのテーブルにプロファイルを作ること、SQL が読むほかのデータセット (dbt の `profiles.yml` から) の依存先、それにこれらのテーブルの主キーと asset の列 `files.sha256` とプロファイルを作らないことです。`fdl declare list` と違うものだけを実行し、説明に無いものは FDL の宣言のまま残します
 - コメント (`COMMENT ON`) は書きません
 
 ## カタログからファイルを書く
@@ -369,7 +369,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 ```
 
 - `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--schema`: 説明のあるスキーマ (既定は `_tabledoc`)。ほかのスキーマは `tabledoc.yml` の `schema` に書くので、`load` は同じスキーマに書き戻します。`--out`: 書くフォルダ (既定は今のフォルダ)。`.fdl/` の外でなければなりません
-- `--files`: `files` テーブルのファイルの置き場所。`<files>/<sha256>` で読みます。フォルダか http(s) の URL です。既定は、`fdl clone` がカタログの横に記録したリポジトリの `assets/` です。各ファイルは sha256 で照合します
+- `--files`: `files` テーブルのファイルの置き場所。`<files>/<sha256>` で読みます。フォルダか http(s) の URL です。既定は、fdl の作業用メタデータについて `fdl status --json` が返す `remote` の `assets/` です。各ファイルは sha256 で照合します
 - `--name`: `tabledoc.yml` の `name`。既定はリポジトリの URL の最後の部分です
 - フォルダに同じファイルがあると、`--force` を付けない限り何も書きません。カタログのパスがフォルダの外を指すときはエラーです
 - テーブルのファイルは `<schema>/<table>.tabledoc.yml` に書きます。ファイルはデータセットの中のパスのまま書き、フォルダの Markdown (`README.md` を先頭に) を、そのフォルダが説明する対象の `documents` に並べます。ルートの `README.md` は並べなくてもデータセットの説明です

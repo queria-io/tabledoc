@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import datetime
 import hashlib
-import json
 import posixpath
 import urllib.request
 from dataclasses import dataclass
@@ -46,20 +45,17 @@ class Source:
     schema: str = tables.SCHEMA
 
 
-def _note(catalog: str) -> dict[str, Any]:
-    note = fdl_state.note(catalog)
-    try:
-        found = json.loads(note.read_text(encoding="utf-8")) if note else {}
-    except (OSError, ValueError) as exc:
-        raise SpecError(f"cannot read {note}: {exc}") from exc
-    return found if isinstance(found, dict) else {}
+def _remote(catalog: str) -> str | None:
+    """The repository `fdl clone` made ``catalog`` from, as `fdl status` says; else None."""
+    found = fdl_state.status(catalog)
+    return found.get("remote") if found else None
 
 
 def files_base(source: Source) -> str | None:
-    """``source.files``, else the assets of the repository `fdl clone` noted beside the catalog."""
+    """``source.files``, else the assets of the repository `fdl clone` made the catalog from."""
     if source.files:
         return source.files
-    remote = _note(source.catalog).get("remote")
+    remote = _remote(source.catalog)
     return f"{str(remote).rstrip('/')}/assets" if remote else None
 
 
@@ -67,7 +63,7 @@ def dataset_name(source: Source) -> str:
     """``source.name``, else the last part of the repository's URL, else the catalog's file name."""
     if source.name:
         return source.name
-    remote = _note(source.catalog).get("remote")
+    remote = _remote(source.catalog)
     if remote:
         return posixpath.basename(str(remote).rstrip("/"))
     return Path(source.catalog.removeprefix("ducklake:")).name.split(".")[0]

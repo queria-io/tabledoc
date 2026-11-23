@@ -49,7 +49,7 @@ def test_runs_fdl_declare_only_for_a_working_metadata(write, tmp_path):
 
     catalog = tmp_path / "work.sqlite"
     assert declare(str(catalog), description, "_tabledoc", run) == []
-    (tmp_path / "work.sqlite.fdl.json").write_text("{}")
+    (tmp_path / "work.sqlite.fdl").mkdir()
     done = declare(str(catalog), description, "_tabledoc", run)
     assert calls[0] == ["declare", "list", str(catalog), "--json"]
     assert ["declare", "primary-key", str(catalog), "sales.orders", "id"] in calls
@@ -71,16 +71,15 @@ def test_a_view_gets_no_key_and_a_table_not_listed_no_profile(write):
 
 
 def test_output_of_fdl_that_is_not_json_is_an_error(write, tmp_path):
-    (tmp_path / "work.sqlite.fdl.json").write_text("{}")
+    (tmp_path / "work.sqlite.fdl").mkdir()
     with pytest.raises(SpecError):
         declare(str(tmp_path / "work.sqlite"), described(write), "_tabledoc", lambda args: "not json")
 
 
-def test_the_state_fdl_keeps_in_a_folder_makes_a_working_metadata(tmp_path):
-    from tabledoc.declare import working
+def test_the_folder_fdl_keeps_beside_it_makes_a_working_metadata(tmp_path):
+    from tabledoc.fdl_state import working
 
     catalog = tmp_path / "work.sqlite"
     assert working(str(catalog)) is None
     (tmp_path / "work.sqlite.fdl").mkdir()
-    (tmp_path / "work.sqlite.fdl" / "state.json").write_text("{}")
     assert working(f"ducklake:{catalog}") == catalog
