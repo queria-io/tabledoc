@@ -83,3 +83,6 @@ def test_the_folder_fdl_keeps_beside_it_makes_a_working_metadata(tmp_path):
     assert working(str(catalog)) is None
     (tmp_path / "work.sqlite.fdl").mkdir()
     assert working(f"ducklake:{catalog}") == catalog
+    (tmp_path / "work.sqlite.fdl.json").write_text("{}")
+    with pytest.raises(SpecError, match="0.35"):
+        working(str(catalog))

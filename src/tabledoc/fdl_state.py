@@ -30,6 +30,8 @@ def working(catalog: str) -> Path | None:
     """The working metadata ``catalog`` is, when `fdl clone` made it (the folder
     ``<catalog>.fdl`` is beside it); else None."""
     path = Path(catalog.removeprefix("ducklake:"))
+    if path.with_name(path.name + ".fdl.json").is_file():
+        raise SpecError(f"{path} was cloned by fdl-cli 0.34 or earlier: tabledoc needs fdl-cli 0.35 or later")
     return path if path.with_name(path.name + ".fdl").is_dir() else None
 
 
