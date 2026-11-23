@@ -1,6 +1,21 @@
 # CHANGELOG
 
 
+## v0.9.0 (2026-11-23)
+
+### Features
+
+- Fill in the licenses tabledoc knows by id ([#25](https://github.com/queria-io/tabledoc/pull/25),
+  [`c98b796`](https://github.com/queria-io/tabledoc/commit/c98b79607dc46fae5367a1484b2553936abcb26b))
+
+tabledoc now holds the title, URL and terms of common licenses (SPDX ones and terms of use without
+  an SPDX identifier, such as JP-PDL-1.0) in licenses.json. A license written by one of those ids is
+  filled in on read, so every catalog holds the same entry; keys written that differ are replaced
+  with a warning (known-license). dump writes such a license back as its id alone.
+
+The spec also says what homepage is: the dataset's web page other than its repository.
+
+
 ## v0.8.0 (2026-11-23)
 
 ### Features
