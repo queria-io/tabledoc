@@ -1,6 +1,37 @@
 # CHANGELOG
 
 
+## v0.8.0 (2026-11-23)
+
+### Features
+
+- Put the primary key in _tabledoc and settle the names of v1
+  ([#23](https://github.com/queria-io/tabledoc/pull/23),
+  [`b77c39a`](https://github.com/queria-io/tabledoc/commit/b77c39aa8358288a76bc2ef530ab31fcb08730b1))
+
+* feat!: put the primary key in _tabledoc and settle the names of v1
+
+- columns.key_position holds each column's place in the primary key - listed becomes hidden (true
+  hides a table); --unlisted becomes --hide-undescribed - sources and contributors take url instead
+  of path - entity is the name of a code system; dimension is categorical or time - drop keywords,
+  the license spdx key and the schema key of tabledoc.yml - the profile tables use FDL's names
+  (rows, min, max, count) and its value rule - the dataset table holds the dataset's name, which
+  dump reads back - the spec says how each table was built, and that v1 may still change
+
+BREAKING CHANGE: tabledoc.yml and table files with listed, path, keywords, spdx, schema or an entity
+  map are refused, and readers of _tabledoc see the new column names.
+
+* fix: read older keywords as topics and refuse catalogs of earlier tabledoc in dump
+
+* fix: read listed and keywords in dbt config.meta as hidden and topics, keep
+  schemas/tabledoc/v1.json
+
+### Breaking Changes
+
+- Tabledoc.yml and table files with listed, path, keywords, spdx, schema or an entity map are
+  refused, and readers of _tabledoc see the new column names.
+
+
 ## v0.7.0 (2026-11-23)
 
 ### Features
