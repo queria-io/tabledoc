@@ -116,13 +116,15 @@ def test_dump_checks_the_content(loaded, tmp_path):
         dump(Source(catalog[0], files.as_posix(), "shop"), tmp_path / "dumped")
 
 
-def test_dump_reads_the_repository_from_fdl_clones_note(loaded, tmp_path, monkeypatch, capsys):
+def test_dump_reads_the_repository_from_fdl_status(loaded, tmp_path, monkeypatch, capsys):
     catalog, files = loaded
     repo = tmp_path / "repo"
     (repo / "assets").mkdir(parents=True)
     for file in files.iterdir():
         (repo / "assets" / file.name).write_bytes(file.read_bytes())
-    (tmp_path / "lake" / "work.sqlite.fdl.json").write_text(json.dumps({"remote": str(repo) + "/"}))
+    (tmp_path / "lake" / "work.sqlite.fdl").mkdir()
+    status = {"remote": str(repo) + "/", "base": None, "data_path": catalog[1]}
+    monkeypatch.setattr("tabledoc.fdl_state.call", lambda args: json.dumps(status))
     monkeypatch.setenv("FDL_WORKING", catalog[0])
     out = tmp_path / "dumped"
     assert main(["dump", "--out", str(out)]) == 0

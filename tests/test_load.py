@@ -332,22 +332,28 @@ def test_names_are_written_as_the_catalog_spells_them(write, catalog):
     assert held(catalog, "columns", "column_name") == [("id",)]
 
 
-def test_data_path_follows_fdl_clones_note(tmp_path):
+def test_data_path_follows_fdl_status(tmp_path, monkeypatch):
     working = tmp_path / "work.sqlite"
-    note = tmp_path / "work.sqlite.fdl.json"
-    note.write_text(json.dumps({"storage": "s3://bucket/repo/", "data_dir": "data/"}))
-    assert data_path(str(working), None) == "s3://bucket/repo/data/"
+    assert data_path(str(working), None) is None
+    (tmp_path / "work.sqlite.fdl").mkdir()
+    calls = []
+
+    def call(args):
+        calls.append(args)
+        return json.dumps({"remote": "https://data.example/d/", "base": None, "data_path": "s3://bucket/repo/data/"})
+
+    monkeypatch.setattr("tabledoc.fdl_state.call", call)
     assert data_path("ducklake:" + str(working), None) == "s3://bucket/repo/data/"
-    note.write_text(json.dumps({"data": str(tmp_path / "d")}))
-    assert data_path(str(working), None) == (tmp_path / "d").resolve().as_posix() + "/"
+    assert calls == [["status", str(working), "--json"]]
     assert data_path(str(working), "given/") == "given/"
 
 
-def test_data_path_reads_the_state_fdl_keeps_in_a_folder(tmp_path):
+def test_an_fdl_whose_status_gives_no_data_path_is_an_error(tmp_path, monkeypatch):
     working = tmp_path / "work.sqlite"
     (tmp_path / "work.sqlite.fdl").mkdir()
-    (tmp_path / "work.sqlite.fdl" / "state.json").write_text(json.dumps({"data": str(tmp_path / "work.sqlite.fdl" / "data")}))
-    assert data_path(str(working), None) == (tmp_path / "work.sqlite.fdl" / "data").resolve().as_posix() + "/"
+    monkeypatch.setattr("tabledoc.fdl_state.call", lambda args: json.dumps({"pending": None}))
+    with pytest.raises(SpecError, match="0.35"):
+        data_path(str(working), None)
 
 
 def test_a_missing_manifest_stays_a_warning_when_a_table_dbt_built_is_not_described(write, catalog):
@@ -451,7 +457,9 @@ def test_sends_fdl_token_to_the_remote_of_a_working_metadata(tmp_path, monkeypat
     catalog = tmp_path / "work.sqlite"
     monkeypatch.setenv("FDL_TOKEN", "t'k")
     assert remote_secret(str(catalog)) is None
-    (tmp_path / "work.sqlite.fdl.json").write_text(json.dumps({"remote": "https://data.example/d/"}))
+    (tmp_path / "work.sqlite.fdl").mkdir()
+    status = {"remote": "https://data.example/d/", "base": None, "data_path": "/tmp/d/"}
+    monkeypatch.setattr("tabledoc.fdl_state.call", lambda args: json.dumps(status))
     assert remote_secret(str(catalog)) == (
         "CREATE SECRET tabledoc_remote (TYPE http, BEARER_TOKEN 't''k', SCOPE 'https://data.example/d/')"
     )
