@@ -21,7 +21,7 @@ from typing import Any
 
 import yaml
 
-from . import fdl_state, languages, schemas, tables
+from . import fdl_state, languages, licenses, schemas, tables
 from .description import README
 from .files import normalized
 from .load import ALIAS, attached
@@ -154,7 +154,8 @@ def _ordered(found: tables.Rows, table: str, column: str) -> dict[tuple[str, str
 
 class _Entries:
     """Licenses or sources as the files write them: in full where an id is first used, by
-    its id alone after that. A license that has only its id is written as the id."""
+    its id alone after that. A license that has only its id, or is one tabledoc knows, is
+    written as the id."""
 
     def __init__(self, rows: list[dict[str, Any]], bare: bool) -> None:
         self.by_id = {r["id"]: _plain(r) for r in rows}
@@ -165,7 +166,7 @@ class _Entries:
         out: list[Any] = []
         for i in ids:
             entry = self.by_id.get(i, {"id": i})
-            if i in self.written or (self.bare and set(entry) == {"id"}):
+            if i in self.written or (self.bare and (set(entry) == {"id"} or entry == licenses.held_as(i))):
                 out.append(i)
             else:
                 out.append(entry)

@@ -10,7 +10,7 @@ TABLE = "$schema: https://tabledoc.queria.io/schemas/table/v1.json\n"
 
 FILES = {
     "tabledoc.yml": DATASET
-    + "name: shop\ntitle: Shop\nlanguage: en\nlicenses: [{id: CC-BY-4.0, url: https://example.com/by}]\n"
+    + "name: shop\ntitle: Shop\nlanguage: en\nlicenses: [{id: own, url: https://example.com/by}]\n"
     + "schemas: [{name: sales, title: Sales, description: What was sold.}]\n"
     + "title_reading: ショップ\nsynonyms: [store]\nannotations: {other: {secret: 1}}\n",
     "README.md": "# Shop\n\nSee ![chart](docs/chart.png).\n",
@@ -47,7 +47,7 @@ def test_one_file_per_dataset_schema_and_table_at_the_paths_in_the_dataset(write
 def test_dataset_lists_its_tables_then_its_overview(write):
     readme = rendered(write)["README.md"]
     assert readme.startswith("# Shop (`shop`)\n\n- Name: `shop`\n- Reading: ショップ\n- Language: en\n- Synonyms: store\n")
-    assert "- Licenses: [CC-BY-4.0](https://example.com/by)\n" in readme
+    assert "- Licenses: [own](https://example.com/by)\n" in readme
     assert "### [Sales (`sales`)](sales/README.md)\n\nWhat was sold.\n" in readme
     assert "- [`sales.orders`](sales/orders/README.md) Orders: One row is one order.\n" in readme
     assert readme.endswith("---\n\n# Shop\n\nSee ![chart](docs/chart.png).\n")

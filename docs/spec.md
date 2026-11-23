@@ -54,7 +54,6 @@ description: Every statistic on the Bank of Japan's time-series data search site
 language: en
 topics: [Bank of Japan, interest rates, prices]
 synonyms: [BOJ statistics]
-homepage: https://github.com/queria-io/dataset-boj
 update_frequency: irregular
 licenses:
   - id: boj-copyright
@@ -82,7 +81,7 @@ documents:
 | --- | --- | --- |
 | `$schema` | yes | The format and its version |
 | `name` | yes | The dataset's name: `^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
-| `title`, `title_reading`, `description`, `topics`, `synonyms`, `homepage`, `language`, `issued`, `update_frequency` | | `title_reading` is how the title is read (its kana in Japanese, say); `synonyms` are other names people search for it by; `language` is a BCP 47 tag, the language of the text written without one ([languages](#languages)); `issued` is `YYYY-MM-DD`; `update_frequency` is `continuous`, `daily`, `weekly`, `monthly`, `quarterly`, `yearly` or `irregular` |
+| `title`, `title_reading`, `description`, `topics`, `synonyms`, `homepage`, `language`, `issued`, `update_frequency` | | `title_reading` is how the title is read (its kana in Japanese, say); `synonyms` are other names people search for it by; `homepage` is the dataset's web page, other than its repository (left out when it has none); `language` is a BCP 47 tag, the language of the text written without one ([languages](#languages)); `issued` is `YYYY-MM-DD`; `update_frequency` is `continuous`, `daily`, `weekly`, `monthly`, `quarterly`, `yearly` or `irregular` |
 | `repository` | | The URL of the repository of the dataset's source code, such as `https://github.com/queria-io/dataset-boj`. `tabledoc load` takes Git's `origin` when it is left out |
 | `licenses`, `sources`, `contributors`, `temporal_coverage`, `spatial_coverage` | | [Licenses, sources and contributors](#licenses-sources-and-contributors). Written in a table file, `licenses`, `sources` and the coverage are that table's alone |
 | `image` | | The path of an image that stands for the dataset. It is sent with the documents and keeps its path under the root |
@@ -157,7 +156,8 @@ sources:
 
 - An entry is written in full once, in `tabledoc.yml` or in any table file, and by its `id` alone anywhere else (`sources: [search-site]`)
 - An entry whose keys all match the entry with the same `id` (`{id, path}` beside `{id, title, path}`, say) refers to it. Two entries with the same `id` that differ in a key are an error
-- A license whose `id` is written alone and defined nowhere is that `id` (an SPDX identifier such as `CC-BY-4.0`, say). A license that has an SPDX identifier takes it as its `id`. A source whose `id` is defined nowhere is an error
+- A license that has an SPDX identifier takes it as its `id`. tabledoc knows the title, URL and terms of the licenses in [`licenses.json`](https://github.com/queria-io/tabledoc/blob/main/src/tabledoc/licenses.json): some SPDX licenses and terms of use that have no SPDX identifier, such as `JP-PDL-1.0`. A license with one of those `id`s is written by its `id` alone, and tabledoc fills in the rest; where other keys are written, tabledoc's win and it warns
+- A license whose `id` is written alone, defined nowhere and unknown to tabledoc is that `id` alone. A source whose `id` is defined nowhere is an error
 - A license is `{id, url, title, commercial_use, share_alike, attribution_required}`, a source `{id, title, url}`, and a contributor `{id, title, url, roles}`. Contributors are the dataset's only
 
 ## Languages
