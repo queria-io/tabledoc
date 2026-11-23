@@ -61,6 +61,7 @@ metrics:
 tabledoc validate            # 検査する
 tabledoc load --ducklake work.sqlite   # 検査して、カタログの _tabledoc スキーマに書く
 tabledoc dump --ducklake work.sqlite --out description/   # カタログからファイルを書き戻す
+tabledoc profile --ducklake lake.sqlite   # データを数えてプロファイルのテーブルに書く (fdl を使わないとき)
 tabledoc export --markdown ai-docs/   # テーブルごとの Markdown を書き出す
 ```
 
