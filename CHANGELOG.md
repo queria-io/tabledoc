@@ -1,6 +1,45 @@
 # CHANGELOG
 
 
+## v0.6.0 (2026-11-23)
+
+### Bug Fixes
+
+- Read fdl's state from <catalog>.fdl/state.json, as fdl keeps it after 0.34
+  ([#19](https://github.com/queria-io/tabledoc/pull/19),
+  [`9bff5a8`](https://github.com/queria-io/tabledoc/commit/9bff5a8c739639b450c8f84d8dae0528d1f17a6d))
+
+fdl clone keeps its state in <catalog>.fdl/state.json from the release after 0.34. load, dump and
+  declare read it there, and from <catalog>.fdl.json as fdl 0.34 wrote it.
+
+### Continuous Integration
+
+- Release on every push to main ([#20](https://github.com/queria-io/tabledoc/pull/20),
+  [`7581ea2`](https://github.com/queria-io/tabledoc/commit/7581ea21819ed2564ab9a36f2f4d0f8f70805a6c))
+
+### Features
+
+- Write the description as 20 tables in third normal form, and drop queria:
+  ([#18](https://github.com/queria-io/tabledoc/pull/18),
+  [`f57a8e8`](https://github.com/queria-io/tabledoc/commit/f57a8e873e1b324c16df57d14b02c2623a444160))
+
+* feat!: write the description as 20 tables in third normal form, and drop queria:
+
+Licenses, sources and contributors get ids, and tables refer to them by id. title_kana is
+  title_reading, cover is image, published is listed, and synonyms is a key of its own. A table of
+  another dataset in depends_on is <dataset>.<schema>.<table>.
+
+* docs!: define tabledoc as a vocabulary with two forms, files and the _tabledoc tables
+
+* fix: read the older format without breaking existing datasets, and keep tables load did not write
+
+- Read cover as image only when it is a file's path - An entry whose keys all match the entry with
+  the same id refers to it - Report a duplicate or unknown id in the file it is written in - Skip a
+  source without an id after its schema error, instead of failing - Drop only the texts table an
+  earlier tabledoc wrote - dump: refuse a catalog an earlier tabledoc wrote, and sort topics,
+  synonyms and depends_on
+
+
 ## v0.5.0 (2026-11-22)
 
 ### Features
