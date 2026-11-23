@@ -343,6 +343,13 @@ def test_data_path_follows_fdl_clones_note(tmp_path):
     assert data_path(str(working), "given/") == "given/"
 
 
+def test_data_path_reads_the_state_fdl_keeps_in_a_folder(tmp_path):
+    working = tmp_path / "work.sqlite"
+    (tmp_path / "work.sqlite.fdl").mkdir()
+    (tmp_path / "work.sqlite.fdl" / "state.json").write_text(json.dumps({"data": str(tmp_path / "work.sqlite.fdl" / "data")}))
+    assert data_path(str(working), None) == (tmp_path / "work.sqlite.fdl" / "data").resolve().as_posix() + "/"
+
+
 def test_a_missing_manifest_stays_a_warning_when_a_table_dbt_built_is_not_described(write, catalog):
     root = project(write)
     write({"dbt_project.yml": "name: p\n"})

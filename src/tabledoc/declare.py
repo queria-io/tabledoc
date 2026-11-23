@@ -1,7 +1,7 @@
 """Declare to FDL what it reads of the tables: primary keys, asset columns and dependencies.
 
-When the catalog is FDL's working metadata (`fdl clone` noted ``<catalog>.fdl.json``
-beside it), `tabledoc load` runs `fdl declare` for what the description says:
+When the catalog is FDL's working metadata (`fdl clone` noted its state beside
+it), `tabledoc load` runs `fdl declare` for what the description says:
 
 - each described table's `primary_key` (a view has none)
 - each described table's asset columns, when its columns say `asset` (a view has none)
@@ -24,7 +24,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import tables
+from . import fdl_state, tables
 from .description import Description
 from .report import SpecError
 
@@ -34,8 +34,7 @@ Run = Callable[[list[str]], str]
 
 def working(catalog: str) -> Path | None:
     """The working metadata ``catalog`` is, when `fdl clone` made it; else None."""
-    path = Path(catalog.removeprefix("ducklake:"))
-    return path if Path(f"{path}.fdl.json").is_file() else None
+    return Path(catalog.removeprefix("ducklake:")) if fdl_state.note(catalog) else None
 
 
 def wanted(

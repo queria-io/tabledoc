@@ -357,7 +357,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - ビューの行には `sql` と `table_dependencies` を書きません。ビューの SQL はメタデータが持ちます
 - `repository` は `tabledoc.yml` の `repository`、無ければ Git の `origin` を https にしたものです
 - 以前の tabledoc が書いた、この規約のものでないテーブル (`texts`) と、この規約のテーブルにある規約のものでない列は削除します。スキーマのほかのテーブルはそのまま残します。プロファイルのテーブルは書かず、そのまま残します
-- 主キーと asset の列はこれらのテーブルに書きません。カタログが `fdl clone` の作った作業用メタデータのとき (横に `<catalog>.fdl.json` があるとき)、`load` は `fdl declare` で FDL に宣言します (fdl-cli 0.34 以降の `fdl` が `PATH` にあることが必要です)。宣言するのは、各テーブルの `primary_key` と、列に `asset` があるテーブルの asset の列 (ビューにはどちらも宣言しません)、`listed` が false のテーブルとビューにプロファイルを作らないことと、説明したほかのテーブルにプロファイルを作ること、SQL が読むほかのデータセット (dbt の `profiles.yml` から) の依存先、それにこれらのテーブルの主キーと asset の列 `files.sha256` とプロファイルを作らないことです。`fdl declare list` と違うものだけを実行し、説明に無いものは FDL の宣言のまま残します
+- 主キーと asset の列はこれらのテーブルに書きません。カタログが `fdl clone` の作った作業用メタデータのとき (横に `<catalog>.fdl/state.json`、fdl-cli 0.34 では `<catalog>.fdl.json` があるとき)、`load` は `fdl declare` で FDL に宣言します (fdl-cli 0.34 以降の `fdl` が `PATH` にあることが必要です)。宣言するのは、各テーブルの `primary_key` と、列に `asset` があるテーブルの asset の列 (ビューにはどちらも宣言しません)、`listed` が false のテーブルとビューにプロファイルを作らないことと、説明したほかのテーブルにプロファイルを作ること、SQL が読むほかのデータセット (dbt の `profiles.yml` から) の依存先、それにこれらのテーブルの主キーと asset の列 `files.sha256` とプロファイルを作らないことです。`fdl declare list` と違うものだけを実行し、説明に無いものは FDL の宣言のまま残します
 - コメント (`COMMENT ON`) は書きません
 
 ## カタログからファイルを書く
