@@ -1,24 +1,26 @@
 """The formats before tabledoc, read as tabledoc's.
 
-- queria.yml (https://queria.io/schemas/dataset/v1.json) as tabledoc.yml, with
-  Queria's keys at the top level
+- queria.yml (https://queria.io/schemas/dataset/v1.json) as tabledoc.yml:
+  `title_kana` is `title_reading`, and `cover` is `image` when it is a file's path
 - Markdown whose front matter is https://queria.io/schemas/table/v1.json, as a
-  table file (the front matter) and its guide (the text below)
+  table file (the front matter) and its guide (the text below): `published` is `listed`
 """
 
 from __future__ import annotations
 
+import posixpath
 import re
 from typing import Any
 
-from .shape import QUERIA
-
 DATASET_FILE = "queria.yml"
-#: Keys queria.yml wrote at the top level that tabledoc.yml writes under `queria:`.
-QUERIA_KEYS = {
-    "dataset": ("title_kana", "themes", "cover", "ai_context"),
-    "table": ("published", "themes", "ai_context"),
+#: Keys queria.yml and the table front matter wrote at the top level, as tabledoc's keys.
+#: `themes` and the rest of `ai_context` are not read; `synonyms` is the one part of
+#: `ai_context` tabledoc has a key for.
+RENAMED = {
+    "dataset": {"title_kana": "title_reading", "cover": "image"},
+    "table": {"published": "listed"},
 }
+DROPPED = ("themes", "ai_context")
 
 _FRONT_MATTER = re.compile(r"\A---[ \t]*\r?\n(.*?\r?\n)?---[ \t]*(?:\r?\n|\Z)(.*)\Z", re.DOTALL)
 
@@ -29,20 +31,41 @@ def split_front_matter(text: str) -> tuple[str, str] | None:
     return (match.group(1) or "", match.group(2)) if match else None
 
 
-def _queria(record: dict[str, Any], level: str) -> dict[str, Any]:
-    """``record`` with Queria's top-level keys, and annotations.queria, under `queria:`."""
-    keys = QUERIA_KEYS[level]
+def _renamed(record: dict[str, Any], level: str) -> dict[str, Any]:
+    """``record`` with the older keys as tabledoc's, and keys tabledoc has no place for left out."""
+    renamed = RENAMED[level]
+    context = record.get("ai_context")
+    synonyms = context.get("synonyms") if isinstance(context, dict) else None
     written = record.get("annotations") if isinstance(record.get("annotations"), dict) else {}
-    own = {
-        **(written.get(QUERIA) or {}),
-        **{k: v for k, v in record.items() if k in keys},
-    }
-    others = {k: v for k, v in written.items() if k != QUERIA}
-    rest = {k: v for k, v in record.items() if k not in keys and k != "annotations"}
+    others = {k: v for k, v in written.items() if k != "queria"}
+    # A cover was often an emoji, not a file: only a file's path is an image.
+    skipped = {*DROPPED, "annotations", *(("cover",) if not _a_path(record.get("cover")) else ())}
+    rest = {renamed.get(k, k): v for k, v in record.items() if k not in skipped}
     return {
         **rest,
-        **({QUERIA: own} if own else {}),
+        **({"synonyms": synonyms} if synonyms and "synonyms" not in rest else {}),
         **({"annotations": others} if others else {}),
+    }
+
+
+def _a_path(value: Any) -> bool:
+    """Whether ``value`` names a file: text with a file extension."""
+    return isinstance(value, str) and bool(posixpath.splitext(value.strip())[1])
+
+
+def _ids(record: dict[str, Any]) -> dict[str, Any]:
+    """``record`` with an `id` on each source and contributor, which the older format did not
+    have: its `path`, else its `title`."""
+
+    def with_id(entry: Any) -> Any:
+        if not isinstance(entry, dict) or "id" in entry:
+            return entry
+        named = entry.get("path") or entry.get("title")
+        return {"id": str(named), **entry} if isinstance(named, str) else entry
+
+    return {
+        **record,
+        **{k: [with_id(e) for e in record[k]] for k in ("sources", "contributors") if isinstance(record.get(k), list)},
     }
 
 
@@ -56,7 +79,7 @@ def _documents(record: dict[str, Any], guide: bool = False) -> dict[str, Any]:
 
 def dataset(record: dict[str, Any]) -> dict[str, Any]:
     """queria.yml as tabledoc.yml. `catalogs` stays; the caller takes it out as `dependencies`."""
-    converted = _documents(_queria(record, "dataset"))
+    converted = _documents(_ids(_renamed(record, "dataset")))
     written = converted.get("schemas")
     if isinstance(written, list):
         converted["schemas"] = [_documents(s, guide=True) if isinstance(s, dict) else s for s in written]
@@ -84,7 +107,7 @@ def _semantic(field: dict[str, Any], primary_key: list[str]) -> tuple[dict[str, 
 
 def table(record: dict[str, Any]) -> dict[str, Any]:
     """A table front matter as a table file. `fields` is `columns`, `semantic` is read as dbt's."""
-    own = _documents(_queria(record, "table"))
+    own = _documents(_ids(_renamed(record, "table")))
     fields = own.pop("fields", None)
     primary_key = own.get("primary_key") if isinstance(own.get("primary_key"), list) else []
     converted = [
