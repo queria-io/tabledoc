@@ -28,4 +28,4 @@ The JSON Schemas in `src/tabledoc/schemas` are served at https://tabledoc.queria
 
 ## Commits and releases
 
-Conventional Commits. python-semantic-release (manual `Release` workflow) sets the version from them: `fix:` patch, `feat:` minor. Do not edit the version in pyproject.toml or CHANGELOG.md by hand.
+Conventional Commits. python-semantic-release (the `Release` workflow, run on every push to main) sets the version from them and releases when there is a `feat:` or `fix:`: `fix:` patch, `feat:` minor. Do not edit the version in pyproject.toml or CHANGELOG.md by hand.
