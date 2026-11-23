@@ -103,6 +103,7 @@ def test_the_older_format(write):
         {
             "queria.yml": "$schema: https://queria.io/schemas/dataset/v1.json\n"
             + "name: old\ntitle: Old\ntitle_kana: オールド\nlanguage: ja\nthemes: [economy]\ncover: cover.png\n"
+            + "keywords: [money]\n"
             + "sources: [{title: Site, path: https://site.example}]\n"
             + "catalogs: {other: https://data.example/datasets/o/other/}\n",
             "models/a.md": "---\n$schema: https://queria.io/schemas/table/v1.json\ntable: s.a\n"
@@ -113,7 +114,8 @@ def test_the_older_format(write):
             + "  - {name: value, semantic: {role: measure, agg: sum}}\n"
             + "  - {name: count, semantic: {role: measure}}\n"
             + "sql: select * from other.x.y join s.b using (id)\n---\n\nThe guide.\n",
-            "models/b.md": "---\n$schema: https://queria.io/schemas/table/v1.json\ntable: s.b\n---\n",
+            "models/b.md": "---\n$schema: https://queria.io/schemas/table/v1.json\ntable: s.b\n"
+            + "keywords: [rates]\npublished: true\n---\n",
             "cover.png": b"PNG",
         }
     )
@@ -122,6 +124,7 @@ def test_the_older_format(write):
     assert "metric-without-agg" in codes(report)
     assert document["dataset"]["title_reading"] == {"ja": "オールド"}
     assert document["dataset"]["image"] == "cover.png"
+    assert document["dataset"]["topics"] == {"ja": ["money"]}
     assert "annotations" not in document["dataset"]
     assert document["dataset"]["sources"] == [
         {"id": "https://site.example", "title": {"ja": "Site"}, "url": {"ja": "https://site.example"}}
@@ -148,6 +151,8 @@ def test_the_older_format(write):
     sent = next(f for f in document["files"] if f["path"] == "s/a/README.md")
     assert sent["sha256"] == hashlib.sha256(b"The guide.\n").hexdigest()
     assert "documents" not in document["tables"][1]
+    assert document["tables"][1]["topics"] == {"ja": ["rates"]}
+    assert document["tables"][1]["hidden"] is False
     d = read(Options(root, with_source=False), Report())
     assert d.content(next(f for f in d.files if f.path == "s/a/README.md")) == b"The guide.\n"
 

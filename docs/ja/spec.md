@@ -408,9 +408,9 @@ tabledoc export --markdown ai-docs/
 
 すべてのデータセットを一度に書き換えずに済むように、tabledoc は置き換える前の形式も読みます。新しく書くのは tabledoc の形式だけです。
 
-- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。`title_kana` は `title_reading`、`cover` はファイルのパス (拡張子のあるもの) のときだけ `image`、`ai_context` の `synonyms` は `synonyms` として読みます。`themes` と `ai_context` のほかの値は読みません。`catalogs` は `depends_on` に使い、`dependencies` として返します
+- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。`title_kana` は `title_reading`、`keywords` は `topics`、`cover` はファイルのパス (拡張子のあるもの) のときだけ `image`、`ai_context` の `synonyms` は `synonyms` として読みます。`themes` と `ai_context` のほかの値は読みません。`catalogs` は `depends_on` に使い、`dependencies` として返します
 - 以前の形式のファイルの出典と作成者の `path` は `url` として読みます。`id` の無いものは `path` (無ければ `title`) を `id` にします
-- フロントマターに `$schema: https://queria.io/schemas/table/v1.json` を持つ Markdown は、フロントマターをテーブルのファイル、本文をガイドとして読みます。`table:` で対応を決め、`fields` は `columns`、`published: false` は `hidden: true` として読みます。`ai_context` と `themes` は `queria.yml` と同じく扱います。ガイドはその Markdown のパスで、送る本文はフロントマターを外したものです
+- フロントマターに `$schema: https://queria.io/schemas/table/v1.json` を持つ Markdown は、フロントマターをテーブルのファイル、本文をガイドとして読みます。`table:` で対応を決め、`fields` は `columns`、`keywords` は `topics`、`published: false` は `hidden: true` (`published: true` は `hidden: false`) として読みます。`ai_context` と `themes` は `queria.yml` と同じく扱います。ガイドはその Markdown のパスで、送る本文はフロントマターを外したものです
 - 列の `semantic: {role, name, agg}` は次のように読み替えます。`role: entity` → `entity: <name>`。`role: dimension` → `dimension: categorical`。`role: measure` → テーブルの metrics に `{name: <列名>, agg, expr: <列名>}` (`agg` が無ければ警告)
 - `docs` (`schemas[].docs` も) は `documents`、スキーマの `guide` はそのスキーマの `documents` の 1 つとして読みます
 - 同じフォルダに `tabledoc.yml` と `queria.yml` があるとエラーになります

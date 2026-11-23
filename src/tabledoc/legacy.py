@@ -1,9 +1,10 @@
 """The formats before tabledoc, read as tabledoc's.
 
 - queria.yml (https://queria.io/schemas/dataset/v1.json) as tabledoc.yml:
-  `title_kana` is `title_reading`, and `cover` is `image` when it is a file's path
+  `title_kana` is `title_reading`, `keywords` is `topics`, and `cover` is `image` when it is a file's path
 - Markdown whose front matter is https://queria.io/schemas/table/v1.json, as a
-  table file (the front matter) and its guide (the text below): `published: false` is `hidden: true`
+  table file (the front matter) and its guide (the text below): `keywords` is `topics`,
+  and `published` is `hidden` negated
 - A source's or contributor's `path` is its `url`
 """
 
@@ -18,8 +19,8 @@ DATASET_FILE = "queria.yml"
 #: `themes` and the rest of `ai_context` are not read; `synonyms` is the one part of
 #: `ai_context` tabledoc has a key for.
 RENAMED = {
-    "dataset": {"title_kana": "title_reading", "cover": "image"},
-    "table": {},
+    "dataset": {"title_kana": "title_reading", "keywords": "topics", "cover": "image"},
+    "table": {"keywords": "topics"},
 }
 DROPPED = ("themes", "ai_context")
 
@@ -42,7 +43,8 @@ def _renamed(record: dict[str, Any], level: str) -> dict[str, Any]:
     # A cover was often an emoji, not a file: only a file's path is an image.
     skipped = {*DROPPED, "annotations", *(("cover",) if not _a_path(record.get("cover")) else ())}
     rest = {renamed.get(k, k): v for k, v in record.items() if k not in skipped and k != "published"}
-    hidden = {"hidden": True} if record.get("published") is False else {}
+    published = record.get("published")
+    hidden = {"hidden": not published} if isinstance(published, bool) else {}
     return {
         **hidden,
         **rest,

@@ -182,3 +182,13 @@ def test_dump_refuses_the_tables_of_an_earlier_tabledoc(lake, tmp_path):
     catalog = lake("CREATE SCHEMA lake._tabledoc; CREATE TABLE lake._tabledoc.dataset AS SELECT 'dataset' AS id")
     with pytest.raises(SpecError, match="earlier tabledoc"):
         dump(Source(catalog[0]), tmp_path / "dumped")
+
+
+def test_dump_refuses_the_tables_a_tabledoc_before_hidden_wrote(lake, tmp_path):
+    catalog = lake(
+        "CREATE SCHEMA lake._tabledoc; "
+        "CREATE TABLE lake._tabledoc.dataset AS SELECT 'language' AS key, 'en' AS value; "
+        "CREATE TABLE lake._tabledoc.tables AS SELECT 's' AS schema_name, 't' AS table_name, false AS listed"
+    )
+    with pytest.raises(SpecError, match="earlier tabledoc"):
+        dump(Source(catalog[0]), tmp_path / "dumped")

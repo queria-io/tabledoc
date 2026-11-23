@@ -249,7 +249,7 @@ def documents(found: tables.Rows, name: str) -> dict[str, dict[str, Any]]:
             **({"depends_on": depends[(schema, table_name)]} if authored and (schema, table_name) in depends else {}),
         }
         docs = _documents(paths, f"{schema}/{table_name}")
-        if set(record) <= {"hidden"} and not (own or own_metrics or docs):
+        if set(record) == {"hidden"} and not (own or own_metrics or docs):
             continue  # a row `load --hide-undescribed` wrote for a table with no description
         written[f"{schema}/{table_name}{TABLE_SUFFIX}"] = {
             "$schema": schemas.TABLE,
@@ -314,8 +314,11 @@ def dump(source: Source, out: Path, *, force: bool = False) -> list[str]:
         raise SpecError(f"cannot read {source.schema} in {source.catalog}: {exc}") from exc
     if not found:
         raise SpecError(f"{source.catalog} has no {source.schema} schema")
-    if any("key" not in r for r in found.get("dataset") or []) or any(
-        "schema_name" not in r for r in found.get("tables") or []
+    if (
+        any("key" not in r for r in found.get("dataset") or [])
+        or any("schema_name" not in r or "listed" in r for r in found.get("tables") or [])
+        or any("path" in r for k in ("sources", "contributors") for r in found.get(k) or [])
+        or any("spdx" in r for r in found.get("licenses") or [])
     ):
         raise SpecError(
             f"{source.schema} in {source.catalog} is in an earlier tabledoc's tables; "
