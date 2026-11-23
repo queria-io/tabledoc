@@ -80,3 +80,26 @@ def test_refuses_fdl_working_metadata(catalog):
 def test_cli(catalog, capsys):
     assert main(["profile", "--ducklake", catalog[0], "--data-path", catalog[1]]) == 0
     assert "profiled 3 tables and views" in capsys.readouterr().err
+
+
+def test_types_as_fdl_has_them(lake):
+    catalog = lake(
+        "CREATE TABLE lake.main.t AS SELECT TIMESTAMP_NS '2025-01-01 00:00:00' AS at, [1, 2] AS l, "
+        "'nan'::DOUBLE AS x"
+    )
+    profile(Target(*catalog))
+    assert held(catalog, "column_profiles", "column_name", "distinct_count", "min", "max") == [
+        ("at", 1, "2025-01-01 00:00:00", "2025-01-01 00:00:00"),
+        ("l", None, None, None),
+        ("x", 1, None, None),
+    ]
+
+
+def test_skips_what_cannot_be_read(lake, capsys):
+    catalog = lake(
+        "CREATE TABLE lake.main.t AS SELECT 1 AS a; CREATE TABLE lake.main.gone AS SELECT 1 AS b;"
+        "CREATE VIEW lake.main.v AS SELECT * FROM lake.main.gone; DROP TABLE lake.main.gone"
+    )
+    assert main(["profile", "--ducklake", catalog[0], "--data-path", catalog[1]]) == 0
+    assert held(catalog, "table_profiles", "table_name", "rows") == [("t", 1)]
+    assert "main.v cannot be read" in capsys.readouterr().err

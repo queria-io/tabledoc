@@ -10,6 +10,7 @@ refused: fdl writes a profile for each version itself.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,9 +27,24 @@ EXACT_DISTINCT_ROWS = 1_000_000
 #: Columns counted by one query: each `count(DISTINCT)` holds a hash table at once.
 COLUMNS_PER_QUERY = 100
 
-_NUMERIC = re.compile(r"^(U?(TINY|SMALL|BIG|HUGE)?INT(EGER)?|FLOAT|DOUBLE|REAL|DECIMAL|NUMERIC|U?INT\d+|FLOAT\d+)\b")
-_TEMPORAL = re.compile(r"^(DATE|TIME|TIMESTAMP|INTERVAL)\b")
-_TEXT = re.compile(r"^(VARCHAR|UUID)\b")
+#: The type names of each family, as FDL's profile has them; a list or an array of them is not one.
+_NUMERIC = frozenset(
+    {
+        "TINYINT", "SMALLINT", "INTEGER", "BIGINT", "HUGEINT", "UTINYINT", "USMALLINT",
+        "UINTEGER", "UBIGINT", "UHUGEINT", "FLOAT", "DOUBLE", "DECIMAL", "REAL", "NUMERIC",
+        "INT8", "INT16", "INT32", "INT64", "INT128", "UINT8", "UINT16", "UINT32", "UINT64",
+        "UINT128", "FLOAT32", "FLOAT64",
+    }
+)  # fmt: skip
+_TEMPORAL = frozenset(
+    {
+        "DATE", "TIME", "TIMESTAMP", "TIMESTAMPTZ", "TIMESTAMP WITH TIME ZONE", "TIMETZ", "TIME WITH TIME ZONE",
+        "INTERVAL", "TIMESTAMP_S", "TIMESTAMP_MS", "TIMESTAMP_NS",
+    }
+)  # fmt: skip
+_TEXT = frozenset({"VARCHAR", "UUID"})
+#: How DuckDB writes a floating-point bound that is not a number: FDL's profile leaves it out.
+_UNBOUNDED = frozenset({"nan", "-nan", "inf", "-inf", "infinity", "-infinity"})
 
 
 @dataclass(frozen=True)
@@ -43,14 +59,19 @@ class Target:
 
 def kind(data_type: str) -> str:
     """numeric, temporal, text or other: which counts a column gets."""
-    upper = data_type.upper()
-    if _NUMERIC.match(upper):
+    base = re.sub(r"\(.*\)", "", data_type.upper()).strip()
+    if base in _NUMERIC:
         return "numeric"
-    if _TEMPORAL.match(upper):
+    if base in _TEMPORAL:
         return "temporal"
-    if _TEXT.match(upper):
+    if base in _TEXT:
         return "text"
     return "other"
+
+
+def _bound(value: Any) -> Any:
+    """``value`` as `min` or `max`: None for NaN and infinity, as FDL's profile has it."""
+    return None if isinstance(value, str) and value.lower() in _UNBOUNDED else value
 
 
 def _aggregates(name: str, data_type: str, rows: int) -> list[str]:
@@ -98,7 +119,7 @@ def count(con: Any, schema: str, table: str, held: dict[str, str]) -> tables.Row
         if distinct is not None:
             distinct, listed = _values(con, relation, name, int(distinct))
         profiles.append(
-            {**at, "column_name": name, "null_count": rows - int(present), "distinct_count": distinct, "min": low, "max": high}
+            {**at, "column_name": name, "null_count": rows - int(present), "distinct_count": distinct, "min": _bound(low), "max": _bound(high)}
         )
         values += [{**at, "column_name": name, "value": v, "count": int(n)} for v, n in listed]
     return {"table_profiles": [{**at, "rows": rows}], "column_profiles": profiles, "column_values": values}
@@ -113,9 +134,12 @@ def _hidden(con: Any, schema: str) -> set[tables.Key]:
     }
 
 
-def profile(target: Target) -> tables.Rows:
+def profile(target: Target, skipped: Callable[[tables.Key, str], None] | None = None) -> tables.Rows:
     """Count every table and view of the catalog (but the description's own and hidden ones)
-    and make the profile tables of the description's schema hold the counts and nothing else."""
+    and make the profile tables of the description's schema hold the counts and nothing else.
+
+    A table or view that cannot be read gets no profile, as with FDL: ``skipped`` is told
+    which and why, and the others are counted all the same."""
     if fdl_state.working(target.catalog) is not None:
         raise SpecError(f"{target.catalog} is fdl's working metadata: fdl writes the profiles of each version")
     import duckdb
@@ -130,7 +154,13 @@ def profile(target: Target) -> tables.Rows:
             for key in sorted(in_catalog | views):
                 if tables.fold(*key) in hidden:
                     continue
-                for name, rows in count(con, *key, columns[key]).items():
+                try:
+                    counts = count(con, *key, columns[key])
+                except duckdb.Error as exc:
+                    if skipped is not None:
+                        skipped(key, str(exc))
+                    continue
+                for name, rows in counts.items():
                     found[name] += rows
             tables.write_profiles(con, ALIAS, found, schema)
     except duckdb.Error as exc:

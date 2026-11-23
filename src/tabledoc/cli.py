@@ -88,7 +88,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "profile":
         data = args.data_path or os.environ.get("FDL_DATA_PATH")
         try:
-            found = profile(Counted(_catalog(args.ducklake), data, args.schema))
+            found = profile(
+                Counted(_catalog(args.ducklake), data, args.schema),
+                lambda key, why: print(f"warning: {'.'.join(key)} cannot be read and gets no profile: {why}", file=sys.stderr),
+            )
         except SpecError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2

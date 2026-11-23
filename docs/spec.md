@@ -392,7 +392,8 @@ tabledoc profile --ducklake lake.sqlite
 
 - `--ducklake`: the catalog (default: `FDL_WORKING`). `--data-path`: where its data files are (default: `FDL_DATA_PATH`, else the catalog's own). `--schema`: the description's schema (default: `_tabledoc`)
 - Every table and view is counted but those of the description's schema and those whose `hidden` is true in `tables`. A view is counted from the rows its query returns
-- Numbers and dates and times get `min` and `max`; numbers, text, dates and times get `distinct_count` and `column_values`; every column gets `null_count`. Above 1,000,000 rows, `distinct_count` is estimated when it is over 2,000
+- Numbers and dates and times get `min` and `max` (none for NaN or infinity); numbers, text, dates and times get `distinct_count` and `column_values`; every column gets `null_count`. A list, array or struct of them is none of these. Above 1,000,000 rows, `distinct_count` is estimated when it is over 2,000
+- A table or view that cannot be read, such as a view whose query fails, gets no profile and a warning; the others are counted all the same
 - The three tables then hold these counts and no other rows: the rows of a table that is gone are removed
 - The working metadata `fdl clone` made is refused: fdl writes the profiles of each version
 
