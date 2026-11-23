@@ -5,6 +5,24 @@
 
 ### Features
 
+- Add tabledoc profile, which counts a DuckLake catalog's data into the profile tables
+  ([#24](https://github.com/queria-io/tabledoc/pull/24),
+  [`02434a4`](https://github.com/queria-io/tabledoc/commit/02434a461798bf385b44a54d05e7e3596cc36883))
+
+* feat: add tabledoc profile, which counts a DuckLake catalog's data into the profile tables
+
+It counts every table and view by SQL, by the rules of an FDL profile (every value up to 2,000
+  distinct values, else the 10 most common), skips the tables hidden in the description, and makes
+  table_profiles, column_profiles and column_values hold the counts and nothing else. A catalog fdl
+  clone made is refused: fdl writes the profiles itself.
+
+* fix: profile column types as fdl names them, leave NaN bounds out and skip what cannot be read
+
+- kind() matches whole type names, so a list or array is not counted as its element type, and
+  TIMESTAMP_NS and the like are temporal - min and max are NULL for NaN and infinity, as in an FDL
+  profile - a table or view that cannot be read gets no profile and a warning, and the others are
+  still counted
+
 - Fill in the licenses tabledoc knows by id ([#25](https://github.com/queria-io/tabledoc/pull/25),
   [`c98b796`](https://github.com/queria-io/tabledoc/commit/c98b79607dc46fae5367a1484b2553936abcb26b))
 
