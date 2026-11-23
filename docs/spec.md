@@ -157,7 +157,7 @@ sources:
 ```
 
 - An entry is written in full once, in `tabledoc.yml` or in any table file, and by its `id` alone anywhere else (`sources: [search-site]`)
-- Two entries with the same `id` and different values are an error
+- An entry whose keys all match the entry with the same `id` (`{id, path}` beside `{id, title, path}`, say) refers to it. Two entries with the same `id` that differ in a key are an error
 - A license whose `id` is written alone and defined nowhere is that `id` (an SPDX identifier such as `CC-BY-4.0`, say). A source whose `id` is defined nowhere is an error
 - A license is `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`, a source `{id, title, path}`, and a contributor `{id, title, path, roles}`. Contributors are the dataset's only
 
@@ -356,7 +356,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - `source_path` is the path of the file that defines the table, from the root of `repository` (dbt's `original_file_path`, under the folder of `tabledoc.yml` in the Git working copy), and `sql` is the SQL that made it; both are NULL where they are not known. Whether it is a table or a view is not written: the catalog holds that
 - A view's row has no `sql` and no `table_dependencies`: the metadata holds the view's SQL
 - `repository` is `repository` in `tabledoc.yml`, else Git's `origin` as https
-- Tables of the schema that are not of the format (an earlier tabledoc's) are dropped, and so are their columns that are not. `load` does not write the profile tables, and leaves them as they are
+- The tables an earlier tabledoc wrote that are not of the format (`texts`) are dropped, and so are the columns of the format's tables that are not. Other tables of the schema are left as they are. `load` does not write the profile tables, and leaves them as they are
 - Primary keys and asset columns are not written into these tables. When the catalog is the working metadata `fdl clone` made (it noted `<catalog>.fdl.json` beside it), `load` declares them to FDL with `fdl declare`, which has to be on `PATH` (fdl-cli 0.34 or later): each table's `primary_key` and the asset columns of each table whose columns say `asset` (a view has neither), no profile for each table and view whose `listed` is false and a profile for each other table described, the other datasets the SQL reads (from dbt's `profiles.yml`) as dependencies, and the keys of these tables with `files.sha256` as an asset column and no profile. It runs only what differs from `fdl declare list`, and leaves what the description does not say as FDL has it
 - tabledoc writes no comments (`COMMENT ON`)
 
@@ -404,7 +404,7 @@ tabledoc export --markdown ai-docs/
 
 So that every dataset need not be rewritten at once, tabledoc also reads the format it replaces. Only tabledoc's format is written anew.
 
-- Without `tabledoc.yml`, `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) is read as `tabledoc.yml`. `title_kana` is read as `title_reading`, `cover` as `image`, and `synonyms` under `ai_context` as `synonyms`; `themes` and the rest of `ai_context` are not read. `catalogs` is used for `depends_on` and returned as `dependencies`
+- Without `tabledoc.yml`, `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) is read as `tabledoc.yml`. `title_kana` is read as `title_reading`, `cover` as `image` when it is a file's path (one with an extension; an emoji is not read), and `synonyms` under `ai_context` as `synonyms`; `themes` and the rest of `ai_context` are not read. `catalogs` is used for `depends_on` and returned as `dependencies`
 - A source or contributor without an `id`, in either older file, gets its `path` (else its `title`) as its `id`
 - Markdown whose front matter has `$schema: https://queria.io/schemas/table/v1.json` is read as a table file (the front matter) and its guide (the text below). `table:` says which table, `fields` is `columns`, `published` is `listed`, and `ai_context` and `themes` are read as in `queria.yml`. The guide is that Markdown's path, and what is sent is the text without the front matter
 - A field's `semantic: {role, name, agg}` is read as: `role: entity` → `entity: {type: foreign, name}`, or `type: primary` when the column alone is the `primary_key`; `role: dimension` → `dimension: categorical`; `role: measure` → a metric `{name: <column>, agg, expr: <column>}` on the table (without `agg`, a warning)

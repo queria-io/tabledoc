@@ -174,3 +174,9 @@ def test_text_in_more_than_one_language_comes_back_as_a_map(write, lake, tmp_pat
     assert "title:\n    en: Order ID\n" in (out / "sales" / "orders.tabledoc.yml").read_text()
     again = Report()
     assert load(Options(out, with_source=False), Target(*catalog), again) is not None, again.render()
+
+
+def test_dump_refuses_the_tables_of_an_earlier_tabledoc(lake, tmp_path):
+    catalog = lake("CREATE SCHEMA lake._tabledoc; CREATE TABLE lake._tabledoc.dataset AS SELECT 'dataset' AS id")
+    with pytest.raises(SpecError, match="earlier tabledoc"):
+        dump(Source(catalog[0]), tmp_path / "dumped")

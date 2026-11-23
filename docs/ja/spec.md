@@ -157,7 +157,7 @@ sources:
 ```
 
 - 1 つの項目は `tabledoc.yml` かいずれかのテーブルのファイルに 1 回だけ全部書き、ほかの場所では `id` だけを書きます (`sources: [search-site]`)
-- 同じ `id` で値の違う項目を書くとエラーです
+- 同じ `id` の項目とキーがすべて一致する項目 (`{id, title, path}` に対する `{id, path}` など) は、その項目を参照します。同じ `id` でキーの値が違う項目を書くとエラーです
 - `id` だけを書いたライセンスで、どこにも定義が無いものは、その `id` (`CC-BY-4.0` などの SPDX の識別子) として扱います。どこにも定義の無い出典の `id` はエラーです
 - ライセンスは `{id, spdx, url, title, commercial_use, share_alike, attribution_required}`、出典は `{id, title, path}`、作成者は `{id, title, path, roles}` です。作成者はデータセットにだけ書きます
 
@@ -356,7 +356,7 @@ fdl commit work.sqlite -m "..." --assets build/assets
 - `source_path` はそのテーブルを定義しているファイルの、`repository` のルートからのパス (dbt の `original_file_path` に、Git の作業コピーの中での `tabledoc.yml` のフォルダを前に付けたもの)、`sql` はそのテーブルを作った SQL です。判定できないときはどちらも NULL です。テーブルかビューかは書きません (カタログが持っています)
 - ビューの行には `sql` と `table_dependencies` を書きません。ビューの SQL はメタデータが持ちます
 - `repository` は `tabledoc.yml` の `repository`、無ければ Git の `origin` を https にしたものです
-- スキーマの中にあるこの規約のものでないテーブル (以前の tabledoc が書いたもの) と列は削除します。プロファイルのテーブルは書かず、そのまま残します
+- 以前の tabledoc が書いた、この規約のものでないテーブル (`texts`) と、この規約のテーブルにある規約のものでない列は削除します。スキーマのほかのテーブルはそのまま残します。プロファイルのテーブルは書かず、そのまま残します
 - 主キーと asset の列はこれらのテーブルに書きません。カタログが `fdl clone` の作った作業用メタデータのとき (横に `<catalog>.fdl.json` があるとき)、`load` は `fdl declare` で FDL に宣言します (fdl-cli 0.34 以降の `fdl` が `PATH` にあることが必要です)。宣言するのは、各テーブルの `primary_key` と、列に `asset` があるテーブルの asset の列 (ビューにはどちらも宣言しません)、`listed` が false のテーブルとビューにプロファイルを作らないことと、説明したほかのテーブルにプロファイルを作ること、SQL が読むほかのデータセット (dbt の `profiles.yml` から) の依存先、それにこれらのテーブルの主キーと asset の列 `files.sha256` とプロファイルを作らないことです。`fdl declare list` と違うものだけを実行し、説明に無いものは FDL の宣言のまま残します
 - コメント (`COMMENT ON`) は書きません
 
@@ -404,7 +404,7 @@ tabledoc export --markdown ai-docs/
 
 すべてのデータセットを一度に書き換えずに済むように、tabledoc は置き換える前の形式も読みます。新しく書くのは tabledoc の形式だけです。
 
-- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。`title_kana` は `title_reading`、`cover` は `image`、`ai_context` の `synonyms` は `synonyms` として読みます。`themes` と `ai_context` のほかの値は読みません。`catalogs` は `depends_on` に使い、`dependencies` として返します
+- `tabledoc.yml` が無く `queria.yml` (`https://queria.io/schemas/dataset/v1.json`) があれば、それを tabledoc.yml として読みます。`title_kana` は `title_reading`、`cover` はファイルのパス (拡張子のあるもの) のときだけ `image`、`ai_context` の `synonyms` は `synonyms` として読みます。`themes` と `ai_context` のほかの値は読みません。`catalogs` は `depends_on` に使い、`dependencies` として返します
 - 以前の形式のファイルで `id` の無い出典と作成者は、`path` (無ければ `title`) を `id` にします
 - フロントマターに `$schema: https://queria.io/schemas/table/v1.json` を持つ Markdown は、フロントマターをテーブルのファイル、本文をガイドとして読みます。`table:` で対応を決め、`fields` は `columns`、`published` は `listed` として読みます。`ai_context` と `themes` は `queria.yml` と同じく扱います。ガイドはその Markdown のパスで、送る本文はフロントマターを外したものです
 - 列の `semantic: {role, name, agg}` は次のように読み替えます。`role: entity` → `entity: {type: foreign, name}`、その列だけで `primary_key` になっていれば `type: primary`。`role: dimension` → `dimension: categorical`。`role: measure` → テーブルの metrics に `{name: <列名>, agg, expr: <列名>}` (`agg` が無ければ警告)

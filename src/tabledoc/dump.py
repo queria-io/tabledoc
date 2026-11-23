@@ -132,6 +132,11 @@ def _texts(found: tables.Rows, language: str) -> dict[Where, dict[str, Any]]:
         for row in found.get(table) or []:
             words = by_where.setdefault(_at(row), {}).setdefault(key, {})
             words.setdefault(row["language"], []).append(row[column])
+    for keys in by_where.values():
+        # The tables keep no order for words: sorted, so the same tables give the same files.
+        for key in ("topics", "synonyms"):
+            for words in (keys.get(key) or {}).values():
+                words.sort()
     return {
         where: {
             k: next(iter(v.values())) if [t.lower() for t in v] == [language.lower()] else dict(sorted(v.items()))
@@ -214,7 +219,7 @@ def documents(found: tables.Rows, name: str, held_in: str = tables.SCHEMA) -> di
     paths = sorted(f["path"] for f in found.get("files") or [])
     columns = found.get("columns") or []
     metrics = found.get("metrics") or []
-    depends = _ordered(found, "table_dependencies", "depends_on")
+    depends = {at: sorted(d) for at, d in _ordered(found, "table_dependencies", "depends_on").items()}
     roles: dict[str, list[str]] = {}
     for r in sorted(found.get("contributor_roles") or [], key=lambda r: (r["contributor_id"], r["role"])):
         roles.setdefault(r["contributor_id"], []).append(r["role"])
@@ -308,6 +313,13 @@ def dump(source: Source, out: Path, *, force: bool = False) -> list[str]:
         raise SpecError(f"cannot read {source.schema} in {source.catalog}: {exc}") from exc
     if not found:
         raise SpecError(f"{source.catalog} has no {source.schema} schema")
+    if any("key" not in r for r in found.get("dataset") or []) or any(
+        "schema_name" not in r for r in found.get("tables") or []
+    ):
+        raise SpecError(
+            f"{source.schema} in {source.catalog} is in an earlier tabledoc's tables; "
+            "dump it with the tabledoc that wrote it, or load the description again first"
+        )
     texts = {
         path: render(record).encode("utf-8")
         for path, record in documents(found, dataset_name(source), held_in).items()

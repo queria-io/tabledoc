@@ -1,13 +1,14 @@
 """The formats before tabledoc, read as tabledoc's.
 
 - queria.yml (https://queria.io/schemas/dataset/v1.json) as tabledoc.yml:
-  `title_kana` is `title_reading`, `cover` is `image`
+  `title_kana` is `title_reading`, and `cover` is `image` when it is a file's path
 - Markdown whose front matter is https://queria.io/schemas/table/v1.json, as a
   table file (the front matter) and its guide (the text below): `published` is `listed`
 """
 
 from __future__ import annotations
 
+import posixpath
 import re
 from typing import Any
 
@@ -37,12 +38,19 @@ def _renamed(record: dict[str, Any], level: str) -> dict[str, Any]:
     synonyms = context.get("synonyms") if isinstance(context, dict) else None
     written = record.get("annotations") if isinstance(record.get("annotations"), dict) else {}
     others = {k: v for k, v in written.items() if k != "queria"}
-    rest = {renamed.get(k, k): v for k, v in record.items() if k not in (*DROPPED, "annotations")}
+    # A cover was often an emoji, not a file: only a file's path is an image.
+    skipped = {*DROPPED, "annotations", *(("cover",) if not _a_path(record.get("cover")) else ())}
+    rest = {renamed.get(k, k): v for k, v in record.items() if k not in skipped}
     return {
         **rest,
         **({"synonyms": synonyms} if synonyms and "synonyms" not in rest else {}),
         **({"annotations": others} if others else {}),
     }
+
+
+def _a_path(value: Any) -> bool:
+    """Whether ``value`` names a file: text with a file extension."""
+    return isinstance(value, str) and bool(posixpath.splitext(value.strip())[1])
 
 
 def _ids(record: dict[str, Any]) -> dict[str, Any]:

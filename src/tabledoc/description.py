@@ -301,7 +301,7 @@ def read(options: Options, report: Report) -> Description:
             language,
         ),
         [languages.table(_ordered(t), language) for t in placed_tables],
-        dataset.path,
+        [dataset.path, *(by_key[(t["schema"], t["name"])].path for t in placed_tables)],
         report,
     )
     return Description(
@@ -315,40 +315,55 @@ def read(options: Options, report: Report) -> Description:
     )
 
 
-def _by_id(
-    dataset: dict[str, Any], tables: list[dict[str, Any]], path: Path, report: Report
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """The dataset and its tables with each license and source written as its id alone replaced
-    by the entry that defines it.
+def _part_of(entry: dict[str, Any], other: dict[str, Any]) -> bool:
+    """Whether every key of ``entry`` is in ``other`` with the same value."""
+    return all(k in other and other[k] == v for k, v in entry.items())
 
-    An id is defined once: two entries with the same id and different values are an error.
-    A license id nothing defines stays `{id}` (such as CC-BY-4.0); a source id nothing defines
-    is an error. Two contributors with the same id are an error.
+
+def _by_id(
+    dataset: dict[str, Any], tables: list[dict[str, Any]], paths: list[Path], report: Report
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """The dataset and its tables with each license and source written as its id alone, or
+    as part of the entry that defines it, replaced by that entry. ``paths`` are the files the
+    dataset and each table are described in, for the findings.
+
+    An entry whose keys all match another with the same id (`{id, path}` beside
+    `{id, title, path}`, say) is a reference to it; two entries with the same id that
+    differ in a key are an error. A license id nothing defines stays `{id}` (such as
+    CC-BY-4.0); a source id nothing defines is an error. Two contributors with the same
+    id are an error.
     """
     seen: set[str] = set()
     for c in dataset.get("contributors") or []:
         if isinstance(c, dict) and c.get("id") in seen:
-            report.error("defined-twice", f"contributor {c['id']} is written twice", path)
+            report.error("defined-twice", f"contributor {c['id']} is written twice", paths[0])
         seen.add(c.get("id") if isinstance(c, dict) else None)
     records = [dataset, *tables]
     for key, single in (("licenses", "license"), ("sources", "source")):
         defined: dict[str, dict[str, Any]] = {}
-        for record in records:
+        for record, where in zip(records, paths):
             for entry in record.get(key) or []:
-                if isinstance(entry, dict) and defined.setdefault(entry["id"], entry) != entry:
-                    report.error("defined-twice", f"{single} {entry['id']} is defined twice, differently", path)
+                # An entry without an id is a schema error already reported.
+                if not isinstance(entry, dict) or "id" not in entry:
+                    continue
+                held = defined.setdefault(entry["id"], entry)
+                if _part_of(held, entry):
+                    defined[entry["id"]] = entry
+                elif not _part_of(entry, held):
+                    report.error("defined-twice", f"{single} {entry['id']} is defined twice, differently", where)
 
-        def resolved(entry: Any, key: str = key, single: str = single, defined: dict = defined) -> Any:
+        def resolved(entry: Any, where: Path, key: str = key, defined: dict = defined) -> Any:
             if isinstance(entry, dict):
-                return entry
+                return defined.get(entry.get("id"), entry)
             if entry in defined:
                 return defined[entry]
             if key == "sources":
-                report.error("undefined-id", f"source {entry} is not defined; write it with its title and path", path)
+                report.error("undefined-id", f"source {entry} is not defined; write it with its title and path", where)
             return {"id": entry}
 
         records = [
-            {**r, key: [resolved(e) for e in r[key]]} if isinstance(r.get(key), list) else r for r in records
+            {**r, key: [resolved(e, where) for e in r[key]]} if isinstance(r.get(key), list) else r
+            for r, where in zip(records, paths)
         ]
     return records[0], records[1:]
 

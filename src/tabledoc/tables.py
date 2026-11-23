@@ -103,6 +103,8 @@ DATASET_KEYS = (
 ASSETS = {"files": ("sha256",)}
 #: Columns of `descriptions` that hold text, one language a row.
 TEXTS = ("title", "title_reading", "description")
+#: Tables an earlier tabledoc wrote that are not the format's now: a load drops them.
+_EARLIER = frozenset({"texts"})
 #: Tables every load wrote, an earlier tabledoc's too: a schema holding them all is a description's.
 _EVERY_LOAD = frozenset({"dataset", "schemas", "tables", "columns", "files"})
 
@@ -531,8 +533,8 @@ def write(con: Any, catalog: str, found: Rows, schema: str = SCHEMA) -> None:
 
     Rows are added, changed and removed by their primary key, so a version
     changes only the cells that differ, and merges with others' changes by them.
-    Tables of ``schema`` that are not the format's (an earlier tabledoc's `texts`,
-    say) are dropped; the profile tables are left as they are.
+    The tables an earlier tabledoc wrote and this one does not (`texts`) are dropped;
+    any other table of ``schema``, the profile tables among them, is left as it is.
     """
     con.execute("BEGIN")
     try:
@@ -544,7 +546,7 @@ def write(con: Any, catalog: str, found: Rows, schema: str = SCHEMA) -> None:
             "SELECT table_name FROM duckdb_tables() WHERE database_name = ? AND lower(schema_name) = lower(?)",
             [catalog, schema],
         ).fetchall():
-            if table.lower() not in TABLES and table.lower() not in PROFILES:
+            if table.lower() in _EARLIER:
                 con.execute(f"DROP TABLE {catalog}.{quote(schema)}.{quote(table)}")
     except BaseException:
         con.execute("ROLLBACK")

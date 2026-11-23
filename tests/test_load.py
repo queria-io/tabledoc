@@ -148,6 +148,16 @@ def test_an_id_defined_twice_differently_is_an_error(write, catalog):
     report = Report()
     assert run(root, catalog, report) is None
     assert sorted(f.code for f in report.findings) == ["defined-twice", "undefined-id"]
+    assert {f.source.name for f in report.findings} == {"recent.tabledoc.yml"}
+
+
+def test_a_part_of_an_entry_refers_to_it(write, catalog):
+    root = project(write)
+    (root / "tabledoc.yml").write_text(DATASET + "name: shop\nsources: [{id: s, title: A, path: https://a.example}]\n")
+    (root / "sales" / "recent.tabledoc.yml").write_text(TABLE + "sources: [{id: s, path: https://a.example}]\n")
+    report = Report()
+    assert run(root, catalog, report) is not None, report.render()
+    assert held(catalog, "sources", "id", "title", "path") == [("s", "A", "https://a.example")]
 
 
 def test_a_view_gets_no_sql(write, catalog):
@@ -464,3 +474,11 @@ def test_replaces_the_tables_of_an_earlier_tabledoc(write, catalog):
     found = sql(catalog, "SELECT table_name FROM duckdb_tables() WHERE schema_name = '_tabledoc' ORDER BY 1")
     assert ("texts",) not in found
     assert ("table_profiles",) in found
+
+
+def test_keeps_the_other_tables_of_the_schema_written_into(write, catalog):
+    root = project(write)
+    sql(catalog, "CREATE SCHEMA lake.docs; CREATE TABLE lake.docs.notes AS SELECT 1 AS x")
+    report = Report()
+    assert run(root, catalog, report, schema="docs") is not None, report.render()
+    assert sql(catalog, "SELECT count(*) FROM lake.docs.notes") == [(1,)]

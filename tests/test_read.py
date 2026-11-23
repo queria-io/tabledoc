@@ -469,3 +469,21 @@ def test_a_readme_no_longer_found_by_itself_is_a_warning(write):
     )
     _, report = run(root)
     assert codes(report) == ["unlisted-readme", "unlisted-readme"]
+
+
+def test_a_cover_that_is_not_a_path_is_not_an_image(write):
+    root = write(
+        {
+            "queria.yml": "$schema: https://queria.io/schemas/dataset/v1.json\n"
+            + "name: old\ntitle: Old\nlanguage: ja\ncover: 🏦\n",
+        }
+    )
+    document, report = run(root)
+    assert not report.failed, report.render()
+    assert "image" not in document["dataset"]
+
+
+def test_a_source_without_an_id_is_a_finding_not_a_crash(write):
+    root = write({"tabledoc.yml": DATASET + "name: d\ntitle: D\nsources: [{title: Site, path: https://site.example}]\n"})
+    _, report = run(root)
+    assert report.failed
