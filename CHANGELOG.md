@@ -1,6 +1,22 @@
 # CHANGELOG
 
 
+## v0.7.0 (2026-11-23)
+
+### Features
+
+- Read fdl's remote and data path from fdl status --json
+  ([#22](https://github.com/queria-io/tabledoc/pull/22),
+  [`0fa2a6e`](https://github.com/queria-io/tabledoc/commit/0fa2a6e064330229841c99f2aa3b6523df4d6323))
+
+* feat: read fdl's remote and data path from fdl status --json
+
+tabledoc no longer reads the files fdl keeps beside its working metadata. It runs fdl status --json
+  for the remote and the data path, which needs fdl-cli 0.35 or later.
+
+* feat: say that a working metadata from fdl-cli 0.34 needs a newer fdl
+
+
 ## v0.6.1 (2026-11-23)
 
 ### Bug Fixes
