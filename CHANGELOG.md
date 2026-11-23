@@ -1,6 +1,17 @@
 # CHANGELOG
 
 
+## v0.6.1 (2026-11-23)
+
+### Bug Fixes
+
+- Read a table file beside a dbt Python model ([#21](https://github.com/queria-io/tabledoc/pull/21),
+  [`2b9b7a6`](https://github.com/queria-io/tabledoc/commit/2b9b7a681cb5916f8f7d4e1fd0eab6c3a324440c))
+
+A dbt model can be a .py file. Accept <model>.tabledoc.yml next to <model>.py as well as
+  <model>.sql.
+
+
 ## v0.6.0 (2026-11-23)
 
 ### Bug Fixes
