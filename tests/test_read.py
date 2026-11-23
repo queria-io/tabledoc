@@ -326,6 +326,27 @@ def test_a_table_file_beside_the_model_adds_what_dbt_does_not_say(write):
     assert a["columns"] == [{"name": "id", "title": {"und": "ID"}}, {"name": "extra", "title": {"und": "X"}}]
 
 
+def test_a_table_file_beside_a_python_model(write):
+    python_model = model("a")
+    python_model["model.p.a"]["original_file_path"] = "models/a.py"
+    root = write(
+        {
+            "tabledoc.yml": DATASET + "name: d\n",
+            "dbt_project.yml": "name: p\n",
+            ".dbtignore": "*.tabledoc.yml\n",
+            "target/manifest.json": manifest(a=python_model),
+            "models/a.py": "def model(dbt, session): ...\n",
+            "models/a.tabledoc.yml": TABLE + "title: A\n",
+            "models/a.md": "Guide\n",
+        }
+    )
+    document, report = run(root)
+    assert not report.failed, report.render()
+    a = document["tables"][0]
+    assert (a["schema"], a["name"], a["title"]) == ("s", "a", {"und": "A"})
+    assert a["documents"] == ["s/a/README.md"]
+
+
 @pytest.mark.parametrize(
     ("files", "code"),
     [

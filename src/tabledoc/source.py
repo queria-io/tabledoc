@@ -6,7 +6,7 @@
     <schema>/<table>.md             that table's guide
 
 In a dbt project, `<model>.tabledoc.yml` and `<model>.md` sit next to
-`<model>.sql` and describe that model's table. A dbt project's tables come
+`<model>.sql` (or `<model>.py`) and describe that model's table. A dbt project's tables come
 from dbt (see dbt.py); this module reads the files.
 """
 
@@ -120,16 +120,22 @@ def read_dataset(root: Path, report: Report) -> Dataset:
     return Dataset(record=converted, path=path, dependencies=dependencies if isinstance(dependencies, dict) else {})
 
 
+#: The files of a dbt model: SQL, or Python for a Python model.
+MODEL_SUFFIXES = (".sql", ".py")
+
+
 def stem(path: Path) -> str:
     """The name a file is about: `series` for series.tabledoc.yml, series.sql and series.md."""
     return path.name[: -len(TABLE_SUFFIX)] if path.name.endswith(TABLE_SUFFIX) else path.name.rsplit(".", 1)[0]
 
 
 def _table_key(root: Path, path: Path, models: dict[Path, Key], report: Report) -> Key | None:
-    """Which table a table file describes: the model whose SQL is beside it, else its place under the root."""
-    sql = path.with_name(stem(path) + ".sql")
-    if sql in models:
-        return models[sql]
+    """Which table a table file describes: the model whose file (SQL or Python) is beside it, else its place under the root."""
+    beside = [path.with_name(stem(path) + suffix) for suffix in MODEL_SUFFIXES]
+    model = next((m for m in beside if m in models), None)
+    if model is not None:
+        return models[model]
+    sql = next((m for m in beside if m.is_file()), beside[0])
     if sql.is_file() and models:
         report.error("table-without-model", f"{rel(root, sql)} beside it is not a model that makes a table", path)
         return None
@@ -142,7 +148,7 @@ def _table_key(root: Path, path: Path, models: dict[Path, Key], report: Report) 
     if len(parts) == 2:
         return parts[0], stem(path)
     report.error(
-        "table-unplaced", f"not at <schema>/<table>{TABLE_SUFFIX} or next to a model's .sql", path
+        "table-unplaced", f"not at <schema>/<table>{TABLE_SUFFIX} or next to a model's .sql or .py", path
     )
     return None
 
