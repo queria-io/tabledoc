@@ -299,6 +299,16 @@ def test_dbt_models(write):
     }
 
 
+def test_earlier_config_meta_keys_are_read_as_the_new_ones(write):
+    nodes = manifest(base=model("base", sql="select 1 as id", meta={"listed": False, "keywords": ["a"]}))
+    root = write({"tabledoc.yml": DATASET + "name: d\n", "dbt_project.yml": "name: p\n", "target/manifest.json": nodes})
+    document, report = run(root)
+    assert not report.failed, report.render()
+    table = document["tables"][0]
+    assert (table["hidden"], table["topics"]) == (True, {"und": ["a"]})
+    assert "config.meta.listed is read as hidden" in report.render()
+
+
 def dbt_columns(**columns):
     return {name: {"name": name, **c} for name, c in columns.items()}
 

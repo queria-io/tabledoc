@@ -127,6 +127,12 @@ def tables(manifest: dict[str, Any], root: Path, report: Report) -> list[Table]:
             # The earlier name of `documents`, read as it (the older format).
             report.info("legacy-format", f"{node.get('name')}: config.meta.docs is read as documents; rename it", _yml_path(root, node))
             meta = {**{k: v for k, v in meta.items() if k != "docs"}, "documents": meta.get("documents", meta["docs"])}
+        if "listed" in meta:
+            report.info("legacy-format", f"{node.get('name')}: config.meta.listed is read as hidden; rename it", _yml_path(root, node))
+            meta = {**{k: v for k, v in meta.items() if k != "listed"}, "hidden": meta.get("hidden", meta["listed"] is False)}
+        if "keywords" in meta:
+            report.info("legacy-format", f"{node.get('name')}: config.meta.keywords is read as topics; rename it", _yml_path(root, node))
+            meta = {**{k: v for k, v in meta.items() if k != "keywords"}, "topics": meta.get("topics", meta["keywords"])}
         columns = [_column(c) for c in (node.get("columns") or {}).values() if isinstance(c, dict)]
         primary_key = _primary_key(node)
         if primary_key and "primary_key" in meta:

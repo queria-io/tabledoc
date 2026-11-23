@@ -413,6 +413,7 @@ tabledoc export --markdown ai-docs/
 - フロントマターに `$schema: https://queria.io/schemas/table/v1.json` を持つ Markdown は、フロントマターをテーブルのファイル、本文をガイドとして読みます。`table:` で対応を決め、`fields` は `columns`、`keywords` は `topics`、`published: false` は `hidden: true` (`published: true` は `hidden: false`) として読みます。`ai_context` と `themes` は `queria.yml` と同じく扱います。ガイドはその Markdown のパスで、送る本文はフロントマターを外したものです
 - 列の `semantic: {role, name, agg}` は次のように読み替えます。`role: entity` → `entity: <name>`。`role: dimension` → `dimension: categorical`。`role: measure` → テーブルの metrics に `{name: <列名>, agg, expr: <列名>}` (`agg` が無ければ警告)
 - `docs` (`schemas[].docs` も) は `documents`、スキーマの `guide` はそのスキーマの `documents` の 1 つとして読みます
+- dbt の `config.meta` の `docs` は `documents`、`listed: false` は `hidden: true`、`keywords` は `topics` として読みます
 - 同じフォルダに `tabledoc.yml` と `queria.yml` があるとエラーになります
 
 ## $schema とバージョン

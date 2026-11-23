@@ -413,6 +413,7 @@ So that every dataset need not be rewritten at once, tabledoc also reads the for
 - Markdown whose front matter has `$schema: https://queria.io/schemas/table/v1.json` is read as a table file (the front matter) and its guide (the text below). `table:` says which table, `fields` is `columns`, `keywords` is `topics`, `published: false` is `hidden: true` (and `published: true` is `hidden: false`), and `ai_context` and `themes` are read as in `queria.yml`. The guide is that Markdown's path, and what is sent is the text without the front matter
 - A field's `semantic: {role, name, agg}` is read as: `role: entity` → `entity: <name>`; `role: dimension` → `dimension: categorical`; `role: measure` → a metric `{name: <column>, agg, expr: <column>}` on the table (without `agg`, a warning)
 - `docs` (and `schemas[].docs`) is read as `documents`, and a schema's `guide` as one of its `documents`
+- In dbt's `config.meta`, `docs` is read as `documents`, `listed: false` as `hidden: true`, and `keywords` as `topics`
 - `tabledoc.yml` and `queria.yml` in the same folder is an error
 
 ## $schema and versions
