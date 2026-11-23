@@ -136,7 +136,7 @@ Types, nullability and row counts are not written. The data store holds the stru
 ## Which table
 
 - The name and place decide: `<schema>/<table>.tabledoc.yml` describes `<schema>.<table>`. A file directly under the root is in the `main` schema
-- In a dbt project, `<model>.tabledoc.yml` next to `<model>.sql` describes that model's table, named by the model's `schema` and `alias`. A table file there with no model beside it is an error
+- In a dbt project, `<model>.tabledoc.yml` next to the model's file (`<model>.sql`, or `<model>.py` for a Python model) describes that model's table, named by the model's `schema` and `alias`. A table file there with no model beside it is an error
 - A table file anywhere else, or a `name` other than the file name, is an error
 - dbt parses every yml under its model paths, and a table file's `sources` is not what dbt's `sources:` is. A dbt project with table files lists `*.tabledoc.yml` in `.dbtignore`; without it, tabledoc gives an error
 

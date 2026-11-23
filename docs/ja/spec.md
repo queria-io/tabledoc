@@ -136,7 +136,7 @@ columns:
 ## テーブルとの対応
 
 - 名前と置き場所で決めます。`<schema>/<table>.tabledoc.yml` は `<schema>.<table>` を説明します。ルートの直下に置いたファイルは `main` スキーマです
-- dbt のプロジェクトでは、`<model>.sql` の隣の `<model>.tabledoc.yml` がそのモデルのテーブルを説明します。テーブル名はモデルの `schema` と `alias` で決まります。隣にモデルの無いテーブルのファイルはエラーです
+- dbt のプロジェクトでは、モデルのファイル (`<model>.sql`、Python のモデルは `<model>.py`) の隣の `<model>.tabledoc.yml` がそのモデルのテーブルを説明します。テーブル名はモデルの `schema` と `alias` で決まります。隣にモデルの無いテーブルのファイルはエラーです
 - それ以外の場所に置いたテーブルのファイルと、ファイル名と違う `name` はエラーです
 - dbt はモデルのパスの下の yml をすべて構文解析し、テーブルのファイルの `sources` を dbt の `sources:` として読もうとします。テーブルのファイルを置く dbt のプロジェクトは、`.dbtignore` に `*.tabledoc.yml` を書きます。書いていないと tabledoc はエラーにします
 
