@@ -10,7 +10,7 @@ from typing import Any
 
 import yaml
 
-from . import dbt, files, git, languages, lineage, shape, source
+from . import dbt, files, git, languages, licenses, lineage, shape, source
 from .report import Report
 
 README = "README.md"
@@ -302,6 +302,7 @@ def read(options: Options, report: Report) -> Description:
         ),
         [languages.table(_ordered(t), language) for t in placed_tables],
         [dataset.path, *(by_key[(t["schema"], t["name"])].path for t in placed_tables)],
+        language,
         report,
     )
     return Description(
@@ -321,7 +322,7 @@ def _part_of(entry: dict[str, Any], other: dict[str, Any]) -> bool:
 
 
 def _by_id(
-    dataset: dict[str, Any], tables: list[dict[str, Any]], paths: list[Path], report: Report
+    dataset: dict[str, Any], tables: list[dict[str, Any]], paths: list[Path], language: str, report: Report
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """The dataset and its tables with each license and source written as its id alone, or
     as part of the entry that defines it, replaced by that entry. ``paths`` are the files the
@@ -329,8 +330,9 @@ def _by_id(
 
     An entry whose keys all match another with the same id (`{id, path}` beside
     `{id, title, path}`, say) is a reference to it; two entries with the same id that
-    differ in a key are an error. A license id nothing defines stays `{id}` (such as
-    CC-BY-4.0); a source id nothing defines is an error. Two contributors with the same
+    differ in a key are an error. A license tabledoc knows by its id (CC-BY-4.0, JP-PDL-1.0)
+    is tabledoc's entry; another license id nothing defines stays `{id}`; a source id nothing
+    defines is an error. Two contributors with the same
     id are an error.
     """
     seen: set[str] = set()
@@ -354,18 +356,40 @@ def _by_id(
 
         def resolved(entry: Any, where: Path, key: str = key, defined: dict = defined) -> Any:
             if isinstance(entry, dict):
-                return defined.get(entry.get("id"), entry)
-            if entry in defined:
-                return defined[entry]
-            if key == "sources":
-                report.error("undefined-id", f"source {entry} is not defined; write it with its title and path", where)
-            return {"id": entry}
+                entry = defined.get(entry.get("id"), entry)
+            elif entry in defined:
+                entry = defined[entry]
+            elif key == "sources":
+                report.error("undefined-id", f"source {entry} is not defined; write it with its title and url", where)
+                return {"id": entry}
+            else:
+                entry = {"id": entry}
+            return _known(entry, where, language, report) if key == "licenses" else entry
 
         records = [
             {**r, key: [resolved(e, where) for e in r[key]]} if isinstance(r.get(key), list) else r
             for r, where in zip(records, paths)
         ]
     return records[0], records[1:]
+
+
+def _known(entry: dict[str, Any], where: Path, language: str, report: Report) -> dict[str, Any]:
+    """A license tabledoc knows by its id, as tabledoc knows it; any other as written. Keys
+    written that differ from the known ones are dropped with a warning."""
+    held = licenses.known(entry, language)
+    if held is None:
+        return entry
+    text = languages.ENTRY
+    if any(
+        k not in held or (languages.one(v, language) != languages.one(held[k], language) if k in text else v != held[k])
+        for k, v in entry.items()
+    ):
+        report.warning(
+            "known-license",
+            f"license {entry['id']} is known to tabledoc; its title, url and terms are tabledoc's, not the ones written",
+            where,
+        )
+    return held
 
 
 def _ordered(table: dict[str, Any]) -> dict[str, Any]:

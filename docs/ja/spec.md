@@ -54,7 +54,6 @@ description: 日本銀行の時系列統計データ検索サイトの全ての�
 language: ja
 topics: [日本銀行, 金利, 物価]
 synonyms: [日銀統計]
-homepage: https://github.com/queria-io/dataset-boj
 update_frequency: irregular
 licenses:
   - id: boj-copyright
@@ -82,7 +81,7 @@ documents:
 | --- | --- | --- |
 | `$schema` | 必須 | 書式とバージョン |
 | `name` | 必須 | データセットの名前。`^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$` |
-| `title`・`title_reading`・`description`・`topics`・`synonyms`・`homepage`・`language`・`issued`・`update_frequency` | | `title_reading` はタイトルの読み (日本語ならカタカナなど) です。`synonyms` は検索に使う別名です。`language` は BCP 47 のタグで、言語を付けずに書いた文字列の言語です ([言語](#言語))。`issued` は `YYYY-MM-DD` です。`update_frequency` は `continuous`・`daily`・`weekly`・`monthly`・`quarterly`・`yearly`・`irregular` のどれかです |
+| `title`・`title_reading`・`description`・`topics`・`synonyms`・`homepage`・`language`・`issued`・`update_frequency` | | `title_reading` はタイトルの読み (日本語ならカタカナなど) です。`synonyms` は検索に使う別名です。`homepage` はリポジトリ以外のデータセットの Web ページで、無ければ書きません。`language` は BCP 47 のタグで、言語を付けずに書いた文字列の言語です ([言語](#言語))。`issued` は `YYYY-MM-DD` です。`update_frequency` は `continuous`・`daily`・`weekly`・`monthly`・`quarterly`・`yearly`・`irregular` のどれかです |
 | `repository` | | データセットのソースコードのリポジトリの URL。例: `https://github.com/queria-io/dataset-boj`。省くと `tabledoc load` は Git の `origin` を使います |
 | `licenses`・`sources`・`contributors`・`temporal_coverage`・`spatial_coverage` | | [ライセンス・出典・作成者](#ライセンス出典作成者)。`licenses`・`sources` と期間・地域は、テーブルのファイルに書くとそのテーブルだけの値になります |
 | `image` | | データセットを表す画像のパス。文書と一緒に送り、ルートからのパスのまま置きます |
@@ -157,7 +156,8 @@ sources:
 
 - 1 つの項目は `tabledoc.yml` かいずれかのテーブルのファイルに 1 回だけ全部書き、ほかの場所では `id` だけを書きます (`sources: [search-site]`)
 - 同じ `id` の項目とキーがすべて一致する項目 (`{id, title, url}` に対する `{id, url}` など) は、その項目を参照します。同じ `id` でキーの値が違う項目を書くとエラーです
-- `id` だけを書いたライセンスで、どこにも定義が無いものは、その `id` (`CC-BY-4.0` などの SPDX の識別子) として扱います。SPDX の識別子があるライセンスは、それを `id` にします。どこにも定義の無い出典の `id` はエラーです
+- SPDX の識別子があるライセンスは、それを `id` にします。tabledoc は [`licenses.json`](https://github.com/queria-io/tabledoc/blob/main/src/tabledoc/licenses.json) にあるライセンスの題・URL・条件を持っています。一部の SPDX のライセンスと、`JP-PDL-1.0` など SPDX の識別子が無い利用規約です。これらの `id` のライセンスは `id` だけを書き、残りは tabledoc が埋めます。ほかのキーを書いたときは tabledoc の値を使い、警告を出します
+- `id` だけを書いたライセンスで、どこにも定義が無く tabledoc も知らないものは、`id` だけのライセンスとして扱います。どこにも定義の無い出典の `id` はエラーです
 - ライセンスは `{id, url, title, commercial_use, share_alike, attribution_required}`、出典は `{id, title, url}`、作成者は `{id, title, url, roles}` です。作成者はデータセットにだけ書きます
 
 ## 言語

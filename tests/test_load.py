@@ -134,7 +134,7 @@ def test_license_terms_are_columns_of_licenses(write, catalog):
     (root / "sales" / "recent.tabledoc.yml").write_text(TABLE + "description: x\nlicenses: [x, CC0-1.0]\n")
     assert run(root, catalog) is not None
     assert held(catalog, "licenses", "id", "url", "commercial_use", "share_alike") == [
-        ("CC0-1.0", None, None, None),
+        ("CC0-1.0", "https://creativecommons.org/publicdomain/zero/1.0/", True, False),
         ("x", "https://x.example", True, False),
     ]
     assert held(catalog, "table_licenses", "table_name", "license_id", "position") == [

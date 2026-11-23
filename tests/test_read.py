@@ -523,3 +523,13 @@ def test_a_source_without_an_id_is_a_finding_not_a_crash(write):
     root = write({"tabledoc.yml": DATASET + "name: d\ntitle: D\nsources: [{title: Site, url: https://site.example}]\n"})
     _, report = run(root)
     assert report.failed
+
+
+def test_a_license_tabledoc_knows_is_filled_in_from_its_id(write):
+    document, report = run(
+        write({"tabledoc.yml": DATASET + "name: d\nlicenses: [JP-PDL-1.0, {id: CC-BY-4.0, url: https://example.com}]\n"})
+    )
+    pdl, by = document["dataset"]["licenses"]
+    assert pdl["title"] == {"ja": "公共データ利用規約（第1.0版）"} and pdl["commercial_use"] is True
+    assert by["url"] == {"und": "https://creativecommons.org/licenses/by/4.0/"}
+    assert codes(report) == ["known-license"]
