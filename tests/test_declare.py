@@ -74,3 +74,13 @@ def test_output_of_fdl_that_is_not_json_is_an_error(write, tmp_path):
     (tmp_path / "work.sqlite.fdl.json").write_text("{}")
     with pytest.raises(SpecError):
         declare(str(tmp_path / "work.sqlite"), described(write), "_queria", lambda args: "not json")
+
+
+def test_the_state_fdl_keeps_in_a_folder_makes_a_working_metadata(tmp_path):
+    from tabledoc.declare import working
+
+    catalog = tmp_path / "work.sqlite"
+    assert working(str(catalog)) is None
+    (tmp_path / "work.sqlite.fdl").mkdir()
+    (tmp_path / "work.sqlite.fdl" / "state.json").write_text("{}")
+    assert working(f"ducklake:{catalog}") == catalog

@@ -23,7 +23,7 @@ from typing import Any
 
 import yaml
 
-from . import languages, schemas, tables
+from . import fdl_state, languages, schemas, tables
 from .description import README
 from .files import normalized
 from .load import ALIAS, attached
@@ -61,9 +61,9 @@ class Source:
 
 
 def _note(catalog: str) -> dict[str, Any]:
-    note = Path(catalog.removeprefix("ducklake:") + ".fdl.json")
+    note = fdl_state.note(catalog)
     try:
-        found = json.loads(note.read_text(encoding="utf-8")) if note.is_file() else {}
+        found = json.loads(note.read_text(encoding="utf-8")) if note else {}
     except (OSError, ValueError) as exc:
         raise SpecError(f"cannot read {note}: {exc}") from exc
     return found if isinstance(found, dict) else {}

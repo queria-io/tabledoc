@@ -18,7 +18,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from . import tables
+from . import fdl_state, tables
 from .declare import declare
 from .description import MANIFEST_MISSING, Description, Options, read
 from .report import Finding, Level, Report, SpecError
@@ -45,15 +45,15 @@ class Target:
 
 
 def data_path(catalog: str, given: str | None) -> str | None:
-    """``given``, else where `fdl clone` noted in ``<catalog>.fdl.json`` that new data files go.
+    """``given``, else where `fdl clone` noted beside the catalog that new data files go.
 
     As fdl reads the note: the storage's data folder (``--storage``), else the
     local folder (``--data``), else None (the catalog's own data path).
     """
     if given:
         return given
-    note = Path(catalog.removeprefix("ducklake:") + ".fdl.json")
-    if not note.is_file():
+    note = fdl_state.note(catalog)
+    if note is None:
         return None
     try:
         state = json.loads(note.read_text(encoding="utf-8"))
@@ -77,8 +77,8 @@ def remote_secret(catalog: str) -> str | None:
     """The DuckDB secret that sends `FDL_TOKEN` to the HTTP remote `fdl clone` noted beside
     ``catalog``, so the data files of a private dataset can be read; None without both."""
     token = os.environ.get("FDL_TOKEN")
-    note = Path(catalog.removeprefix("ducklake:") + ".fdl.json")
-    if not token or not note.is_file():
+    note = fdl_state.note(catalog)
+    if not token or note is None:
         return None
     try:
         remote = json.loads(note.read_text(encoding="utf-8")).get("remote")
