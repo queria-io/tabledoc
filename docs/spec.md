@@ -252,9 +252,11 @@ What a column means follows dbt's semantic layer as written from dbt-core 1.12 (
 | Key | Value | Meaning |
 | --- | --- | --- |
 | `entity` | the name of a code system, such as `corporate_number` or `city` | The column is an identifier: its values come from that code system, so it joins with the columns of other tables and datasets that name the same one. Whether it identifies the row is the primary key's to say |
-| `dimension` | `categorical` or `time` | A column to filter and group by |
+| `dimension` | `categorical` or `time` | A column to filter and group by. `categorical` is a column whose values, from a fixed set, tell what was counted or which kind a row is: an indicator, an industry, an age group, a sex. It is not written on a column that holds the name of a code (a place name, a company name) or on a code column (write `entity` there). `time` is a column of dates or periods |
 | `granularity` | `day`, `month`, `year`, ... | How fine a `dimension: time` column is |
 | `metrics` (table) | `[{name, agg, expr, description}]` | How to aggregate. `agg` is `sum`, `max`, `count_distinct`, ... |
+
+A reader can list every value of a `categorical` column, so a search finds the table by one of them (the name of an indicator, say).
 
 In dbt, `metrics` need the semantic layer (`semantic_model: true` and a time spine). A project that does not use it can still write `entity` and `dimension` on columns.
 
