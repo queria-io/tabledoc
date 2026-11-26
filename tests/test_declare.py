@@ -39,6 +39,17 @@ def test_runs_only_what_differs(write):
     assert commands(have, want, "w") == [["table", "w", "sales.orders", "--primary-key", "id"]]
 
 
+def test_repeats_the_option_for_each_column_and_removes_an_empty_list(write):
+    want = wanted(described(write), "_tabledoc")
+    have = {**want, "primary_keys": {k: v for k, v in want["primary_keys"].items() if k != "_tabledoc.columns"}}
+    assert commands(have, want, "w") == [
+        ["table", "w", "_tabledoc.columns", "--primary-key", "schema_name",
+         "--primary-key", "table_name", "--primary-key", "column_name"]
+    ]
+    emptied = {**want, "assets": {**want["assets"], "sales.orders": []}}
+    assert commands(want, emptied, "w") == [["table", "w", "sales.orders", "--no-assets"]]
+
+
 def test_runs_fdl_only_for_a_working_metadata(write, tmp_path):
     description = described(write)
     calls = []
@@ -74,6 +85,16 @@ def test_output_of_fdl_that_is_not_json_is_an_error(write, tmp_path):
     (tmp_path / "work.sqlite.fdl").mkdir()
     with pytest.raises(SpecError):
         declare(str(tmp_path / "work.sqlite"), described(write), "_tabledoc", lambda args: "not json")
+
+
+def test_an_fdl_without_fdl_table_names_the_version_it_needs(write, tmp_path):
+    (tmp_path / "work.sqlite.fdl").mkdir()
+
+    def run(args):
+        raise SpecError("fdl table failed: No such command 'table'")
+
+    with pytest.raises(SpecError, match="0.44"):
+        declare(str(tmp_path / "work.sqlite"), described(write), "_tabledoc", run)
 
 
 def test_the_folder_fdl_keeps_beside_it_makes_a_working_metadata(tmp_path):

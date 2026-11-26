@@ -1,7 +1,7 @@
 """Declare to FDL what it reads of the tables: primary keys, asset columns and dependencies.
 
 When the catalog is FDL's working metadata (`fdl clone` made it), `tabledoc load` runs `fdl table`
-and `fdl dependency add` (fdl-cli 0.43 or later) for what the description says:
+and `fdl dependency add` (fdl-cli 0.44 or later) for what the description says:
 
 - each described table's `primary_key` (a view has none)
 - each described table's asset columns, when its columns say `asset` (a view has none)
@@ -68,10 +68,11 @@ def wanted(
 def commands(have: dict[str, Any], want: dict[str, Any], working: str) -> list[list[str]]:
     """The fdl arguments that make ``have`` say ``want`` of the working metadata ``working``."""
     out: list[list[str]] = []
-    for kind, option in (("primary_keys", "--primary-key"), ("assets", "--assets")):
+    for kind, option in (("primary_keys", "primary-key"), ("assets", "assets")):
         held = have.get(kind) or {}
         out += [
-            ["table", working, name, option, ",".join(cols)]
+            ["table", working, name, *(a for c in cols for a in (f"--{option}", c))] if cols
+            else ["table", working, name, f"--no-{option}"]
             for name, cols in want[kind].items()
             if (held.get(name) or []) != cols
         ]
@@ -88,7 +89,11 @@ def commands(have: dict[str, Any], want: dict[str, Any], working: str) -> list[l
 
 
 def _json(run: fdl_state.Run, args: list[str]) -> dict[str, Any]:
-    printed = run(args)
+    try:
+        printed = run(args)
+    except SpecError as exc:
+        # fdl-cli 0.43 and earlier have `fdl declare`, not `fdl table` and `fdl dependency`
+        raise SpecError(f"{exc} (tabledoc needs fdl-cli 0.44 or later)") from exc
     try:
         found = json.loads(printed)
     except ValueError as exc:
