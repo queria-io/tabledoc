@@ -4,7 +4,7 @@ The catalog is the one the build wrote (with fdl, the working metadata `fdl clon
 made). The description's rows (`tables.rows`) go into the tables of a schema
 of it (`_tabledoc` unless told otherwise), and the folder ``out`` gets the files
 of its `files` table (for `fdl commit --assets`). With fdl's working metadata, the
-primary keys, asset columns and dependencies are declared with `fdl declare`.
+primary keys, asset columns and dependencies are declared with `fdl table` and `fdl dependency add`.
 """
 
 from __future__ import annotations
