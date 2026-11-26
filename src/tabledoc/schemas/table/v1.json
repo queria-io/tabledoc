@@ -34,7 +34,7 @@
       "minLength": 1,
       "description": "The column is an identifier: its values come from this code system, such as corporate_number or city, so it joins with other columns of the same name."
     },
-    "dimension": { "enum": ["categorical", "time"], "description": "A column to filter and group by." },
+    "dimension": { "enum": ["categorical", "time"], "description": "A column to filter and group by. categorical: a column whose values, from a fixed set, tell what was counted or which kind a row is (an indicator, an industry, an age group, a sex); not a column of places or organizations (by code or by name) or true/false; a column of years is time. time: a column of dates or periods." },
     "granularity": { "type": "string", "minLength": 1, "description": "How fine a time dimension is: day, month, year, ..." },
     "column": {
       "type": "object",

@@ -252,7 +252,7 @@ dbt で作らないテーブル (Python で作るものなど) は、同じプ�
 | キー | 値 | 意味 |
 | --- | --- | --- |
 | `entity` | コード体系の名前 (`corporate_number`・`city` など) | 列が識別子であることを示します。値がそのコード体系から取られているので、同じコード体系を書いたほかのテーブルやデータセットの列と結合できます。行を識別するかどうかは主キーで示します |
-| `dimension` | `categorical` か `time` | 絞り込み・グループ分けに使う列 |
+| `dimension` | `categorical` か `time` | 絞り込み・グループ分けに使う列。`categorical` は、何を数えたか・どの種類の行かを決まった値で分ける列です (指標・業種・年齢階級・性別など)。場所や組織を表す列には、コードでも名前でも書きません (メッシュコード・都道府県名・会社名など。ほかのテーブルと結合できるコードには `entity` を書きます)。真偽値の列にも書きません。年の列は `dimension: time` にします。`time` は日付や期間の列です |
 | `granularity` | `day`・`month`・`year` など | `dimension: time` の列の細かさ |
 | `metrics` (テーブル) | `[{name, agg, expr, description}]` | 集計のしかた。`agg` は `sum`・`max`・`count_distinct` など |
 
