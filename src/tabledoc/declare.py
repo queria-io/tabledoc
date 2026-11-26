@@ -1,6 +1,7 @@
 """Declare to FDL what it reads of the tables: primary keys, asset columns and dependencies.
 
-When the catalog is FDL's working metadata (`fdl clone` made it), `tabledoc load` runs `fdl declare` for what the description says:
+When the catalog is FDL's working metadata (`fdl clone` made it), `tabledoc load` runs `fdl table`
+and `fdl dependency add` (fdl-cli 0.43 or later) for what the description says:
 
 - each described table's `primary_key` (a view has none)
 - each described table's asset columns, when its columns say `asset` (a view has none)
@@ -10,7 +11,7 @@ When the catalog is FDL's working metadata (`fdl clone` made it), `tabledoc load
 - the description's own tables: their primary keys, `files.sha256` as an asset
   column, and no profile
 
-Only what differs from `fdl declare list` is run. What the description does not
+Only what differs from `fdl table --json` and `fdl dependency list --json` is run. What the description does not
 say is left as FDL has it.
 """
 
@@ -30,7 +31,8 @@ def wanted(
     hidden: set[str] | frozenset[str] = frozenset(),
     views: set[str] | frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
-    """What the description declares, in the shape of `fdl declare list --json`, and
+    """What the description declares, in the shape of `fdl table --json` with the dependencies of
+    `fdl dependency list --json`, and
     `profiled`: the described tables that are not hidden, which get a profile.
 
     ``hidden`` are the tables and views (`schema.name`) whose `hidden` is true;
@@ -63,22 +65,37 @@ def wanted(
     }
 
 
-def commands(have: dict[str, Any], want: dict[str, Any]) -> list[list[str]]:
-    """The `fdl declare` arguments (after the working metadata) that make ``have`` say ``want``."""
+def commands(have: dict[str, Any], want: dict[str, Any], working: str) -> list[list[str]]:
+    """The fdl arguments that make ``have`` say ``want`` of the working metadata ``working``."""
     out: list[list[str]] = []
-    for kind, verb in (("primary_keys", "primary-key"), ("assets", "assets")):
+    for kind, option in (("primary_keys", "--primary-key"), ("assets", "--assets")):
         held = have.get(kind) or {}
-        out += [[verb, name, *cols] for name, cols in want[kind].items() if (held.get(name) or []) != cols]
+        out += [
+            ["table", working, name, option, ",".join(cols)]
+            for name, cols in want[kind].items()
+            if (held.get(name) or []) != cols
+        ]
     quiet = set(have.get("unprofiled") or [])
-    out += [["profile", name, "false"] for name in want.get("unprofiled") or [] if name not in quiet]
-    out += [["profile", name, "true"] for name in want.get("profiled") or [] if name in quiet]
+    out += [["table", working, name, "--no-profile"] for name in want.get("unprofiled") or [] if name not in quiet]
+    out += [["table", working, name, "--profile"] for name in want.get("profiled") or [] if name in quiet]
     held = have.get("dependencies") or {}
     out += [
-        ["dependency", alias, entry["url"]]
+        ["dependency", "add", working, alias, entry["url"]]
         for alias, entry in want["dependencies"].items()
         if (held.get(alias) or {}).get("url") != entry["url"]
     ]
     return out
+
+
+def _json(run: fdl_state.Run, args: list[str]) -> dict[str, Any]:
+    printed = run(args)
+    try:
+        found = json.loads(printed)
+    except ValueError as exc:
+        raise SpecError(f"fdl {args[0]} printed what is not JSON: {exc}") from exc
+    if not isinstance(found, dict):
+        raise SpecError(f"fdl {args[0]} printed JSON that is not an object")
+    return found
 
 
 def declare(
@@ -90,22 +107,18 @@ def declare(
     hidden: set[str] | frozenset[str] = frozenset(),
     views: set[str] | frozenset[str] = frozenset(),
 ) -> list[list[str]]:
-    """Run `fdl declare` for what differs, when ``catalog`` is fdl's working metadata.
-
-    Gives the commands run (each without `fdl declare <working>`).
+    """Run `fdl table` and `fdl dependency add` for what differs, when ``catalog`` is fdl's
+    working metadata. Gives the fdl arguments run.
     """
     path = fdl_state.working(catalog)
     if path is None:
         return []
     run = run or fdl_state.call
-    printed = run(["declare", "list", str(path), "--json"])
-    try:
-        have = json.loads(printed)
-    except ValueError as exc:
-        raise SpecError(f"fdl declare list printed what is not JSON: {exc}") from exc
-    if not isinstance(have, dict):
-        raise SpecError("fdl declare list printed JSON that is not an object")
-    todo = commands(have, wanted(description, schema, hidden, views))
+    have = {
+        **_json(run, ["table", str(path), "--json"]),
+        "dependencies": _json(run, ["dependency", "list", str(path), "--json"]),
+    }
+    todo = commands(have, wanted(description, schema, hidden, views), str(path))
     for args in todo:
-        run(["declare", args[0], str(path), *args[1:]])
+        run(args)
     return todo

@@ -34,27 +34,27 @@ def test_declares_keys_and_assets_of_the_description_and_its_own_tables(write):
 
 def test_runs_only_what_differs(write):
     want = wanted(described(write), "_tabledoc")
-    assert commands(want, want) == []
+    assert commands(want, want, "w") == []
     have = {**want, "primary_keys": {**want["primary_keys"], "sales.orders": ["file"]}}
-    assert commands(have, want) == [["primary-key", "sales.orders", "id"]]
+    assert commands(have, want, "w") == [["table", "w", "sales.orders", "--primary-key", "id"]]
 
 
-def test_runs_fdl_declare_only_for_a_working_metadata(write, tmp_path):
+def test_runs_fdl_only_for_a_working_metadata(write, tmp_path):
     description = described(write)
     calls = []
 
     def run(args):
         calls.append(args)
-        return json.dumps({}) if args[1] == "list" else ""
+        return json.dumps({}) if "--json" in args else ""
 
     catalog = tmp_path / "work.sqlite"
     assert declare(str(catalog), description, "_tabledoc", run) == []
     (tmp_path / "work.sqlite.fdl").mkdir()
     done = declare(str(catalog), description, "_tabledoc", run)
-    assert calls[0] == ["declare", "list", str(catalog), "--json"]
-    assert ["declare", "primary-key", str(catalog), "sales.orders", "id"] in calls
-    assert ["declare", "assets", str(catalog), "_tabledoc.files", "sha256"] in calls
-    assert len(calls) == len(done) + 1
+    assert calls[:2] == [["table", str(catalog), "--json"], ["dependency", "list", str(catalog), "--json"]]
+    assert ["table", str(catalog), "sales.orders", "--primary-key", "id"] in calls
+    assert ["table", str(catalog), "_tabledoc.files", "--assets", "sha256"] in calls
+    assert len(calls) == len(done) + 2
 
 
 def test_a_view_gets_no_key_and_a_table_not_listed_no_profile(write):
@@ -64,10 +64,10 @@ def test_a_view_gets_no_key_and_a_table_not_listed_no_profile(write):
     assert want["unprofiled"] == sorted([*(f"_tabledoc.{t}" for t in tables.TABLES), "sales.extra"])
     assert want["profiled"] == ["sales.orders"]
     have = {**want, "unprofiled": ["sales.orders"]}
-    done = commands(have, want)
-    assert ["profile", "sales.extra", "false"] in done
-    assert ["profile", "sales.orders", "true"] in done
-    assert commands(want, want) == []
+    done = commands(have, want, "w")
+    assert ["table", "w", "sales.extra", "--no-profile"] in done
+    assert ["table", "w", "sales.orders", "--profile"] in done
+    assert commands(want, want, "w") == []
 
 
 def test_output_of_fdl_that_is_not_json_is_an_error(write, tmp_path):
