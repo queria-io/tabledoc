@@ -1,6 +1,35 @@
 # CHANGELOG
 
 
+## v0.10.0 (2026-11-26)
+
+### Documentation
+
+- Narrow dimension: categorical to columns that tell what was counted or which kind
+  ([#26](https://github.com/queria-io/tabledoc/pull/26),
+  [`5d75258`](https://github.com/queria-io/tabledoc/commit/5d75258e9ed01834a28d3d059a44b3c96a645cd7))
+
+* docs: narrow dimension: categorical to columns that tell what was counted or which kind
+
+* docs: leave places, organizations, years and true/false out of categorical
+
+* docs: a column of years is dimension: time
+
+* docs: a categorical code column has a column of its names beside it
+
+* docs: end the sentence
+
+* docs: describe categorical by grouping only
+
+* docs: keep categorical to its definition
+
+### Features
+
+- Declare to fdl with fdl table and fdl dependency add
+  ([#27](https://github.com/queria-io/tabledoc/pull/27),
+  [`8e2a2c8`](https://github.com/queria-io/tabledoc/commit/8e2a2c83f6c21ea941bb94c18a5a9522ff06d860))
+
+
 ## v0.9.0 (2026-11-23)
 
 ### Features
