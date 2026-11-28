@@ -180,7 +180,7 @@ columns:
 ```
 
 - tabledoc のキーのうち、値が文字列か文字列の一覧のものは、どちらの形でも書けます。たとえば `title`・`title_reading`・`description`・`topics`・`synonyms`・`homepage` と、ライセンス・出典・作成者の `title`・`url` です。一覧はタグから一覧への対応にします
-- 何かを指す値と、決まった語彙から選ぶ値は、値を 1 つだけ持ちます。`name`・`table`・`repository`・`primary_key`・`entity`・`language`・`$schema`・`issued`・`update_frequency`・`dimension`・`granularity`・`agg`・`expr`・`sql`・`depends_on`・`id`・`roles`・`hidden`・`image`・`spatial_coverage`・`temporal_coverage` と、`documents` のパスです。言語ごとに変えると、同じテーブル・列・ファイルを指せなくなるためです
+- 何かを指す値と、決まった語彙から選ぶ値は、値を 1 つだけ持ちます。`name`・`repository`・`primary_key`・`entity`・`language`・`$schema`・`issued`・`update_frequency`・`dimension`・`granularity`・`agg`・`expr`・`sql`・`depends_on`・`id`・`roles`・`hidden`・`image`・`spatial_coverage`・`temporal_coverage` と、`documents` のパスです。言語ごとに変えると、同じテーブル・列・ファイルを指せなくなるためです
 - テーブルには `title`・`title_reading`・`description`・`topics`・`synonyms` をすべての言語で書きます。ほかの文字列 (`homepage`、ライセンス・出典・作成者、metric の `description`) は `language` の言語の値だけを書き、複数の言語で書いたときは警告を出します
 - `annotations:` の下のキーは、それぞれの読み手が決めます
 - タグは BCP 47 として検査します。文字列が 1 つも無い対応はエラーです
@@ -247,7 +247,7 @@ dbt で作らないテーブル (Python で作るものなど) は、同じプ�
 
 ## semantic
 
-列の意味は、dbt-core 1.12 以降のセマンティックレイヤーの書き方 (列に直接書く形) にそろえます。特定の読み手のキーではなく、tabledoc 自身のキーです。
+列の意味は、dbt-core 1.12 以降のセマンティックレイヤーの書き方 (列に直接書く形) に合わせます。特定の読み手のキーではなく、tabledoc 自身のキーです。
 
 | キー | 値 | 意味 |
 | --- | --- | --- |
@@ -267,10 +267,12 @@ dbt で `metrics` を書くにはセマンティックレイヤー (`semantic_mo
 説明をほかの場所に送るプログラムや、別の形式に変えるプログラムは `tabledoc.read` で読みます。`validate` と同じ検査をして、以前の形式を今の形に読み替えた説明を返します。
 
 ```python
+from pathlib import Path
+
 import tabledoc
 
 report = tabledoc.Report()
-d = tabledoc.read(tabledoc.Options(root), report)  # root: tabledoc.yml のフォルダ
+d = tabledoc.read(tabledoc.Options(Path("shop")), report)  # tabledoc.yml のフォルダ
 if report.failed:
     print(report.render())
 d.dataset   # {"name": "boj", "title": …, "documents": ["README.md", "methodology.md"], "image": "docs/cover.png"}
@@ -375,7 +377,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 
 - `--ducklake`: カタログ (既定は `FDL_WORKING`)。`--schema`: 説明のあるスキーマ (既定は `_tabledoc`)。`--out`: 書くフォルダ (既定は今のフォルダ)。`.fdl/` の外でなければなりません
 - `--files`: `files` テーブルのファイルの置き場所。`<files>/<sha256>` で読みます。フォルダか http(s) の URL です。既定は、fdl の作業用メタデータについて `fdl status --json` が返す `remote` の `assets/` です。各ファイルは sha256 で照合します
-- `--name`: `tabledoc.yml` の `name`。既定は `dataset` テーブルの `name`、無ければリポジトリの URL の最後の部分です
+- `--name`: `tabledoc.yml` の `name`。既定は `dataset` テーブルの `name`、無ければリポジトリの URL の最後の部分、それも無ければカタログのファイル名から拡張子を除いたものです
 - フォルダに同じファイルがあると、`--force` を付けない限り何も書きません。カタログのパスがフォルダの外を指すときはエラーです
 - テーブルのファイルは `<schema>/<table>.tabledoc.yml` に書きます。ファイルはデータセットの中のパスのまま書き、フォルダの Markdown (`README.md` を先頭に) を、そのフォルダが説明する対象の `documents` に並べます。ルートの `README.md` は並べなくてもデータセットの説明です
 - 文字列は、1 つの言語だけでそれがデータセットの `language` なら文字列だけで、それ以外は対応で書きます

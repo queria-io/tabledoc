@@ -4,10 +4,10 @@
 
 [English](README.md)
 
-tabledoc は、データセットのテーブルを人と AI が読める形にするツールです。dbt がテーブルについて持っている情報 (`target/manifest.json` の説明・SQL・依存関係) に、人や AI が YAML と Markdown で書いた説明 (名前、列の説明、結合キー、ガイド) を重ねて検査し、Markdown のファイルか DuckLake のカタログのテーブルとして書き出します。
+tabledoc は、データセットのテーブルを人と AI が読める形にするツールです。dbt がテーブルについて持っている情報 (`target/manifest.json` の説明・SQL・依存関係) に、人や AI が YAML と Markdown で書いた説明 (名前、列の説明、識別子、ガイド) を重ねて検査し、Markdown のファイルか DuckLake のカタログのテーブルとして書き出します。
 
 - テーブルごとに YAML を 1 つ書き、隣に Markdown のガイドを置きます。キーは dbt の `models:` の項目と同じです
-- semantic (結合キー・ディメンション・メトリクス) は dbt のセマンティックレイヤーの書き方にそろえています
+- semantic (識別子・ディメンション・メトリクス) は dbt のセマンティックレイヤーの書き方に合わせています
 - dbt のプロジェクトでは、説明・SQL・依存関係を `target/manifest.json` から取ります
 - Python からは `tabledoc.read` で、検査した説明を読めます。ガイドとそこから参照するファイルはパスと sha256 で並べます
 - `tabledoc export --markdown <フォルダ>` は、テーブルごとに Markdown のファイルを 1 つ (列、semantic、主キー、依存関係、SQL、ガイド) と、それらを一覧にするデータセットのファイルを書き出します。AI アシスタントや人がそのまま読めます

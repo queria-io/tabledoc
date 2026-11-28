@@ -180,7 +180,7 @@ columns:
 ```
 
 - Any of tabledoc's keys whose value is text, or a list of text, takes either form: `title`, `title_reading`, `description`, `topics`, `synonyms`, `homepage`, and the `title` and `url` of licenses, sources and contributors, say. A list becomes a map from a tag to a list
-- Values that point at something, or come from a fixed set, hold one value: `name`, `table`, `repository`, `primary_key`, `entity`, `language`, `$schema`, `issued`, `update_frequency`, `dimension`, `granularity`, `agg`, `expr`, `sql`, `depends_on`, `id`, `roles`, `hidden`, `image`, `spatial_coverage`, `temporal_coverage`, and the paths in `documents`. Written in other languages, they would no longer point at the same table, column or file
+- Values that point at something, or come from a fixed set, hold one value: `name`, `repository`, `primary_key`, `entity`, `language`, `$schema`, `issued`, `update_frequency`, `dimension`, `granularity`, `agg`, `expr`, `sql`, `depends_on`, `id`, `roles`, `hidden`, `image`, `spatial_coverage`, `temporal_coverage`, and the paths in `documents`. Written in other languages, they would no longer point at the same table, column or file
 - The tables hold the text of `title`, `title_reading`, `description`, `topics` and `synonyms` in every language. Of the other text (`homepage`, licenses, sources, contributors and a metric's `description`) they hold the one in `language`, and tabledoc warns when it is written in more
 - Keys under `annotations:` are the reader's own
 - A tag is checked as BCP 47. A map with no text is an error
@@ -267,10 +267,12 @@ Keys only one reader uses go under `annotations: {<reader>: {...}}`, in `tabledo
 Programs that send the description somewhere, or turn it into another format, read it with `tabledoc.read`. It checks the files as `validate` does and returns the description with the older formats read as today's.
 
 ```python
+from pathlib import Path
+
 import tabledoc
 
 report = tabledoc.Report()
-d = tabledoc.read(tabledoc.Options(root), report)  # root: the folder of tabledoc.yml
+d = tabledoc.read(tabledoc.Options(Path("shop")), report)  # the folder of tabledoc.yml
 if report.failed:
     print(report.render())
 d.dataset   # {"name": "boj", "title": …, "documents": ["README.md", "methodology.md"], "image": "docs/cover.png"}
@@ -375,7 +377,7 @@ tabledoc dump --ducklake work.sqlite --out description/
 
 - `--ducklake`: the catalog (default: `FDL_WORKING`). `--schema`: the schema the description is in (default: `_tabledoc`). `--out`: the folder (default: here), outside `.fdl/`
 - `--files`: where the files of the `files` table are, as `<files>/<sha256>`: a folder or an http(s) URL. Default: `assets/` of the `remote` that `fdl status --json` gives for fdl's working metadata. Each file is checked against its sha256
-- `--name`: the dataset's `name` in `tabledoc.yml`. Default: the `name` the `dataset` table holds, else the last part of the repository's URL
+- `--name`: the dataset's `name` in `tabledoc.yml`. Default: the `name` the `dataset` table holds, else the last part of the repository's URL, else the catalog's file name without its extension
 - A file already in the folder is not replaced, and nothing is written, unless `--force`. A path in the catalog that would leave the folder is an error
 - Each table file is at `<schema>/<table>.tabledoc.yml`. Every file stays at its path in the dataset, and the Markdown files of a folder (its `README.md` first) are listed in the `documents` of what the folder describes; the root's `README.md` is the dataset's without being listed
 - Text is written as the text alone when there is one language and it is the dataset's `language`, and as a map otherwise
