@@ -6,10 +6,10 @@ sidebar:
 description: Makes a dataset's tables readable by people and AI, from dbt's manifest and the descriptions people and AI write.
 ---
 
-tabledoc makes a dataset's tables readable by people and AI. It takes what dbt already knows about the tables (descriptions, SQL and lineage from `target/manifest.json`), adds what people and AI write in YAML and Markdown (titles, column descriptions, join keys, guides), checks the result, and writes it as Markdown files or as tables in a DuckLake catalog.
+tabledoc makes a dataset's tables readable by people and AI. It takes what dbt already knows about the tables (descriptions, SQL and lineage from `target/manifest.json`), adds what people and AI write in YAML and Markdown (titles, column descriptions, identifiers, guides), checks the result, and writes it as Markdown files or as tables in a DuckLake catalog.
 
 - One YAML file per table, next to a Markdown guide. Keys follow dbt's `models:` entries
-- Semantics (join keys, dimensions, metrics) follow dbt's semantic layer
+- Semantics (identifiers, dimensions, metrics) follow dbt's semantic layer
 - In a dbt project, descriptions, SQL and lineage come from `target/manifest.json`
 - From Python, `tabledoc.read` returns the checked description, with the guides and the files they link to by path and sha256
 - `tabledoc export --markdown <folder>` writes one Markdown file per table (columns, semantics, primary key, lineage, SQL and the guide) and one for the dataset that lists them, for AI assistants and people to read
